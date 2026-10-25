@@ -26,7 +26,7 @@ A website where doctors at Eastridge Primecare upload their monthly duty rosters
   - Every upload, edit, swap and move is kept in a change log.
 - **Hospital roster:** day-by-day board with Morning / Evening / Night columns, filterable by department.
 - **Checks:** uncovered shifts per department, anyone on duty more than 12 hours without a break (e.g. Night then Morning = 18 h), and doctors who haven't uploaded.
-- **Team** (coordinators only): approve or reject sign-ups and remove access.
+- **Team** (coordinators only): approve or reject sign-ups, remove access, and mark staff who don't do duties (e.g. MSA) as *not on the duty roster*. They keep access but stay off the board, the checks and swap lists.
 
 ## Screenshots
 

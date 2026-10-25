@@ -258,13 +258,13 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   <div class="mast-inner mast-top">
     <div class="brand">
       <span class="logo-plate"><img class="logo" src="assets/eastridge-logo.png" alt="Eastridge Primecare, a project of FFH" width="502" height="207"></span>
-      <span class="bar-title">Doctors' duty roster</span>
+      <span class="bar-title">Doctors' Duty Roster</span>
     </div>
     <div class="who" id="who"></div>
   </div>
   <div class="mast-inner hero-copy">
     <span class="eyebrow">Eastridge Primecare · Medical staff</span>
-    <h1>Doctors' duty roster</h1>
+    <h1>Doctors' Duty Roster</h1>
     <p>Upload your month, swap or hand over duties, and see who's on for every shift across the hospital.</p>
   </div>
 </header>
@@ -567,6 +567,7 @@ const store = {
     else await dbCall(() => ref.set({ uid, ...data, email: app.email || "", approved: false, createdAt: Date.now(), updatedAt: Date.now() }));
   },
   async setApproved(uid, approved) { await dbCall(() => app.db.collection("doctors").doc(uid).update({ approved, updatedAt: Date.now() })); },
+  async setOffRoster(uid, off) { await dbCall(() => app.db.collection("doctors").doc(uid).update({ offRoster: off, updatedAt: Date.now() })); },
   async removeDoctor(uid) { await dbCall(() => app.db.collection("doctors").doc(uid).delete()); },
   async getRoster(month, id) {
     if (app.sample) return cloneShifts(rosterOf(month, id) || {});
@@ -629,12 +630,15 @@ function stopSample() {
 }
 
 /* ---------- derived ---------- */
+/* Approved staff who don't do duties (e.g. MSA): they keep access but stay off the roster, checks and swap lists. */
+const isOffRoster = id => !app.sample && !!(app.allDoctors && app.allDoctors[id] && app.allDoctors[id].offRoster);
+function offRosterStaff() { return Object.values(app.allDoctors || {}).filter(d => d.approved === true && d.offRoster).sort((a, b) => (a.name || "").localeCompare(b.name || "")); }
 function deptList() { return [...new Set(Object.values(state.doctors).map(d => d.dept || "No department"))].sort(); }
 function sortedDoctors() { return Object.values(state.doctors).sort((a, b) => (a.name || "").localeCompare(b.name || "")); }
-function allRosterIds(month) { return [...new Set([...Object.keys(monthDocs(month)), ...Object.keys(state.doctors)])]; }
+function allRosterIds(month) { return [...new Set([...Object.keys(monthDocs(month)), ...Object.keys(state.doctors)])].filter(id => !isOffRoster(id)); }
 function audit(month) {
   const stretches = [];
-  for (const id of Object.keys(monthDocs(month))) for (const st of longStretches(combined(id, month), month)) stretches.push({ id, ...st });
+  for (const id of Object.keys(monthDocs(month)).filter(id => !isOffRoster(id))) for (const st of longStretches(combined(id, month), month)) stretches.push({ id, ...st });
   const cov = coverageGaps(month, state.doctors, monthDocs(month));
   const missing = sortedDoctors().filter(d => !rosterOf(month, d.uid));
   return { stretches, gaps: cov.gaps, notUploadedDepts: cov.notUploaded, missing };
@@ -718,10 +722,12 @@ function renderTeam() {
   return `<div class="grid2">
     <section class="panel"><h2>Waiting for approval</h2>${pend.length ? `<div class="list">${pend.map(d => row(d, `<button class="btn primary" data-act="approve" data-id="${esc(d.uid)}" id="ap-${esc(d.uid)}" ${dis}>Approve</button><button class="btn danger" data-act="reject-doc" data-id="${esc(d.uid)}" id="rj-${esc(d.uid)}" ${dis}>Reject</button>`)).join("")}</div>` : `<p class="muted">No one is waiting. New sign-ups appear here.</p>`}
       <p class="muted small">Only approve people you recognise. Approved doctors see the full roster and can change duties.</p></section>
-    <section class="panel"><h2>Approved doctors (${ok.length})</h2>${ok.length ? `<div class="list">${ok.map(d => row(d, d.uid === app.uid ? `<span class="muted small">This is you.</span>` :
+    <section class="panel"><h2>On the duty roster (${ok.length})</h2>${ok.length ? `<div class="list">${ok.map(d => row(d, d.uid === app.uid ? `<button class="btn" data-act="roster-off" data-id="${esc(d.uid)}" id="off-${esc(d.uid)}" ${dis}>I don't do duties: take me off</button>` :
       state.confirmRevoke === d.uid ? `<span class="small">Remove ${esc(d.name)}'s access?</span><button class="btn danger" data-act="revoke" data-id="${esc(d.uid)}" id="rv-${esc(d.uid)}" ${dis}>Yes, remove</button><button class="btn" data-act="revoke-cancel" id="rvc-${esc(d.uid)}">Keep</button>` :
-      `<button class="btn" data-act="revoke-ask" data-id="${esc(d.uid)}" id="rva-${esc(d.uid)}">Remove access</button>`)).join("")}</div>` : `<p class="muted">No approved doctors yet.</p>`}
+      `<button class="btn" data-act="roster-off" data-id="${esc(d.uid)}" id="off-${esc(d.uid)}" ${dis}>Take off duty roster</button><button class="btn" data-act="revoke-ask" data-id="${esc(d.uid)}" id="rva-${esc(d.uid)}">Remove access</button>`)).join("")}</div>` : `<p class="muted">No doctors on the duty roster yet.</p>`}
       <p class="muted small">Removing access keeps their past rosters and change log, and puts their account back to waiting for approval.</p></section>
+    <section class="panel"><h2>Staff not on the duty roster (${offRosterStaff().length})</h2>${offRosterStaff().length ? `<div class="list">${offRosterStaff().map(d => row(d, `${d.uid === app.uid ? `<span class="muted small">This is you.</span>` : ""}<button class="btn" data-act="roster-on" data-id="${esc(d.uid)}" id="on-${esc(d.uid)}" ${dis}>Put on duty roster</button>${d.uid !== app.uid ? (state.confirmRevoke === d.uid ? `<button class="btn danger" data-act="revoke" data-id="${esc(d.uid)}" id="rv2-${esc(d.uid)}" ${dis}>Yes, remove access</button><button class="btn" data-act="revoke-cancel" id="rvc2-${esc(d.uid)}">Keep</button>` : `<button class="btn" data-act="revoke-ask" data-id="${esc(d.uid)}" id="rva2-${esc(d.uid)}">Remove access</button>`) : ""}`)).join("")}</div>` : `<p class="muted">No one. Use this for MSA or admin staff who need to see the roster but don't do duties.</p>`}
+      <p class="muted small">They can see the roster, but they don't appear on it, in the checks, or in swap lists.</p></section>
   </div>`;
 }
 function renderProfileForm() {
@@ -742,7 +748,7 @@ function renderTabs() {
   const a = app.loading ? null : audit(state.month);
   const issues = a ? a.stretches.length + a.gaps.length : 0;
   const pend = pendingForMe().length;
-  const t = [["board", "Hospital roster", ""], ["mine", "My roster", unsavedCount() ? `<span class="count soft" title="Unsaved changes">•</span>` : ""],
+  const t = [["board", "Hospital roster", ""], ["mine", me() || !app.canEdit ? "My roster" : "Edit rosters", unsavedCount() ? `<span class="count soft" title="Unsaved changes">•</span>` : ""],
     ["changes", "Swaps & changes", pend ? `<span class="count">${pend}</span>` : ""], ["checks", "Checks", issues ? `<span class="count">${issues > 99 ? "99+" : issues}</span>` : ""]];
   if (app.isAdmin && !app.sample) { const pc = pendingDoctors().length; t.push(["team", "Team", pc ? `<span class="count">${pc}</span>` : ""]); }
   return t.map(([k, l, extra]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${state.tab === k}" data-act="tab" data-tab="${k}">${l}${extra}</button>`).join("");
@@ -754,9 +760,9 @@ function renderBoard() {
   const doctors = sortedDoctors();
   if (!doctors.length && !Object.keys(docs).length) {
     return `<div class="empty"><h2>No rosters for ${esc(monthLabel(month))} yet</h2><p>Each doctor sets up a profile, then uploads or fills in their month under <b>My roster</b>. Their duties appear here day by day.</p>
-      <div class="btns">${canAct() && app.uid ? `<button class="btn primary" data-act="profile-open" id="empty-setup">Set up my profile</button>` : ""}${!app.sample ? `<button class="btn" data-act="sample-on" id="sample-on">Show an example</button>` : ""}</div></div>`;
+      <div class="btns">${canAct() && app.uid && !app.myDoc && !app.sample ? `<button class="btn primary" data-act="profile-open" id="empty-setup">Set up my profile</button>` : ""}${app.canEdit && !app.sample ? `<button class="btn primary" data-act="tab" data-tab="team" id="empty-team">Approve doctors in the Team tab</button>` : ""}${!app.sample ? `<button class="btn" data-act="sample-on" id="sample-on">Show an example</button>` : ""}</div></div>`;
   }
-  const ids = Object.keys(docs);
+  const ids = Object.keys(docs).filter(id => !isOffRoster(id));
   const deptOk = id => state.dept === "all" || ((state.doctors[id] && state.doctors[id].dept) || "No department") === state.dept;
   const scopeIds = allRosterIds(month).filter(deptOk);
   const uploadedInScope = scopeIds.some(id => docs[id]);
@@ -809,6 +815,8 @@ function renderMine() {
   const month = state.month, id = editTarget();
   if (!id) {
     if (!canAct()) return `<div class="empty"><p>Your account can view the roster but not change it.</p></div>`;
+    if (app.canEdit && !app.sample) return `<div class="empty"><h2>No doctors on the roster yet</h2><p>Once you approve doctors in the Team tab, you can fill in or correct anyone's roster here.</p><button class="btn" data-act="tab" data-tab="team" id="mine-team">Open the Team tab</button></div>`;
+    if (app.myDoc && app.myDoc.offRoster) return `<div class="empty"><h2>You're not on the duty roster</h2><p>You can see the hospital roster, but you have no duties of your own.</p></div>`;
     return `<div class="empty"><h2>Set up your profile first</h2><p>Add your name and department so your duties show up on the hospital roster.</p><button class="btn primary" data-act="profile-open" id="mine-setup">Set up my doctor profile</button></div>`;
   }
   const key = draftKey(month, id), draft = state.drafts[key], saved = rosterOf(month, id);
@@ -922,7 +930,7 @@ function renderChanges() {
       ${pv.error ? `<div class="note bad">${esc(pv.error)}</div>` : ""}${pv.warns.map(w => `<div class="note">If you accept: ${esc(w)}</div>`).join("")}
       <div class="btns"><button class="btn primary" data-act="accept" data-id="${esc(r.id)}" id="acc-${esc(r.id)}" ${app.busy || !canAct() ? "disabled" : ""}>Accept</button><button class="btn" data-act="decline" data-id="${esc(r.id)}" id="dec-${esc(r.id)}" ${app.busy || !canAct() ? "disabled" : ""}>Decline</button></div></div>`;
   }).join("")}</div>` : `<p class="muted">Nothing waiting. When a colleague asks you to swap or cover a duty, it shows up here.</p>`}</section>`;
-  html += mine && canAct() ? renderRequestForm(month) : `<section class="panel"><h2>Ask for a change</h2><p class="muted">${canAct() ? "Set up your doctor profile to swap or move duties." : "Your account can't make changes yet."}</p></section>`;
+  html += mine && canAct() ? renderRequestForm(month) : `<section class="panel"><h2>Ask for a change</h2><p class="muted">${!canAct() ? "Your account can't make changes yet." : app.myDoc && app.myDoc.offRoster ? "You're not on the duty roster, so you have no duties to swap." + (app.canEdit ? " You can correct any doctor's roster under Edit rosters." : "") : "Set up your doctor profile to swap or move duties."}</p></section>`;
   html += `</div>`;
   if (outgoing.length || othersPending.length) html += `<section class="panel"><h2>Sent and waiting</h2><div class="list">${[...outgoing, ...othersPending].map(r => `<div class="item"><div class="head"><span class="pill pending">Waiting for ${esc(docName(r.to))}</span><span class="muted small">${when(r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.note ? `<p class="small muted">“${esc(r.note)}”</p>` : ""}${r.from === app.uid ? `<div class="btns"><button class="btn" data-act="cancel-req" data-id="${esc(r.id)}" id="can-${esc(r.id)}" ${app.busy ? "disabled" : ""}>Cancel request</button></div>` : ""}</div>`).join("")}</div></section>`;
   html += `<section class="panel"><h2>Change log for ${esc(monthLabel(month))}</h2>${history.length ? `<div class="list">${history.map(r => `<div class="item"><div class="head"><span class="pill ${esc(r.status)}">${STATUS[r.status] || esc(r.status)}</span><span class="muted small">${when(r.decidedAt || r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.reason ? `<p class="small muted">${esc(r.reason)}</p>` : ""}</div>`).join("")}</div>` : `<p class="muted">No changes this month yet. Uploads, edits, swaps, hand-overs and moves are all recorded here.</p>`}</section>`;
@@ -1027,6 +1035,8 @@ const actions = {
   },
   async approve(b) { const id = b.dataset.id; await guarded(() => store.setApproved(id, true), "Approved. They can now use the roster."); },
   async "reject-doc"(b) { const id = b.dataset.id; await guarded(() => store.removeDoctor(id), "Sign-up rejected."); },
+  async "roster-off"(b) { const id = b.dataset.id; await guarded(() => store.setOffRoster(id, true), id === app.uid ? "You're off the duty roster. You keep full coordinator access." : "Taken off the duty roster. They keep their access."); },
+  async "roster-on"(b) { const id = b.dataset.id; await guarded(() => store.setOffRoster(id, false), "Back on the duty roster."); },
   "revoke-ask"(b) { state.confirmRevoke = b.dataset.id; render(); },
   "revoke-cancel"() { state.confirmRevoke = null; render(); },
   async revoke(b) { const id = b.dataset.id; state.confirmRevoke = null; await guarded(() => store.setApproved(id, false), "Access removed."); },
@@ -1189,7 +1199,7 @@ function startLive() {
   if (!unsubDoctors) unsubDoctors = app.db.collection("doctors").limit(1000).onSnapshot(snap => {
     const all = {}; snap.docs.forEach(x => { const v = x.data(); if (v && v.uid) all[v.uid] = v; });
     app.allDoctors = all;
-    app.liveDoctors = Object.fromEntries(Object.entries(all).filter(([, v]) => v.approved === true));
+    app.liveDoctors = Object.fromEntries(Object.entries(all).filter(([, v]) => v.approved === true && !v.offRoster));
     if (app.sample) return;
     state.doctors = app.liveDoctors; render();
   }, onDbError);
