@@ -4,6 +4,8 @@
 
 ![Eastridge Primecare hospital building](assets/hospital.webp)
 
+**Live site: <https://eastridgerosters.vercel.app>**
+
 A website where doctors at Eastridge Primecare upload their monthly duty rosters, swap or hand over duties with colleagues, and see which shifts are uncovered. Everything is saved in a free Firebase database, and the site itself is hosted free on Vercel.
 
 ## Shifts
@@ -53,7 +55,7 @@ On a phone, in dark mode:
 1. **Build → Authentication → Get started**.
 2. Under **Sign-in method**, enable **Email/Password**.
 3. *(Optional)* Enable **Google**, then set `window.ROSTER_GOOGLE_SIGNIN = true;` in `firebase-config.js`.
-4. Under **Settings → Authorized domains**, click **Add domain** and add your Vercel address (for example `eastridge-rosters.vercel.app`, shown after step 4 below).
+4. Under **Settings → Authorized domains**, click **Add domain** and add your Vercel address (`eastridgerosters.vercel.app`).
 
 ### 3. Create the database and lock it down
 1. **Build → Firestore Database → Create database**. Pick a location near you (for Pakistan, e.g. `asia-south1` Mumbai). Start in **production mode**.
@@ -63,7 +65,7 @@ On a phone, in dark mode:
 1. Go to <https://vercel.com/new> and sign in with your GitHub account.
 2. Find **Eastridge-Rosters** in the list and click **Import**. (If it isn't listed, click *Adjust GitHub App Permissions* and allow the repository.)
 3. Leave every setting as it is (`vercel.json` in this repository already tells Vercel it's a static site) and click **Deploy**.
-4. Vercel gives you an address such as `https://eastridge-rosters.vercel.app`. Add that domain to Firebase's **Authorized domains** (step 2.4).
+4. Vercel gives you an address, for this project `https://eastridgerosters.vercel.app`. Add that domain to Firebase's **Authorized domains** (step 2.4).
 
 From then on, every change pushed to `main` goes live by itself in under a minute.
 
