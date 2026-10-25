@@ -1,0 +1,1038 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body style="margin:0">
+<title>Eastridge Duty Roster</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a ward-board — header with the shift key, month bar, tabs, then a day-by-shift board (rows = dates, columns = Morning / Evening / Night). */
+:root {
+  --bg: #f3f6f6;
+  --surface: #ffffff;
+  --sunk: #e9efef;
+  --ink: #12292b;
+  --muted: #5a6e70;
+  --line: #d6e0e0;
+  --accent: #0d6b66;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcefed;
+  --m: #9a6400; --m-bg: #fcefd2; --m-line: #f0d08a;
+  --e: #b0432b; --e-bg: #fbe2da; --e-line: #f1b3a2;
+  --n: #4446a3; --n-bg: #e3e4f8; --n-line: #b9bcef;
+  --bad: #b42318; --bad-bg: #fdecea;
+  --warn: #9a4d00; --warn-bg: #fff1dc;
+  --ok: #17704a; --ok-bg: #def5e8;
+  --f-display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1819; --surface: #152224; --sunk: #1b2b2d; --ink: #e2eded; --muted: #93a8a9; --line: #29393b;
+  --accent: #4fc2b8; --accent-ink: #062220; --accent-soft: #163a38;
+  --m: #f2b54a; --m-bg: #3a2b0f; --m-line: #6b5120;
+  --e: #f38c72; --e-bg: #3c1f18; --e-line: #6e3628;
+  --n: #a2a5f6; --n-bg: #23254a; --n-line: #3e4180;
+  --bad: #ff8a80; --bad-bg: #3d1a17; --warn: #f7b155; --warn-bg: #3a2810; --ok: #5edb9b; --ok-bg: #12321f;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0e1819; --surface: #152224; --sunk: #1b2b2d; --ink: #e2eded; --muted: #93a8a9; --line: #29393b;
+  --accent: #4fc2b8; --accent-ink: #062220; --accent-soft: #163a38;
+  --m: #f2b54a; --m-bg: #3a2b0f; --m-line: #6b5120;
+  --e: #f38c72; --e-bg: #3c1f18; --e-line: #6e3628;
+  --n: #a2a5f6; --n-bg: #23254a; --n-line: #3e4180;
+  --bad: #ff8a80; --bad-bg: #3d1a17; --warn: #f7b155; --warn-bg: #3a2810; --ok: #5edb9b; --ok-bg: #12321f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 20px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.2rem; font-weight: 600; }
+h3 { font-size: 1rem; font-weight: 600; }
+p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+.eyebrow { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
+.brand { display: flex; gap: 12px; align-items: center; }
+.mark { width: 44px; height: 44px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-family: var(--f-display); font-weight: 700; font-size: 1.1rem; position: relative; flex: none; }
+.mark::after { content: ""; position: absolute; right: -4px; bottom: -4px; width: 14px; height: 14px; border-radius: 4px; background: var(--surface); border: 2px solid var(--accent); }
+.who { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 0.9rem; }
+.who b { font-weight: 600; }
+
+.key { display: flex; flex-wrap: wrap; gap: 8px; }
+.keyitem { display: flex; gap: 8px; align-items: baseline; padding: 6px 12px; border-radius: 999px; border: 1px solid; font-size: 0.85rem; }
+.keyitem b { font-weight: 600; }
+.sh-M { color: var(--m); background: var(--m-bg); border-color: var(--m-line); }
+.sh-E { color: var(--e); background: var(--e-bg); border-color: var(--e-line); }
+.sh-N { color: var(--n); background: var(--n-bg); border-color: var(--n-line); }
+
+/* banners */
+.banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px 14px; border-radius: var(--r); background: var(--accent-soft); border: 1px solid var(--line); }
+.banner.warn { background: var(--warn-bg); color: var(--warn); }
+.banner.bad { background: var(--bad-bg); color: var(--bad); }
+.banner p { min-width: 0; flex: 1 1 260px; }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-weight: 600; font-size: 0.9rem; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--bad); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--accent); padding-inline: 8px; }
+.btn.ghost:hover { border-color: var(--line); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* month bar + tabs */
+.bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.month { display: flex; align-items: center; gap: 4px; }
+.month h2 { min-width: 10.5em; text-align: center; font-size: 1.3rem; }
+.iconbtn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 1.1rem; line-height: 1; }
+.iconbtn:hover { border-color: var(--accent); }
+.tabs { display: flex; gap: 4px; background: var(--sunk); padding: 4px; border-radius: 10px; overflow-x: auto; max-width: 100%; }
+.tab { border: 0; background: transparent; padding: 7px 12px; border-radius: 7px; cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--muted); white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
+.tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--bad); color: var(--surface); font-size: 0.72rem; display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; }
+.count.soft { background: var(--line); color: var(--ink); }
+
+/* panels */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; align-items: start; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.stat { display: grid; }
+.stat b { font-family: var(--f-display); font-size: 1.35rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat span { font-size: 0.78rem; color: var(--muted); }
+.stat.bad b { color: var(--bad); }
+.stat.warn b { color: var(--warn); }
+.stat.okc b { color: var(--ok); }
+a.statlink, button.statlink { all: unset; cursor: pointer; display: grid; border-radius: 6px; }
+button.statlink:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* form */
+.field { display: grid; gap: 4px; min-width: 0; }
+.field label, .field .lab { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+input[type=text], input[type=tel], input[type=date], select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 0; }
+textarea { font-family: var(--f-mono); font-size: 0.82rem; min-height: 90px; resize: vertical; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+.row > .field { flex: 1 1 180px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { border: 1px solid var(--line); background: var(--surface); padding: 7px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.88rem; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+/* board */
+.filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.filters select, .bar select { width: auto; max-width: 100%; }
+.check { min-width: 0; max-width: 100%; }
+.check { display: inline-flex; gap: 6px; align-items: center; font-size: 0.9rem; cursor: pointer; }
+.boardwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.board { display: grid; grid-template-columns: minmax(84px, 108px) repeat(3, minmax(0, 1fr)); min-width: 0; }
+.bh { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; padding: 10px; font-size: 0.8rem; font-weight: 700; border-bottom: 1px solid var(--line); background: var(--surface); display: grid; }
+.bh .mono { font-weight: 500; font-size: 0.72rem; opacity: .85; }
+.bh.sh-M, .bh.sh-E, .bh.sh-N { border-width: 0 0 1px 0; border-style: solid; }
+.bd { padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 0.85rem; display: grid; align-content: start; }
+.bd b { font-family: var(--f-display); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.bd.we { background: var(--sunk); }
+.bd.today b::after { content: "today"; margin-left: 6px; font-family: var(--f-body); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--accent-ink); background: var(--accent); padding: 1px 5px; border-radius: 4px; vertical-align: 2px; }
+.bc { padding: 6px; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px; align-content: start; min-width: 0; }
+.bc.we { background: var(--sunk); }
+.bc.gap { background: var(--bad-bg); }
+.gaptag { color: var(--bad); font-weight: 700; font-size: 0.78rem; padding: 2px 4px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: 1px solid; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--surface); }
+.chip small { font-weight: 500; opacity: .75; }
+.chip.mine { outline: 2px solid var(--accent); outline-offset: 0; cursor: pointer; }
+.chip.flag::before { content: "!"; display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: var(--surface); font-size: 0.65rem; font-weight: 800; }
+button.chip { font: inherit; font-size: 0.8rem; font-weight: 600; }
+.chip.c-M { color: var(--m); border-color: var(--m-line); }
+.chip.c-E { color: var(--e); border-color: var(--e-line); }
+.chip.c-N { color: var(--n); border-color: var(--n-line); }
+
+/* calendar editor */
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal .dow { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); text-align: center; padding: 2px 0; }
+.cday { border: 1px solid var(--line); border-radius: 8px; padding: 4px; display: grid; gap: 3px; background: var(--surface); min-width: 0; }
+.cday.we { background: var(--sunk); }
+.cday.flag { border-color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }
+.cday .dn { font-family: var(--f-display); font-weight: 600; font-size: 0.85rem; font-variant-numeric: tabular-nums; padding-left: 2px; }
+.cday.blank { border: 0; background: transparent; }
+.tg { border: 1px dashed var(--line); background: transparent; border-radius: 5px; padding: 2px 0; font-weight: 700; font-size: 0.75rem; cursor: pointer; color: var(--muted); width: 100%; }
+.tg:hover { border-style: solid; }
+.tg.on { border-style: solid; }
+.tg.on.M { color: var(--m); background: var(--m-bg); border-color: var(--m-line); }
+.tg.on.E { color: var(--e); background: var(--e-bg); border-color: var(--e-line); }
+.tg.on.N { color: var(--n); background: var(--n-bg); border-color: var(--n-line); }
+.tg:disabled { cursor: not-allowed; }
+
+/* lists */
+.list { display: grid; gap: 8px; }
+.item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; background: var(--surface); min-width: 0; }
+.item .head { display: flex; gap: 8px; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.pill.pending { background: var(--warn-bg); color: var(--warn); }
+.pill.accepted, .pill.done { background: var(--ok-bg); color: var(--ok); }
+.pill.declined, .pill.cancelled, .pill.failed { background: var(--sunk); color: var(--muted); }
+.note { font-size: 0.85rem; color: var(--warn); background: var(--warn-bg); border-radius: 6px; padding: 6px 8px; }
+.note.bad { color: var(--bad); background: var(--bad-bg); }
+.note.ok { color: var(--ok); background: var(--ok-bg); }
+.empty { padding: 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--r); display: grid; gap: 10px; justify-items: center; }
+details > summary { cursor: pointer; font-weight: 600; }
+pre.tpl { margin: 0; padding: 10px; background: var(--sunk); border-radius: 8px; overflow-x: auto; font-family: var(--f-mono); font-size: 0.8rem; }
+ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+
+#toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 0.9rem; max-width: calc(100% - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 20; }
+
+@media (max-width: 560px) {
+  h1 { font-size: 1.3rem; }
+  .month h2 { min-width: 0; font-size: 1.1rem; }
+  .board { grid-template-columns: 62px repeat(3, minmax(0, 1fr)); }
+  .bd { padding: 6px; font-size: 0.75rem; }
+  .bh { padding: 8px 6px; }
+  .chip small { display: none; }
+  .tg { font-size: 0.68rem; }
+  .cal { gap: 2px; }
+  .cday { padding: 2px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">EH</div>
+      <div>
+        <div class="eyebrow">Eastridge Hospital</div>
+        <h1>Doctors' duty roster</h1>
+      </div>
+    </div>
+    <div class="who" id="who"></div>
+  </header>
+
+  <div class="key" aria-label="Shift times">
+    <span class="keyitem sh-M"><b>Morning</b><span class="mono">08:00 – 14:00</span></span>
+    <span class="keyitem sh-E"><b>Evening</b><span class="mono">14:00 – 20:00</span></span>
+    <span class="keyitem sh-N"><b>Night</b><span class="mono">20:00 – 08:00 next day</span></span>
+  </div>
+
+  <div id="banner"></div>
+
+  <div class="bar">
+    <div class="month">
+      <button class="iconbtn" id="m-prev" data-act="month" data-d="-1" aria-label="Previous month">‹</button>
+      <h2 id="month-label"></h2>
+      <button class="iconbtn" id="m-next" data-act="month" data-d="1" aria-label="Next month">›</button>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs"></nav>
+  </div>
+
+  <main id="main"></main>
+</div>
+<div id="toast" role="status" hidden></div>
+
+<script>
+/* ===== LOGIC START ===== */
+const SHIFTS = [
+  { code: "M", name: "Morning", start: 8, end: 14, hours: 6, time: "08:00 – 14:00" },
+  { code: "E", name: "Evening", start: 14, end: 20, hours: 6, time: "14:00 – 20:00" },
+  { code: "N", name: "Night", start: 20, end: 32, hours: 12, time: "20:00 – 08:00" },
+];
+const SHIFT = Object.fromEntries(SHIFTS.map(s => [s.code, s]));
+const CODES = SHIFTS.map(s => s.code);
+const MAX_STRETCH = 12; // hours on duty without a break before we flag it
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const MON_SHORT = MONTHS.map(m => m.slice(0, 3));
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+const pad = n => String(n).padStart(2, "0");
+const monthKey = (y, m) => y + "-" + pad(m);
+function parseMonth(k) { const [y, m] = k.split("-").map(Number); return { y, m }; }
+function addMonths(k, d) { let { y, m } = parseMonth(k); m += d; while (m > 12) { m -= 12; y++; } while (m < 1) { m += 12; y--; } return monthKey(y, m); }
+function daysIn(k) { const { y, m } = parseMonth(k); return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+function datesOf(k) { const out = []; for (let d = 1; d <= daysIn(k); d++) out.push(k + "-" + pad(d)); return out; }
+function dayNum(date) { const [y, m, d] = date.split("-").map(Number); return Date.UTC(y, m - 1, d) / 86400000; }
+function dow(date) { return new Date(dayNum(date) * 86400000).getUTCDay(); }
+function fmtDate(date) { const [, m, d] = date.split("-").map(Number); return DOW[dow(date)] + " " + d + " " + MON_SHORT[m - 1]; }
+function monthLabel(k) { const { y, m } = parseMonth(k); return MONTHS[m - 1] + " " + y; }
+function fmtDuty(slot) { return SHIFT[slot.shift].name + ", " + fmtDate(slot.date); }
+function ymd(y, m, d) { return y + "-" + pad(m) + "-" + pad(d); }
+function validYmd(y, m, d) { if (!(y > 1900 && m >= 1 && m <= 12 && d >= 1)) return null; return d <= new Date(Date.UTC(y, m, 0)).getUTCDate() ? ymd(y, m, d) : null; }
+
+function sortCodes(a) { return CODES.filter(c => a.includes(c)); }
+function cloneShifts(s) { const o = {}; for (const k in (s || {})) o[k] = [...s[k]]; return o; }
+function hasDuty(s, date, code) { return !!(s && s[date] && s[date].includes(code)); }
+function withDuty(s, date, code) { const o = cloneShifts(s); o[date] = sortCodes([...(o[date] || []), code]); return o; }
+function withoutDuty(s, date, code) { const o = cloneShifts(s); if (!o[date]) return o; o[date] = o[date].filter(c => c !== code); if (!o[date].length) delete o[date]; return o; }
+function dutyList(s) { const out = []; Object.keys(s || {}).sort().forEach(d => sortCodes(s[d]).forEach(c => out.push({ date: d, shift: c }))); return out; }
+function hoursOf(s) { return dutyList(s).reduce((h, x) => h + SHIFT[x.shift].hours, 0); }
+function onlyMonth(s, k) { const o = {}; for (const d in (s || {})) if (d.startsWith(k + "-") && s[d].length) o[d] = sortCodes(s[d]); return o; }
+function sameShifts(a, b) { return JSON.stringify(onlyMonthAll(a)) === JSON.stringify(onlyMonthAll(b)); }
+function onlyMonthAll(s) { const o = {}; Object.keys(s || {}).sort().forEach(d => { if (s[d].length) o[d] = sortCodes(s[d]); }); return o; }
+function diffShifts(before, after) {
+  const key = x => x.date + "|" + x.shift;
+  const b = new Set(dutyList(before).map(key)), a = new Set(dutyList(after).map(key));
+  return { added: [...a].filter(k => !b.has(k)).length, removed: [...b].filter(k => !a.has(k)).length };
+}
+
+/* Merge back-to-back shifts and report any run of duty longer than MAX_STRETCH hours. */
+function longStretches(shifts, monthK) {
+  const iv = dutyList(shifts).map(x => { const base = dayNum(x.date) * 24, s = SHIFT[x.shift]; return { a: base + s.start, b: base + s.end, first: x, last: x }; }).sort((p, q) => p.a - q.a);
+  const merged = [];
+  for (const i of iv) {
+    const l = merged[merged.length - 1];
+    if (l && i.a <= l.b) { if (i.b > l.b) { l.b = i.b; l.last = i.last; } }
+    else merged.push({ ...i });
+  }
+  return merged
+    .filter(m => m.b - m.a > MAX_STRETCH && (!monthK || m.first.date.startsWith(monthK + "-") || m.last.date.startsWith(monthK + "-")))
+    .map(m => ({ hours: m.b - m.a, from: m.first, to: m.last }));
+}
+function stretchText(st) { return st.hours + " h straight: " + fmtDuty(st.from) + " → " + fmtDuty(st.to); }
+
+/* Validate and compute the rosters after a change. A = requester's shifts, B = colleague's. */
+function planChange(req, A, B, names) {
+  const g = req.give, from = names.from || "the requester", to = names.to || "the colleague";
+  if (!hasDuty(A, g.date, g.shift)) return { error: fmtDuty(g) + " is no longer on " + from + "'s roster." };
+  if (req.type === "move") {
+    const t = req.take;
+    if (hasDuty(A, t.date, t.shift)) return { error: from + " is already on duty for " + fmtDuty(t) + "." };
+    return { A: withDuty(withoutDuty(A, g.date, g.shift), t.date, t.shift) };
+  }
+  if (req.type === "cover") {
+    if (hasDuty(B, g.date, g.shift)) return { error: to + " is already on duty for " + fmtDuty(g) + "." };
+    return { A: withoutDuty(A, g.date, g.shift), B: withDuty(B, g.date, g.shift) };
+  }
+  if (req.type === "swap") {
+    const t = req.take;
+    if (!hasDuty(B, t.date, t.shift)) return { error: fmtDuty(t) + " is no longer on " + to + "'s roster." };
+    if (hasDuty(A, t.date, t.shift)) return { error: from + " is already on duty for " + fmtDuty(t) + "." };
+    if (hasDuty(B, g.date, g.shift)) return { error: to + " is already on duty for " + fmtDuty(g) + "." };
+    return { A: withDuty(withoutDuty(A, g.date, g.shift), t.date, t.shift), B: withDuty(withoutDuty(B, t.date, t.shift), g.date, g.shift) };
+  }
+  return { error: "Unknown change type." };
+}
+
+/* ---- file parsing ---- */
+function parseCSV(text) {
+  text = String(text || "").replace(/^﻿/, "");
+  const first = text.split(/\r?\n/).find(l => l.trim()) || "";
+  const delim = [",", "\t", ";"].map(d => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === delim) { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); rows.push(row); row = []; cell = ""; }
+    else cell += c;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+const SHIFT_WORDS = { m: "M", morning: "M", morn: "M", mor: "M", am: "M", e: "E", evening: "E", eve: "E", ev: "E", pm: "E", n: "N", night: "N", nite: "N", nt: "N", ngt: "N" };
+function parseShiftCell(v) {
+  const s = String(v == null ? "" : v).trim().toLowerCase();
+  if (!s) return { codes: [], empty: true };
+  if (/^(off|leave|rest|none|-|—|holiday|al|cl)$/.test(s)) return { codes: [], off: true };
+  const codes = []; let bad = false;
+  for (const tok of s.split(/[\s,+\/&]+|\band\b/).filter(Boolean)) {
+    if (SHIFT_WORDS[tok]) codes.push(SHIFT_WORDS[tok]);
+    else if (/^[men]{2,3}$/.test(tok)) tok.split("").forEach(ch => codes.push(SHIFT_WORDS[ch]));
+    else if (/^shifts?$|^duty$/.test(tok)) continue;
+    else bad = true;
+  }
+  return { codes: sortCodes(codes), bad: bad || !codes.length };
+}
+const isMark = v => /^(x|✓|✔|y|yes|1|true|on|duty|d)$/i.test(String(v == null ? "" : v).trim());
+function monthFromName(s) { const i = MON_SHORT.findIndex(m => s.toLowerCase().startsWith(m.toLowerCase())); return i < 0 ? 0 : i + 1; }
+function parseDateCell(v, monthK) {
+  const { y: my, m: mm } = parseMonth(monthK);
+  if (v instanceof Date && !isNaN(v)) { const t = new Date(v.getTime() + 12 * 3600e3); return validYmd(t.getFullYear(), t.getMonth() + 1, t.getDate()); }
+  if (typeof v === "number") {
+    if (Number.isInteger(v) && v >= 1 && v <= 31) return validYmd(my, mm, v);
+    if (v > 59 && v < 80000) { const t = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000); return validYmd(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()); }
+    return null;
+  }
+  let s = String(v == null ? "" : v).trim().replace(/^(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s+/i, "");
+  if (!s) return null;
+  let r;
+  if ((r = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))) return validYmd(+r[1], +r[2], +r[3]);
+  if ((r = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/))) {
+    let d = +r[1], m = +r[2], y = +r[3]; if (y < 100) y += 2000;
+    if (m > 12 && d <= 12) [d, m] = [m, d]; // clearly month/day
+    return validYmd(y, m, d);
+  }
+  if ((r = s.match(/^(\d{1,2})[-\/.](\d{1,2})$/))) { let d = +r[1], m = +r[2]; if (m > 12 && d <= 12) [d, m] = [m, d]; return validYmd(my, m, d); }
+  if ((r = s.match(/^(\d{1,2})(st|nd|rd|th)?$/i))) return validYmd(my, mm, +r[1]);
+  if ((r = s.match(/^(\d{1,2})(?:st|nd|rd|th)?[\s\-]+([a-z]{3,})\.?,?[\s\-]*(\d{2,4})?$/i))) { const m = monthFromName(r[2]); let y = r[3] ? +r[3] : my; if (y < 100) y += 2000; return m ? validYmd(y, m, +r[1]) : null; }
+  if ((r = s.match(/^([a-z]{3,})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(\d{4})?$/i))) { const m = monthFromName(r[1]); const y = r[3] ? +r[3] : my; return m ? validYmd(y, m, +r[2]) : null; }
+  return null;
+}
+function parseRows(rows, monthK) {
+  rows = (rows || []).map(r => (r || []).map(c => (typeof c === "string" ? c.trim() : c))).filter(r => r.some(c => c !== "" && c != null));
+  const res = { entries: [], skipped: [], otherMonths: {}, offDays: 0 };
+  if (!rows.length) return res;
+  const hdr = rows[0].map(c => String(c == null ? "" : c).toLowerCase());
+  const find = re => hdr.findIndex(h => re.test(h));
+  const dateIdx = find(/date|^day/);
+  const colIdx = { M: find(/^morn|^m$/), E: find(/^even|^eve$|^e$/), N: find(/^night|^n$/) };
+  const shiftIdx = find(/shift|duty/);
+  let mode, start = 1, dIdx = dateIdx < 0 ? 0 : dateIdx;
+  const firstIsData = rows[0].length >= 2 && parseDateCell(rows[0][0], monthK) && dateIdx < 0;
+  if (firstIsData) { mode = "pairs"; start = 0; dIdx = 0; }
+  else if (colIdx.M >= 0 || colIdx.E >= 0 || colIdx.N >= 0) mode = "cols";
+  else if (shiftIdx >= 0 || dateIdx >= 0) mode = "pairs";
+  else { mode = "pairs"; start = 0; }
+  const seen = new Set();
+  for (let i = start; i < rows.length; i++) {
+    const row = rows[i], line = i + 1;
+    const date = parseDateCell(row[dIdx], monthK);
+    if (!date) { res.skipped.push({ line, reason: "couldn't read the date “" + String(row[dIdx] ?? "") + "”" }); continue; }
+    let codes = [];
+    if (mode === "cols") {
+      for (const c of CODES) { const idx = colIdx[c]; if (idx < 0) continue; const v = row[idx]; if (v === "" || v == null) continue; if (isMark(v) || parseShiftCell(v).codes.includes(c)) codes.push(c); }
+      if (!codes.length) { res.offDays++; continue; }
+    } else {
+      const cellVal = shiftIdx >= 0 ? row[shiftIdx] : row.filter((_, j) => j !== dIdx).join(" ");
+      const p = parseShiftCell(cellVal);
+      if (p.off || p.empty) { res.offDays++; continue; }
+      if (p.bad) { res.skipped.push({ line, reason: "couldn't read the shift “" + String(cellVal) + "”" }); continue; }
+      codes = p.codes;
+    }
+    if (!date.startsWith(monthK + "-")) { const k = date.slice(0, 7); res.otherMonths[k] = (res.otherMonths[k] || 0) + codes.length; continue; }
+    for (const c of codes) { const k = date + "|" + c; if (!seen.has(k)) { seen.add(k); res.entries.push({ date, shift: c }); } }
+  }
+  return res;
+}
+function entriesToShifts(entries) { let s = {}; for (const e of entries) s = withDuty(s, e.date, e.shift); return s; }
+
+/* Per-department coverage for one month. */
+function coverageGaps(monthK, doctors, rosterMonth) {
+  const byDept = {};
+  Object.values(doctors).forEach(d => { const k = d.dept || "No department"; (byDept[k] ||= []).push(d.uid); });
+  const out = { gaps: [], notUploaded: [] };
+  for (const dept of Object.keys(byDept).sort()) {
+    const ids = byDept[dept];
+    if (!ids.some(id => rosterMonth[id])) { out.notUploaded.push(dept); continue; }
+    for (const date of datesOf(monthK)) for (const c of CODES) {
+      if (!ids.some(id => hasDuty(rosterMonth[id], date, c))) out.gaps.push({ dept, date, shift: c });
+    }
+  }
+  return out;
+}
+/* ===== LOGIC END ===== */
+
+/* ---------- app state ---------- */
+const app = { db: null, user: null, uid: null, isOwner: false, canEdit: false, canWrite: null, readOnly: false, sample: false, live: false, loading: true, busy: false };
+const now = new Date();
+const state = {
+  month: monthKey(now.getFullYear(), now.getMonth() + 1),
+  tab: "board", dept: "all", mineOnly: false,
+  doctors: {}, rosters: {}, requests: [],
+  drafts: {}, editFor: null, upload: null, pasteText: "",
+  profileOpen: false, profile: { name: "", dept: "", phone: "" },
+  form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
+};
+const todayKey = ymd(now.getFullYear(), now.getMonth() + 1, now.getDate());
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safeId = s => String(s).replace(/[^A-Za-z0-9_\-.~:@]/g, c => "+" + c.charCodeAt(0).toString(16));
+const docName = id => (state.doctors[id] && state.doctors[id].name) || "Unnamed doctor";
+const me = () => state.doctors[app.uid];
+const rosterOf = (month, id) => (state.rosters[month] || {})[id];
+const canAct = () => !app.readOnly && (app.sample || app.live);
+function monthDocs(month) { return state.rosters[month] || {}; }
+/* Current + previous month combined, so a night on the last day links to a morning on the 1st. */
+function combined(id, month) { return { ...(rosterOf(addMonths(month, -1), id) || {}), ...(rosterOf(month, id) || {}) }; }
+
+let toastTimer;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 4200); }
+
+/* ---------- storage ---------- */
+let unsubDoctors = null, unsubRosters = null, unsubRequests = null;
+function onDbError(e) {
+  if (e && e.code === "revoked") { app.live = false; app.readOnly = true; render(); return; }
+  if (e && e.code === "unavailable") { setTimeout(subscribeMonth, 3000); }
+}
+function subscribeMonth() {
+  if (!app.db) return;
+  if (unsubRosters) unsubRosters();
+  if (unsubRequests) unsubRequests();
+  const ms = [addMonths(state.month, -1), state.month];
+  unsubRosters = app.db.collection("rosters").where("month", "in", ms).onSnapshot(snap => {
+    if (app.sample) return;
+    const r = {};
+    snap.docs.forEach(d => { const x = d.data(); if (x && x.month && x.doctorId) (r[x.month] ||= {})[x.doctorId] = x.shifts || {}; });
+    state.rosters = r; app.loading = false; render();
+  }, onDbError);
+  unsubRequests = app.db.collection("requests").where("month", "in", ms).limit(1000).onSnapshot(snap => {
+    if (app.sample) return;
+    state.requests = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    render();
+  }, onDbError);
+}
+async function dbCall(fn) {
+  try { return await fn(); }
+  catch (e) {
+    if (e && e.code === "unavailable") { await new Promise(r => setTimeout(r, 500 + Math.random() * 800)); return await fn(); }
+    throw e;
+  }
+}
+async function guarded(fn, okMsg) {
+  if (app.busy) return false;
+  app.busy = true; render();
+  try { await fn(); if (okMsg) toast(okMsg); return true; }
+  catch (e) {
+    const code = e && e.code;
+    if (code === "invalid_argument" && app.canWrite !== true) { app.readOnly = true; toast("Your access is view-only. Ask the roster coordinator to give you Contributor access."); }
+    else if (code === "quota_exceeded") toast("The roster's storage is full (" + (e.message || "limit reached") + "). Ask the coordinator to clear old months.");
+    else if (code === "resource_exhausted") toast("Too many saves at once. Wait a few seconds and try again.");
+    else toast("Couldn't save: " + ((e && e.message) || "check your connection and try again."));
+    return false;
+  } finally { app.busy = false; render(); }
+}
+const store = {
+  async saveDoctor(uid, data) {
+    if (app.sample) { state.doctors[uid] = { uid, ...data }; return; }
+    await dbCall(() => app.db.doc("doctors/" + safeId(uid)).set({ uid, ...data, updatedAt: Date.now() }));
+  },
+  async getRoster(month, id) {
+    if (app.sample) return cloneShifts(rosterOf(month, id) || {});
+    const s = await dbCall(() => app.db.doc("rosters/" + month + "_" + safeId(id)).get());
+    return s.exists ? cloneShifts(s.data().shifts || {}) : {};
+  },
+  async saveRoster(month, id, shifts) {
+    shifts = onlyMonth(shifts, month);
+    if (app.sample) { (state.rosters[month] ||= {})[id] = shifts; return; }
+    await dbCall(() => app.db.doc("rosters/" + month + "_" + safeId(id)).set({ month, doctorId: id, shifts, updatedAt: Date.now(), updatedBy: app.uid }));
+  },
+  async addRequest(data) {
+    data = { ...data, createdAt: Date.now(), by: app.uid };
+    if (app.sample) { state.requests.unshift({ id: "s" + Math.random().toString(36).slice(2), ...data }); return; }
+    await dbCall(() => app.db.collection("requests").add(data));
+  },
+  async updateRequest(id, patch) {
+    if (app.sample) { const r = state.requests.find(x => x.id === id); if (r) Object.assign(r, patch); return; }
+    await dbCall(() => app.db.doc("requests/" + id).update(patch));
+  },
+};
+
+/* ---------- example data (only shown when the shared roster can't be reached, or on request) ---------- */
+function buildSample() {
+  const m = state.month, prev = addMonths(m, -1);
+  const docs = [
+    ["s1", "Dr. Example Ayesha", "Emergency"], ["s2", "Dr. Example Bilal", "Emergency"], ["s3", "Dr. Example Chen", "Emergency"],
+    ["s4", "Dr. Example Danish", "Medicine"], ["s5", "Dr. Example Elena", "Medicine"], ["s6", "Dr. Example Farah", "Paediatrics"],
+  ];
+  const doctors = {}; docs.forEach(([uid, name, dept]) => (doctors[uid] = { uid, name, dept }));
+  const rosters = { [m]: {}, [prev]: {} };
+  const pattern = ["M", "E", "N", "", ""];
+  [m, prev].forEach(month => {
+    datesOf(month).forEach((date, i) => {
+      ["s1", "s2", "s3"].forEach((id, j) => { const c = pattern[(i + j * 2) % 5]; if (c) rosters[month][id] = withDuty(rosters[month][id], date, c); });
+      ["s4", "s5"].forEach((id, j) => { const c = ["M", "N", "", "E", ""][(i + j * 2) % 5]; if (c) rosters[month][id] = withDuty(rosters[month][id], date, c); });
+    });
+  });
+  const d3 = m + "-03", d4 = m + "-04", d9 = m + "-09";
+  rosters[m].s1 = withDuty(withDuty(rosters[m].s1 || {}, d3, "N"), d4, "M"); // a deliberate long stretch
+  const s1duty = dutyList(onlyMonth(rosters[m].s1, m))[5], s2duty = dutyList(onlyMonth(rosters[m].s2, m))[7];
+  const requests = [
+    { id: "r1", type: "swap", status: "pending", month: m, from: "s2", to: "s1", give: s2duty, take: s1duty, note: "Family wedding that evening", createdAt: Date.now() - 3600e3 },
+    { id: "r2", type: "cover", status: "accepted", month: m, from: "s4", to: "s5", give: { date: d9, shift: "N" }, createdAt: Date.now() - 86400e3, decidedAt: Date.now() - 80000e3 },
+  ];
+  return { doctors, rosters, requests };
+}
+function startSample(reason) {
+  app.sample = true; app.sampleReason = reason; app.loading = false;
+  app.uid = "s1"; app.canEdit = true; app.readOnly = false;
+  const s = buildSample(); state.doctors = s.doctors; state.rosters = s.rosters; state.requests = s.requests; state.drafts = {};
+  state.editFor = null; render();
+}
+function stopSample() {
+  if (!app.live) return;
+  app.sample = false; app.uid = app.realUid; app.canEdit = app.realCanEdit; app.readOnly = app.realReadOnly;
+  state.doctors = app.liveDoctors || {}; state.rosters = {}; state.requests = []; state.drafts = {}; state.editFor = null; app.loading = true;
+  startLive();
+}
+
+/* ---------- derived ---------- */
+function deptList() { return [...new Set(Object.values(state.doctors).map(d => d.dept || "No department"))].sort(); }
+function sortedDoctors() { return Object.values(state.doctors).sort((a, b) => (a.name || "").localeCompare(b.name || "")); }
+function allRosterIds(month) { return [...new Set([...Object.keys(monthDocs(month)), ...Object.keys(state.doctors)])]; }
+function audit(month) {
+  const stretches = [];
+  for (const id of Object.keys(monthDocs(month))) for (const st of longStretches(combined(id, month), month)) stretches.push({ id, ...st });
+  const cov = coverageGaps(month, state.doctors, monthDocs(month));
+  const missing = sortedDoctors().filter(d => !rosterOf(month, d.uid));
+  return { stretches, gaps: cov.gaps, notUploadedDepts: cov.notUploaded, missing };
+}
+function flaggedSlots(id, month) {
+  const set = new Set();
+  for (const st of longStretches(combined(id, month), month)) {
+    const a = dayNum(st.from.date) * 24 + SHIFT[st.from.shift].start, b = dayNum(st.to.date) * 24 + SHIFT[st.to.shift].end;
+    dutyList(combined(id, month)).forEach(x => { const s = dayNum(x.date) * 24 + SHIFT[x.shift].start; if (s >= a && s < b) set.add(x.date + "|" + x.shift); });
+  }
+  return set;
+}
+function pendingForMe() { return state.requests.filter(r => r.status === "pending" && r.to === app.uid && (r.type === "swap" || r.type === "cover")); }
+
+/* ---------- render ---------- */
+function render() {
+  const ae = document.activeElement, fid = ae && ae.id; let sel = null;
+  try { if (fid && typeof ae.selectionStart === "number") sel = [ae.selectionStart, ae.selectionEnd]; } catch (_) {}
+  $("#who").innerHTML = renderWho();
+  $("#banner").innerHTML = renderBanner();
+  $("#month-label").textContent = monthLabel(state.month);
+  $("#tabs").innerHTML = renderTabs();
+  $("#main").innerHTML = app.loading ? `<div class="empty">Loading the roster…</div>` :
+    state.tab === "board" ? renderBoard() : state.tab === "mine" ? renderMine() : state.tab === "changes" ? renderChanges() : renderChecks();
+  if (fid) { const el = document.getElementById(fid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel) try { el.setSelectionRange(sel[0], sel[1]); } catch (_) {} } }
+}
+function renderWho() {
+  if (app.loading && !app.sample) return "";
+  const d = me();
+  if (d) return `<span>Signed in as <b>${esc(d.name)}</b> · ${esc(d.dept || "No department")}</span><button class="btn ghost" data-act="profile-open" id="who-edit">Edit profile</button>`;
+  if (!canAct() || !app.uid) return `<span class="muted">Viewing only</span>`;
+  return `<button class="btn primary" data-act="profile-open" id="who-setup">Set up my doctor profile</button>`;
+}
+function renderBanner() {
+  let out = "";
+  if (app.sample) out += `<div class="banner warn"><p><b>Example roster.</b> ${esc(app.sampleReason || "")} These doctors are made up and nothing you change here is saved.</p>${app.live ? `<button class="btn" data-act="sample-off" id="sample-off">Back to the real roster</button>` : ""}</div>`;
+  else if (app.readOnly) out += `<div class="banner"><p><b>View only.</b> You can see the roster but not change it. To upload a roster or swap duties, ask the coordinator to share this page with you as a Contributor or Editor.</p></div>`;
+  if (state.profileOpen) out += renderProfileForm();
+  return out;
+}
+function renderProfileForm() {
+  const p = state.profile;
+  const depts = deptList().filter(x => x !== "No department");
+  return `<form class="panel" id="profile-form" data-form="profile">
+    <h2>${me() ? "Edit your profile" : "Set up your doctor profile"}</h2>
+    <p class="muted small">Colleagues see this name on the roster and when you ask them to swap.</p>
+    <div class="row">
+      <div class="field"><label for="pf-name">Name as it should appear</label><input type="text" id="pf-name" data-bind="profile.name" value="${esc(p.name)}" placeholder="Dr. Sana Malik" required maxlength="60"></div>
+      <div class="field"><label for="pf-dept">Department</label><input type="text" id="pf-dept" data-bind="profile.dept" value="${esc(p.dept)}" list="dept-list" placeholder="Emergency" maxlength="40"><datalist id="dept-list">${depts.map(x => `<option value="${esc(x)}"></option>`).join("")}</datalist></div>
+      <div class="field"><label for="pf-phone">Phone (optional)</label><input type="tel" id="pf-phone" data-bind="profile.phone" value="${esc(p.phone)}" placeholder="0300 1234567" maxlength="20"></div>
+    </div>
+    <div class="btns"><button class="btn primary" type="submit" id="pf-save" ${app.busy ? "disabled" : ""}>Save profile</button><button class="btn" type="button" data-act="profile-close" id="pf-cancel">Cancel</button></div>
+  </form>`;
+}
+function renderTabs() {
+  const a = app.loading ? null : audit(state.month);
+  const issues = a ? a.stretches.length + a.gaps.length : 0;
+  const pend = pendingForMe().length;
+  const t = [["board", "Hospital roster", ""], ["mine", "My roster", unsavedCount() ? `<span class="count soft" title="Unsaved changes">•</span>` : ""],
+    ["changes", "Swaps & changes", pend ? `<span class="count">${pend}</span>` : ""], ["checks", "Checks", issues ? `<span class="count">${issues > 99 ? "99+" : issues}</span>` : ""]];
+  return t.map(([k, l, extra]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${state.tab === k}" data-act="tab" data-tab="${k}">${l}${extra}</button>`).join("");
+}
+function unsavedCount() { return Object.keys(state.drafts).length; }
+
+function renderBoard() {
+  const month = state.month, docs = monthDocs(month), a = audit(month);
+  const doctors = sortedDoctors();
+  if (!doctors.length && !Object.keys(docs).length) {
+    return `<div class="empty"><h2>No rosters for ${esc(monthLabel(month))} yet</h2><p>Each doctor sets up a profile, then uploads or fills in their month under <b>My roster</b>. Their duties appear here day by day.</p>
+      <div class="btns">${canAct() && app.uid ? `<button class="btn primary" data-act="profile-open" id="empty-setup">Set up my profile</button>` : ""}${!app.sample ? `<button class="btn" data-act="sample-on" id="sample-on">Show an example</button>` : ""}</div></div>`;
+  }
+  const ids = Object.keys(docs);
+  const deptOk = id => state.dept === "all" || ((state.doctors[id] && state.doctors[id].dept) || "No department") === state.dept;
+  const scopeIds = allRosterIds(month).filter(deptOk);
+  const uploadedInScope = scopeIds.some(id => docs[id]);
+  const flags = {}; ids.forEach(id => (flags[id] = flaggedSlots(id, month)));
+  const uploaded = doctors.filter(d => docs[d.uid]).length;
+  let html = `<section class="panel">
+    <div class="stats">
+      <div class="stat okc"><b>${uploaded}<span class="muted" style="font-size:.9rem"> / ${doctors.length}</span></b><span>rosters uploaded</span></div>
+      <button class="statlink stat ${a.gaps.length ? "bad" : ""}" data-act="tab" data-tab="checks" id="st-gaps"><b>${a.gaps.length}</b><span>uncovered shifts</span></button>
+      <button class="statlink stat ${a.stretches.length ? "warn" : ""}" data-act="tab" data-tab="checks" id="st-str"><b>${a.stretches.length}</b><span>over ${MAX_STRETCH} h without a break</span></button>
+      <button class="statlink stat" data-act="tab" data-tab="changes" id="st-req"><b>${state.requests.filter(r => r.status === "pending" && r.month === month).length}</b><span>swaps waiting</span></button>
+    </div>
+    <div class="filters">
+      <label class="check" for="f-dept">Department <select id="f-dept" data-bind="dept"><option value="all">All departments</option>${deptList().map(d => `<option ${state.dept === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></label>
+      ${me() ? `<label class="check" for="f-mine"><input type="checkbox" id="f-mine" data-bind="mineOnly" ${state.mineOnly ? "checked" : ""}> Only my duties</label>` : ""}
+      ${me() && canAct() ? `<span class="muted small">Tap one of your own duties to swap or move it.</span>` : ""}
+    </div>
+  </section>`;
+  html += `<div class="boardwrap"><div class="board" role="table" aria-label="Duty roster for ${esc(monthLabel(month))}">
+    <div class="bh" role="columnheader">Date</div>${SHIFTS.map(s => `<div class="bh sh-${s.code}" role="columnheader">${s.name}<span class="mono">${s.time}</span></div>`).join("")}`;
+  for (const date of datesOf(month)) {
+    const we = dow(date) === 0 || dow(date) === 6 ? " we" : "";
+    const [, , d] = date.split("-");
+    html += `<div class="bd${we}${date === todayKey ? " today" : ""}" role="rowheader"><b>${+d}</b><span class="muted">${DOW[dow(date)]}</span></div>`;
+    for (const s of SHIFTS) {
+      const on = ids.filter(id => deptOk(id) && hasDuty(docs[id], date, s.code) && (!state.mineOnly || id === app.uid))
+        .sort((x, y) => docName(x).localeCompare(docName(y)));
+      const gap = !state.mineOnly && uploadedInScope && !ids.some(id => deptOk(id) && hasDuty(docs[id], date, s.code));
+      html += `<div class="bc${we}${gap ? " gap" : ""}" role="cell">${gap ? `<span class="gaptag">Uncovered</span>` : ""}${on.map(id => {
+        const mine = id === app.uid, fl = flags[id] && flags[id].has(date + "|" + s.code);
+        const dept = state.dept === "all" && state.doctors[id] && state.doctors[id].dept ? ` <small>${esc(state.doctors[id].dept)}</small>` : "";
+        const title = esc(docName(id) + " · " + fmtDuty({ date, shift: s.code }) + (fl ? " · part of a stretch over " + MAX_STRETCH + " h" : ""));
+        return mine && canAct() ? `<button class="chip c-${s.code} mine${fl ? " flag" : ""}" data-act="pick-duty" data-date="${date}" data-shift="${s.code}" title="${title}">${esc(docName(id))}${dept}</button>`
+          : `<span class="chip c-${s.code}${fl ? " flag" : ""}" title="${title}">${esc(docName(id))}${dept}</span>`;
+      }).join("")}</div>`;
+    }
+  }
+  return html + `</div></div>`;
+}
+
+function editTarget() {
+  if (app.canEdit && state.editFor && state.doctors[state.editFor]) return state.editFor;
+  if (me()) return app.uid;
+  if (app.canEdit) { const f = sortedDoctors()[0]; return f ? f.uid : null; }
+  return null;
+}
+const draftKey = (month, id) => month + "|" + id;
+function workingShifts(month, id) { const d = state.drafts[draftKey(month, id)]; return d ? d.shifts : (rosterOf(month, id) || {}); }
+function renderMine() {
+  const month = state.month, id = editTarget();
+  if (!id) {
+    if (!canAct()) return `<div class="empty"><p>You can view the hospital roster, but uploading needs Contributor access.</p></div>`;
+    return `<div class="empty"><h2>Set up your profile first</h2><p>Add your name and department so your duties show up on the hospital roster.</p><button class="btn primary" data-act="profile-open" id="mine-setup">Set up my doctor profile</button></div>`;
+  }
+  const key = draftKey(month, id), draft = state.drafts[key], saved = rosterOf(month, id);
+  const work = onlyMonth(workingShifts(month, id), month);
+  const dirty = !!draft;
+  const stale = draft && JSON.stringify(onlyMonthAll(saved || {})) !== draft.base;
+  const diff = diffShifts(saved || {}, work);
+  const comb = { ...(rosterOf(addMonths(month, -1), id) || {}), ...work };
+  const stretches = longStretches(comb, month);
+  const flagDays = new Set(); stretches.forEach(st => { flagDays.add(st.from.date); flagDays.add(st.to.date); });
+  const disabled = !canAct() ? "disabled" : "";
+  const who = id === app.uid ? "Your" : esc(docName(id)) + "'s";
+  let html = `<div class="grid2" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))">
+  <section class="panel" style="grid-column:1/-1">
+    <div class="bar">
+      <div><h2>${who} roster for ${esc(monthLabel(month))}</h2>
+      <p class="muted small">${dutyList(work).length} duties · ${hoursOf(work)} hours${saved ? "" : " · not uploaded yet"}</p></div>
+      ${app.canEdit && sortedDoctors().length > 1 ? `<label class="check" for="edit-for">Editing for <select id="edit-for" data-bind="editFor">${sortedDoctors().map(d => `<option value="${esc(d.uid)}" ${d.uid === id ? "selected" : ""}>${esc(d.name)}</option>`).join("")}</select></label>` : ""}
+    </div>
+    ${stale ? `<div class="note bad">This roster changed while you were editing (for example, a swap was accepted). Saving now would overwrite that change. <button class="btn ghost" data-act="discard" id="stale-reset">Start over from the latest</button></div>` : ""}
+    ${stretches.map(st => `<div class="note">Long stretch: ${esc(stretchText(st))}. Night ends at 08:00, so a Night followed by a Morning means no rest.</div>`).join("")}
+    <div class="cal" role="grid" aria-label="Pick shifts for each day">
+      ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => `<div class="dow">${d}</div>`).join("")}
+      ${Array.from({ length: (dow(month + "-01") + 6) % 7 }, () => `<div class="cday blank"></div>`).join("")}
+      ${datesOf(month).map(date => {
+        const we = dow(date) === 0 || dow(date) === 6;
+        return `<div class="cday${we ? " we" : ""}${flagDays.has(date) ? " flag" : ""}"><span class="dn">${+date.slice(8)}</span>${SHIFTS.map(s => {
+          const on = hasDuty(work, date, s.code);
+          return `<button class="tg ${s.code}${on ? " on" : ""}" data-act="toggle" data-date="${date}" data-shift="${s.code}" aria-pressed="${on}" aria-label="${s.name} on ${fmtDate(date)}" ${disabled}>${s.code}</button>`;
+        }).join("")}</div>`;
+      }).join("")}
+    </div>
+    <div class="btns">
+      <button class="btn primary" data-act="save-roster" id="save-roster" ${!dirty || app.busy || disabled ? "disabled" : ""}>${saved ? "Save changes" : "Upload roster"}${dirty ? ` (+${diff.added} / −${diff.removed})` : ""}</button>
+      <button class="btn" data-act="discard" id="discard" ${!dirty ? "disabled" : ""}>Discard changes</button>
+      <button class="btn danger" data-act="clear-month" id="clear-month" ${disabled || !dutyList(work).length ? "disabled" : ""}>Clear month</button>
+      <span class="muted small">${dirty ? "Not saved yet. Colleagues see the change once you save." : saved ? "Saved. Changes you save here are logged under Swaps & changes." : "Pick M / E / N on each day you're on duty, or upload a file below."}</span>
+    </div>
+  </section>
+  ${renderUpload(month)}
+  </div>`;
+  return html;
+}
+function renderUpload(month) {
+  const u = state.upload && state.upload.month === month ? state.upload : null;
+  const disabled = !canAct() ? "disabled" : "";
+  const other = u ? Object.entries(u.otherMonths) : [];
+  return `<section class="panel">
+    <h2>Upload from a file</h2>
+    <p class="muted small">CSV or Excel (.xlsx). One row per duty with a date and a shift, or one row per day with Morning / Evening / Night columns marked X. Dates are read day first (03/11/2026 is 3 November).</p>
+    <div class="field"><label for="file-in">Roster file</label><input type="file" id="file-in" accept=".csv,.tsv,.txt,.xlsx,.xls" ${disabled}></div>
+    <div class="field"><label for="paste-in">Or paste rows from a spreadsheet</label><textarea id="paste-in" data-bind="pasteText" placeholder="date,shift&#10;01/${month.slice(5)}/${month.slice(0, 4)},Morning&#10;02/${month.slice(5)}/${month.slice(0, 4)},Night" ${disabled}>${esc(state.pasteText)}</textarea></div>
+    <div class="btns"><button class="btn" data-act="read-paste" id="read-paste" ${disabled || !state.pasteText.trim() ? "disabled" : ""}>Read pasted rows</button></div>
+    ${u ? `<div class="item">
+      <div class="head"><b>${esc(u.fileName)}</b><span class="muted small">${u.entries.length} duties for ${esc(monthLabel(month))}${u.offDays ? ` · ${u.offDays} days off` : ""}</span></div>
+      ${u.entries.length ? `<p class="small">${SHIFTS.map(s => `${u.entries.filter(e => e.shift === s.code).length} ${s.name.toLowerCase()}`).join(" · ")} · ${hoursOf(entriesToShifts(u.entries))} hours</p>` : ""}
+      ${u.skipped.length ? `<div class="note">Skipped ${u.skipped.length} row${u.skipped.length > 1 ? "s" : ""}:<ul class="plain">${u.skipped.slice(0, 6).map(s => `<li>Row ${s.line}: ${esc(s.reason)}</li>`).join("")}${u.skipped.length > 6 ? `<li>…and ${u.skipped.length - 6} more</li>` : ""}</ul></div>` : ""}
+      ${other.length ? `<div class="note">${other.map(([k, n]) => `${n} duties are in ${esc(monthLabel(k))}`).join(", ")}, not ${esc(monthLabel(month))}. ${other.length === 1 ? `<button class="btn ghost" data-act="goto-month" data-month="${other[0][0]}" id="goto-other">Switch to ${esc(monthLabel(other[0][0]))}</button>` : ""}</div>` : ""}
+      ${u.entries.length ? `<div class="btns"><button class="btn primary" data-act="apply-upload" data-mode="replace" id="up-replace">Replace this month with these</button><button class="btn" data-act="apply-upload" data-mode="merge" id="up-merge">Add to my calendar</button><button class="btn ghost" data-act="drop-upload" id="up-drop">Discard file</button></div>
+      <p class="muted small">This fills the calendar above. Check it, then press Save.</p>` : `<div class="btns"><button class="btn ghost" data-act="drop-upload" id="up-drop2">Discard file</button></div>`}
+    </div>` : ""}
+    <details><summary>See the file layouts</summary>
+      <div class="list" style="margin-top:10px">
+        <div><p class="small"><b>Layout 1:</b> one row per duty. Shift can be Morning/Evening/Night or M/E/N; two shifts on one day can be written “M+E”.</p>
+        <pre class="tpl" id="tpl1">date,shift
+01/${month.slice(5)}/${month.slice(0, 4)},Morning
+02/${month.slice(5)}/${month.slice(0, 4)},Night
+05/${month.slice(5)}/${month.slice(0, 4)},M+E</pre></div>
+        <div><p class="small"><b>Layout 2:</b> one row per day, mark the shifts you're on.</p>
+        <pre class="tpl" id="tpl2">date,morning,evening,night
+01/${month.slice(5)}/${month.slice(0, 4)},X,,
+02/${month.slice(5)}/${month.slice(0, 4)},,,X
+03/${month.slice(5)}/${month.slice(0, 4)},,,</pre></div>
+        <div class="btns"><button class="btn" data-act="copy" data-src="tpl1" id="copy1">Copy layout 1</button><button class="btn" data-act="copy" data-src="tpl2" id="copy2">Copy layout 2</button></div>
+      </div>
+    </details>
+  </section>`;
+}
+
+function describeReq(r) {
+  const f = esc(docName(r.from)), t = esc(docName(r.to));
+  if (r.type === "swap") return `${f} gives <b>${esc(fmtDuty(r.give))}</b> to ${t} and takes <b>${esc(fmtDuty(r.take))}</b>`;
+  if (r.type === "cover") return `${f} hands <b>${esc(fmtDuty(r.give))}</b> over to ${t}`;
+  if (r.type === "move") return `${f} moved <b>${esc(fmtDuty(r.give))}</b> to <b>${esc(fmtDuty(r.take))}</b>`;
+  if (r.type === "edit") return `${f}'s roster was ${r.first ? "uploaded" : "edited"}${r.by && r.by !== r.from ? " by " + esc(docName(r.by)) : ""}: ${r.added} added, ${r.removed} removed`;
+  return "Change";
+}
+function when(ts) { if (!ts) return ""; const d = new Date(ts); return d.getDate() + " " + MON_SHORT[d.getMonth()] + ", " + pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+const STATUS = { pending: "Waiting", accepted: "Done", done: "Done", declined: "Declined", cancelled: "Cancelled", failed: "Couldn't apply" };
+function previewWarnings(req) {
+  const month = req.month, A = combined(req.from, month), B = req.to ? combined(req.to, month) : {};
+  const plan = planChange(req, A, B, { from: docName(req.from), to: docName(req.to) });
+  if (plan.error) return { error: plan.error, warns: [] };
+  const warns = [];
+  const before = id => new Set(longStretches(combined(id, month), month).map(stretchText));
+  if (plan.A) longStretches(plan.A, month).forEach(st => { if (!before(req.from).has(stretchText(st))) warns.push(docName(req.from) + ": " + stretchText(st)); });
+  if (plan.B) longStretches(plan.B, month).forEach(st => { if (!before(req.to).has(stretchText(st))) warns.push(docName(req.to) + ": " + stretchText(st)); });
+  return { warns };
+}
+function renderChanges() {
+  const month = state.month, mine = me();
+  const incoming = pendingForMe();
+  const outgoing = state.requests.filter(r => r.status === "pending" && r.from === app.uid);
+  const history = state.requests.filter(r => r.month === month && r.status !== "pending");
+  const othersPending = state.requests.filter(r => r.status === "pending" && r.from !== app.uid && r.to !== app.uid && r.month === month);
+  let html = `<div class="grid2">`;
+  html += `<section class="panel"><h2>Waiting for your answer</h2>${incoming.length ? `<div class="list">${incoming.map(r => {
+    const pv = previewWarnings(r);
+    return `<div class="item"><div class="head"><span class="pill pending">${r.type === "swap" ? "Swap" : "Cover"}</span><span class="muted small">${when(r.createdAt)}</span></div>
+      <p>${describeReq(r)}</p>${r.note ? `<p class="small muted">“${esc(r.note)}”</p>` : ""}
+      ${pv.error ? `<div class="note bad">${esc(pv.error)}</div>` : ""}${pv.warns.map(w => `<div class="note">If you accept: ${esc(w)}</div>`).join("")}
+      <div class="btns"><button class="btn primary" data-act="accept" data-id="${esc(r.id)}" id="acc-${esc(r.id)}" ${app.busy || !canAct() ? "disabled" : ""}>Accept</button><button class="btn" data-act="decline" data-id="${esc(r.id)}" id="dec-${esc(r.id)}" ${app.busy || !canAct() ? "disabled" : ""}>Decline</button></div></div>`;
+  }).join("")}</div>` : `<p class="muted">Nothing waiting. When a colleague asks you to swap or cover a duty, it shows up here.</p>`}</section>`;
+  html += mine && canAct() ? renderRequestForm(month) : `<section class="panel"><h2>Ask for a change</h2><p class="muted">${canAct() ? "Set up your doctor profile to swap or move duties." : "You need Contributor access to swap or move duties."}</p></section>`;
+  html += `</div>`;
+  if (outgoing.length || othersPending.length) html += `<section class="panel"><h2>Sent and waiting</h2><div class="list">${[...outgoing, ...othersPending].map(r => `<div class="item"><div class="head"><span class="pill pending">Waiting for ${esc(docName(r.to))}</span><span class="muted small">${when(r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.note ? `<p class="small muted">“${esc(r.note)}”</p>` : ""}${r.from === app.uid ? `<div class="btns"><button class="btn" data-act="cancel-req" data-id="${esc(r.id)}" id="can-${esc(r.id)}" ${app.busy ? "disabled" : ""}>Cancel request</button></div>` : ""}</div>`).join("")}</div></section>`;
+  html += `<section class="panel"><h2>Change log for ${esc(monthLabel(month))}</h2>${history.length ? `<div class="list">${history.map(r => `<div class="item"><div class="head"><span class="pill ${esc(r.status)}">${STATUS[r.status] || esc(r.status)}</span><span class="muted small">${when(r.decidedAt || r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.reason ? `<p class="small muted">${esc(r.reason)}</p>` : ""}</div>`).join("")}</div>` : `<p class="muted">No changes this month yet. Uploads, edits, swaps, hand-overs and moves are all recorded here.</p>`}</section>`;
+  return html;
+}
+function renderRequestForm(month) {
+  const f = state.form, my = dutyList(onlyMonth(rosterOf(month, app.uid) || {}, month));
+  const giveOpts = my.map(x => { const v = x.date + "|" + x.shift; return `<option value="${v}" ${f.give === v ? "selected" : ""}>${esc(fmtDuty(x))}</option>`; }).join("");
+  const colleagues = sortedDoctors().filter(d => d.uid !== app.uid);
+  const theirs = f.colleague ? dutyList(onlyMonth(rosterOf(month, f.colleague) || {}, month)) : [];
+  const req = buildReq();
+  const pv = req ? previewWarnings(req) : null;
+  let body = "";
+  if (!my.length) body = `<p class="muted">You have no duties in ${esc(monthLabel(month))} to change. Upload your roster under My roster first.</p>`;
+  else {
+    body = `<div class="field"><label for="rq-give">Your duty</label><select id="rq-give" data-bind="form.give"><option value="">Choose one of your duties</option>${giveOpts}</select></div>`;
+    if (f.type !== "move") body += `<div class="field"><label for="rq-col">Colleague</label><select id="rq-col" data-bind="form.colleague"><option value="">Choose a colleague</option>${colleagues.map(d => `<option value="${esc(d.uid)}" ${f.colleague === d.uid ? "selected" : ""}>${esc(d.name)} · ${esc(d.dept || "No department")}</option>`).join("")}</select></div>`;
+    if (f.type === "swap" && f.colleague) body += theirs.length ? `<div class="field"><label for="rq-take">Their duty you'll take</label><select id="rq-take" data-bind="form.take"><option value="">Choose their duty</option>${theirs.map(x => { const v = x.date + "|" + x.shift; return `<option value="${v}" ${f.take === v ? "selected" : ""}>${esc(fmtDuty(x))}</option>`; }).join("")}</select></div>` : `<p class="muted small">${esc(docName(f.colleague))} has no duties in ${esc(monthLabel(month))} to swap with. Try “Hand over” instead.</p>`;
+    if (f.type === "move") body += `<div class="row"><div class="field"><label for="rq-date">New date</label><input type="date" id="rq-date" data-bind="form.moveDate" value="${esc(f.moveDate)}" min="${month}-01" max="${month}-${pad(daysIn(month))}"></div><div class="field"><label for="rq-shift">New shift</label><select id="rq-shift" data-bind="form.moveShift">${SHIFTS.map(s => `<option value="${s.code}" ${f.moveShift === s.code ? "selected" : ""}>${s.name} (${s.time})</option>`).join("")}</select></div></div>`;
+    if (f.type !== "move") body += `<div class="field"><label for="rq-note">Note for your colleague (optional)</label><input type="text" id="rq-note" data-bind="form.note" value="${esc(f.note)}" maxlength="140" placeholder="e.g. exam that day"></div>`;
+    if (pv && pv.error) body += `<div class="note bad">${esc(pv.error)}</div>`;
+    if (pv) body += pv.warns.map(w => `<div class="note">Heads up: ${esc(w)}</div>`).join("");
+    const label = f.type === "swap" ? "Send swap request" : f.type === "cover" ? "Ask them to cover" : "Move my duty";
+    body += `<div class="btns"><button class="btn primary" data-act="submit-req" id="rq-submit" ${!req || (pv && pv.error) || app.busy ? "disabled" : ""}>${label}</button></div>
+      <p class="muted small">${f.type === "move" ? "Moving your own duty takes effect straight away and is logged." : "Nothing changes until your colleague accepts. Then both rosters update together."}</p>`;
+  }
+  return `<section class="panel"><h2>Ask for a change</h2>
+    <div class="seg" role="group" aria-label="Kind of change">
+      <button data-act="form-type" data-type="swap" aria-pressed="${f.type === "swap"}" id="ty-swap">Swap with a colleague</button>
+      <button data-act="form-type" data-type="cover" aria-pressed="${f.type === "cover"}" id="ty-cover">Hand over to a colleague</button>
+      <button data-act="form-type" data-type="move" aria-pressed="${f.type === "move"}" id="ty-move">Move to another day or shift</button>
+    </div>${body}</section>`;
+}
+function buildReq() {
+  const f = state.form, month = state.month;
+  if (!f.give) return null;
+  const [gd, gs] = f.give.split("|"); const give = { date: gd, shift: gs };
+  if (f.type === "move") { if (!f.moveDate || !f.moveDate.startsWith(month + "-")) return null; return { type: "move", month, from: app.uid, give, take: { date: f.moveDate, shift: f.moveShift } }; }
+  if (!f.colleague || !state.doctors[f.colleague]) return null;
+  if (f.type === "cover") return { type: "cover", month, from: app.uid, to: f.colleague, give, note: f.note.trim() };
+  if (!f.take) return null;
+  const [td, ts] = f.take.split("|");
+  return { type: "swap", month, from: app.uid, to: f.colleague, give, take: { date: td, shift: ts }, note: f.note.trim() };
+}
+
+function renderChecks() {
+  const month = state.month, a = audit(month);
+  const byDept = {}; a.gaps.forEach(g => (byDept[g.dept] ||= []).push(g));
+  const allClear = !a.stretches.length && !a.gaps.length && !a.missing.length && !a.notUploadedDepts.length;
+  let html = allClear && sortedDoctors().length ? `<div class="banner"><p><b>All clear for ${esc(monthLabel(month))}.</b> Every doctor has uploaded, every shift in every department is covered, and nobody works more than ${MAX_STRETCH} hours without a break.</p></div>` : "";
+  html += `<div class="grid2">`;
+  html += `<section class="panel"><h2>Over ${MAX_STRETCH} hours without a break</h2><p class="muted small">Back-to-back shifts are joined up. A Night (ends 08:00) followed by a Morning (starts 08:00) is 18 hours straight.</p>${a.stretches.length ? `<div class="list">${a.stretches.map(s => `<div class="item"><b>${esc(docName(s.id))}</b><p class="small">${esc(stretchText(s))}</p></div>`).join("")}</div>` : `<p class="note ok">No long stretches this month.</p>`}</section>`;
+  html += `<section class="panel"><h2>Uncovered shifts</h2><p class="muted small">Shifts with no doctor from that department on duty.</p>${Object.keys(byDept).length ? Object.entries(byDept).map(([dept, gs]) => `<details ${Object.keys(byDept).length === 1 ? "open" : ""}><summary>${esc(dept)}: ${gs.length} uncovered</summary><ul class="plain small" style="margin-top:6px">${gs.slice(0, 120).map(g => `<li>${esc(fmtDuty(g))}</li>`).join("")}${gs.length > 120 ? `<li>…and ${gs.length - 120} more</li>` : ""}</ul></details>`).join("") : `<p class="note ok">${a.notUploadedDepts.length === deptList().length ? "Nothing to check until rosters are uploaded." : "Every shift is covered."}</p>`}
+    ${a.notUploadedDepts.length ? `<p class="small muted">Not checked yet because nobody in them has uploaded: ${a.notUploadedDepts.map(esc).join(", ")}.</p>` : ""}</section>`;
+  html += `<section class="panel"><h2>Rosters not uploaded</h2>${a.missing.length ? `<ul class="plain">${a.missing.map(d => `<li>${esc(d.name)} <span class="muted small">· ${esc(d.dept || "No department")}${d.phone ? " · " + esc(d.phone) : ""}</span></li>`).join("")}</ul>` : `<p class="note ok">${sortedDoctors().length ? "Everyone has uploaded." : "No doctors have set up a profile yet."}</p>`}</section>`;
+  return html + `</div>`;
+}
+
+/* ---------- actions ---------- */
+function setBind(path, value) {
+  const parts = path.split("."); let o = state; while (parts.length > 1) o = o[parts.shift()]; o[parts[0]] = value;
+}
+function ensureDraft(month, id) {
+  const k = draftKey(month, id);
+  if (!state.drafts[k]) { const saved = rosterOf(month, id) || {}; state.drafts[k] = { shifts: cloneShifts(onlyMonth(saved, month)), base: JSON.stringify(onlyMonthAll(saved)) }; }
+  return state.drafts[k];
+}
+function settleDraft(month, id) {
+  const k = draftKey(month, id), d = state.drafts[k];
+  if (d && sameShifts(d.shifts, onlyMonth(rosterOf(month, id) || {}, month)) && d.base === JSON.stringify(onlyMonthAll(rosterOf(month, id) || {}))) delete state.drafts[k];
+}
+const actions = {
+  tab(b) { state.tab = b.dataset.tab; render(); },
+  month(b) { state.month = addMonths(state.month, +b.dataset.d); state.upload = null; if (app.sample) { const s = buildSample(); state.rosters = s.rosters; state.requests = s.requests; } else subscribeMonth(); resetForm(); render(); },
+  "goto-month"(b) { const u = state.upload; state.month = b.dataset.month; if (!app.sample) subscribeMonth(); if (u) state.upload = reparse(u); render(); },
+  "profile-open"() { const d = me(); state.profile = { name: d ? d.name : "", dept: d ? d.dept || "" : "", phone: d ? d.phone || "" : "" }; state.profileOpen = true; render(); setTimeout(() => { const el = $("#pf-name"); if (el) el.focus(); }, 0); },
+  "profile-close"() { state.profileOpen = false; render(); },
+  "sample-on"() { startSample("You asked to see how a filled-in month looks."); },
+  "sample-off"() { stopSample(); },
+  toggle(b) {
+    if (!canAct()) return;
+    const id = editTarget(), month = state.month, d = ensureDraft(month, id);
+    d.shifts = hasDuty(d.shifts, b.dataset.date, b.dataset.shift) ? withoutDuty(d.shifts, b.dataset.date, b.dataset.shift) : withDuty(d.shifts, b.dataset.date, b.dataset.shift);
+    settleDraft(month, id); render();
+  },
+  discard() { delete state.drafts[draftKey(state.month, editTarget())]; render(); },
+  "clear-month"() { const id = editTarget(), d = ensureDraft(state.month, id); d.shifts = {}; settleDraft(state.month, id); render(); toast("Month cleared on the calendar. Press Save to confirm."); },
+  async "save-roster"() {
+    const id = editTarget(), month = state.month, k = draftKey(month, id), d = state.drafts[k];
+    if (!d) return;
+    const before = rosterOf(month, id), first = !before, diff = diffShifts(before || {}, d.shifts);
+    const ok = await guarded(async () => {
+      await store.saveRoster(month, id, d.shifts);
+      if (diff.added || diff.removed || first) await store.addRequest({ type: "edit", status: "done", month, from: id, added: diff.added, removed: diff.removed, first, decidedAt: Date.now() });
+    }, first ? "Roster uploaded for " + monthLabel(month) + "." : "Roster saved.");
+    if (ok) { delete state.drafts[k]; render(); }
+  },
+  async "read-paste"() { state.upload = { fileName: "Pasted rows", rows: parseCSV(state.pasteText), month: state.month }; state.upload = reparse(state.upload); render(); },
+  "apply-upload"(b) {
+    const u = state.upload, id = editTarget(); if (!u || !id) return;
+    const d = ensureDraft(state.month, id);
+    let s = b.dataset.mode === "replace" ? {} : cloneShifts(d.shifts);
+    for (const e of u.entries) s = withDuty(s, e.date, e.shift);
+    d.shifts = s; state.upload = null; state.pasteText = ""; settleDraft(state.month, id); render();
+    toast(u.entries.length + " duties placed on the calendar. Check them, then press Save.");
+  },
+  "drop-upload"() { state.upload = null; render(); },
+  async copy(b) {
+    const el = document.getElementById(b.dataset.src); if (!el) return;
+    try { await navigator.clipboard.writeText(el.textContent); toast("Copied. Paste it into a spreadsheet or the box above."); }
+    catch (_) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Selected. Press Ctrl+C (or ⌘C) to copy."); }
+  },
+  "pick-duty"(b) { state.tab = "changes"; state.form.give = b.dataset.date + "|" + b.dataset.shift; state.form.take = ""; render(); window.scrollTo({ top: 0, behavior: "smooth" }); },
+  "form-type"(b) { state.form.type = b.dataset.type; state.form.take = ""; render(); },
+  async "submit-req"() {
+    const req = buildReq(); if (!req) return;
+    const pv = previewWarnings(req); if (pv.error) { toast(pv.error); return; }
+    if (req.type === "move") {
+      await guarded(async () => {
+        const A = await store.getRoster(req.month, app.uid);
+        const plan = planChange(req, A, {}, { from: docName(app.uid) });
+        if (plan.error) throw { message: plan.error };
+        await store.saveRoster(req.month, app.uid, plan.A);
+        await store.addRequest({ ...req, status: "done", decidedAt: Date.now() });
+      }, "Moved to " + fmtDuty(req.take) + ".");
+    } else {
+      const dup = state.requests.find(r => r.status === "pending" && r.from === app.uid && r.give.date === req.give.date && r.give.shift === req.give.shift);
+      if (dup) { toast("You already have a waiting request for this duty. Cancel it first to send a new one."); return; }
+      await guarded(() => store.addRequest({ ...req, status: "pending" }), "Request sent to " + docName(req.to) + ".");
+    }
+    resetForm(); render();
+  },
+  async accept(b) {
+    const r = state.requests.find(x => x.id === b.dataset.id); if (!r || r.to !== app.uid) return;
+    await guarded(async () => {
+      const A = await store.getRoster(r.month, r.from), B = await store.getRoster(r.month, r.to);
+      const plan = planChange(r, A, B, { from: docName(r.from), to: docName(r.to) });
+      if (plan.error) { await store.updateRequest(r.id, { status: "failed", reason: plan.error, decidedAt: Date.now(), decidedBy: app.uid }); throw { message: plan.error + " The request was closed." }; }
+      await store.saveRoster(r.month, r.to, plan.B);
+      await store.saveRoster(r.month, r.from, plan.A);
+      await store.updateRequest(r.id, { status: "accepted", decidedAt: Date.now(), decidedBy: app.uid });
+    }, "Accepted. Both rosters are updated.");
+  },
+  async decline(b) { const id = b.dataset.id; await guarded(() => store.updateRequest(id, { status: "declined", decidedAt: Date.now(), decidedBy: app.uid }), "Declined."); },
+  async "cancel-req"(b) { const id = b.dataset.id; await guarded(() => store.updateRequest(id, { status: "cancelled", decidedAt: Date.now(), decidedBy: app.uid }), "Request cancelled."); },
+};
+function resetForm() { state.form = { type: state.form.type, give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" }; }
+function reparse(u) { return { ...u, month: state.month, ...parseRows(u.rows, state.month) }; }
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
+  const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
+});
+const LIVE_BINDS = new Set(["pasteText", "profile.name", "profile.dept", "profile.phone", "form.note"]);
+document.addEventListener("input", e => {
+  const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;
+  setBind(path, el.value);
+  if (path === "pasteText") { const b = $("#read-paste"); if (b) b.disabled = !canAct() || !el.value.trim(); }
+});
+document.addEventListener("change", async e => {
+  const el = e.target;
+  if (el.id === "file-in") { if (el.files && el.files[0]) await readFile(el.files[0]); return; }
+  const path = el.dataset && el.dataset.bind; if (!path) return;
+  setBind(path, el.type === "checkbox" ? el.checked : el.value);
+  if (path === "form.colleague") state.form.take = "";
+  if (path === "editFor") state.upload = null;
+  if (!LIVE_BINDS.has(path)) render();
+});
+document.addEventListener("submit", async e => {
+  if (e.target.id !== "profile-form") return;
+  e.preventDefault();
+  const p = state.profile, name = p.name.trim();
+  if (!name) { toast("Add your name so colleagues can find you."); return; }
+  if (!app.uid) { toast("Sign in to claude.ai to set up a profile."); return; }
+  const ok = await guarded(() => store.saveDoctor(app.uid, { name, dept: p.dept.trim(), phone: p.phone.trim() }), "Profile saved.");
+  if (ok) { state.profileOpen = false; if (!rosterOf(state.month, app.uid)) state.tab = "mine"; render(); }
+});
+
+let xlsxPromise = null;
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  return (xlsxPromise ||= new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.onload = () => res(window.XLSX); s.onerror = () => { xlsxPromise = null; rej(new Error("Couldn't load the Excel reader.")); };
+    document.head.appendChild(s);
+  }));
+}
+async function readFile(file) {
+  try {
+    let rows;
+    if (/\.xlsx?$/i.test(file.name)) {
+      const XLSX = await loadXLSX();
+      const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+    } else rows = parseCSV(await file.text());
+    state.upload = reparse({ fileName: file.name, rows });
+    if (!state.upload.entries.length && !state.upload.skipped.length && !Object.keys(state.upload.otherMonths).length) toast("That file has no duties in it. Check it has a date column and a shift column.");
+  } catch (err) { toast("Couldn't read " + file.name + ": " + (err.message || "unknown error") + ". Save it as CSV and try again."); }
+  render();
+}
+
+/* ---------- start ---------- */
+async function startLive() {
+  subscribeMonth();
+  if (!unsubDoctors) unsubDoctors = app.db.collection("doctors").limit(1000).onSnapshot(snap => {
+    const d = {}; snap.docs.forEach(x => { const v = x.data(); if (v && v.uid) d[v.uid] = v; });
+    app.liveDoctors = d; if (app.sample) return;
+    state.doctors = d; render();
+  }, onDbError);
+  render();
+}
+async function init() {
+  render();
+  const cl = window.claude;
+  let db = null, user = null;
+  try { [db, user] = await Promise.all([cl && cl.use ? cl.use("db") : null, cl && cl.use ? cl.use("user") : null]); } catch (_) {}
+  if (user) {
+    try { [app.uid, app.isOwner, app.canEdit, app.canWrite] = await Promise.all([user.id(), user.isOwner(), user.canEdit(), user.can("data.write")]); } catch (_) {}
+  }
+  if (!db) { startSample("This view can't reach the shared roster, so you're seeing a sample month. Open the page signed in to claude.ai to see the real one."); return; }
+  app.db = db; app.live = true;
+  app.readOnly = app.canWrite === false || !app.uid;
+  app.realUid = app.uid; app.realCanEdit = app.canEdit; app.realReadOnly = app.readOnly;
+  startLive();
+}
+init();
+</script>
+</body></html>
