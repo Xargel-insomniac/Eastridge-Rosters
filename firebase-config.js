@@ -10,5 +10,5 @@ window.FIREBASE_CONFIG = {
   appId: "1:991490375941:web:43fd3da1c1fecbc441376c"
 };
 
-// Set to true after turning on Google sign-in in Firebase Authentication.
-window.ROSTER_GOOGLE_SIGNIN = false;
+// Shows "Continue with Google" on the sign-in screen (Google must be enabled in Firebase Authentication).
+window.ROSTER_GOOGLE_SIGNIN = true;

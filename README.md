@@ -54,7 +54,7 @@ On a phone, in dark mode:
 ### 2. Turn on sign-in
 1. **Build → Authentication → Get started**.
 2. Under **Sign-in method**, enable **Email/Password**.
-3. *(Optional)* Enable **Google**, then set `window.ROSTER_GOOGLE_SIGNIN = true;` in `firebase-config.js`.
+3. Enable **Google** too (Add new provider → Google → Enable, pick a support email, Save). The "Continue with Google" button is already switched on in `firebase-config.js`.
 4. Under **Settings → Authorized domains**, click **Add domain** and add your Vercel address (`eastridgerosters.vercel.app`).
 
 ### 3. Create the database and lock it down
