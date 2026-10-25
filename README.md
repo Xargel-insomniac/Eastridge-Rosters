@@ -1,4 +1,8 @@
+<p align="center"><img src="assets/eastridge-logo.png" alt="Eastridge Primecare, a project of FFH" width="320"></p>
+
 # Eastridge Primecare Duty Roster
+
+![Eastridge Primecare hospital building](assets/hospital.webp)
 
 A website where doctors at Eastridge Primecare upload their monthly duty rosters, swap or hand over duties with colleagues, and see which shifts are uncovered. Everything is saved in a free Firebase database, and the site itself is hosted free on GitHub Pages.
 
@@ -21,6 +25,22 @@ A website where doctors at Eastridge Primecare upload their monthly duty rosters
 - **Hospital roster:** day-by-day board with Morning / Evening / Night columns, filterable by department.
 - **Checks:** uncovered shifts per department, anyone on duty more than 12 hours without a break (e.g. Night then Morning = 18 h), and doctors who haven't uploaded.
 - **Team** (coordinators only): approve or reject sign-ups and remove access.
+
+## Screenshots
+
+The home page opens with the hospital photo and the full logo:
+
+![Home page: hospital roster board under the hospital photo](docs/home.webp)
+
+On the other tabs the logo shrinks into a slim bar that stays at the top:
+
+![My roster: calendar for picking Morning, Evening and Night shifts](docs/my-roster.webp)
+
+On a phone, in dark mode:
+
+<img src="docs/phone.webp" alt="Phone view in dark mode" width="300">
+
+*Screenshots show the built-in example month; the doctors in them are made up.*
 
 ## One-time setup (about 10 minutes, free)
 
@@ -71,6 +91,7 @@ Approved doctors can technically write any doctor's roster, because accepting a 
 |---|---|
 | `index.html` | The whole app (one page, no build step). |
 | `assets/` | Hospital logo, favicon and the hospital photo used on the home page. |
+| `docs/` | Screenshots used in this README. |
 | `firebase-config.js` | Your Firebase project settings. These values are not secret; access is controlled by the rules. |
 | `firestore.rules` | Database security rules. Paste into the Firebase console, or deploy with `npm run deploy:rules`. |
 | `tests/rules.test.mjs` | 34 automated checks of the security rules (`npm install && npm run test:rules`, needs Java). |
