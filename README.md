@@ -1,6 +1,6 @@
-# Eastridge Duty Roster
+# Eastridge Primecare Duty Roster
 
-A website where doctors at Eastridge Hospital upload their monthly duty rosters, swap or hand over duties with colleagues, and see which shifts are uncovered. Everything is saved in a free Firebase database, and the site itself is hosted free on GitHub Pages.
+A website where doctors at Eastridge Primecare upload their monthly duty rosters, swap or hand over duties with colleagues, and see which shifts are uncovered. Everything is saved in a free Firebase database, and the site itself is hosted free on GitHub Pages.
 
 ## Shifts
 
@@ -70,6 +70,7 @@ Approved doctors can technically write any doctor's roster, because accepting a 
 | File | What it is |
 |---|---|
 | `index.html` | The whole app (one page, no build step). |
+| `assets/` | Hospital logo, favicon and the hospital photo used on the home page. |
 | `firebase-config.js` | Your Firebase project settings. These values are not secret; access is controlled by the rules. |
 | `firestore.rules` | Database security rules. Paste into the Firebase console, or deploy with `npm run deploy:rules`. |
 | `tests/rules.test.mjs` | 34 automated checks of the security rules (`npm install && npm run test:rules`, needs Java). |
