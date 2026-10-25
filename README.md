@@ -4,7 +4,7 @@
 
 ![Eastridge Primecare hospital building](assets/hospital.webp)
 
-A website where doctors at Eastridge Primecare upload their monthly duty rosters, swap or hand over duties with colleagues, and see which shifts are uncovered. Everything is saved in a free Firebase database, and the site itself is hosted free on GitHub Pages.
+A website where doctors at Eastridge Primecare upload their monthly duty rosters, swap or hand over duties with colleagues, and see which shifts are uncovered. Everything is saved in a free Firebase database, and the site itself is hosted free on Vercel.
 
 ## Shifts
 
@@ -53,16 +53,19 @@ On a phone, in dark mode:
 1. **Build → Authentication → Get started**.
 2. Under **Sign-in method**, enable **Email/Password**.
 3. *(Optional)* Enable **Google**, then set `window.ROSTER_GOOGLE_SIGNIN = true;` in `firebase-config.js`.
-4. Under **Settings → Authorized domains**, click **Add domain** and add `xargel-insomniac.github.io`.
+4. Under **Settings → Authorized domains**, click **Add domain** and add your Vercel address (for example `eastridge-rosters.vercel.app`, shown after step 4 below).
 
 ### 3. Create the database and lock it down
 1. **Build → Firestore Database → Create database**. Pick a location near you (for Pakistan, e.g. `asia-south1` Mumbai). Start in **production mode**.
 2. Open the **Rules** tab, replace everything with the contents of **`firestore.rules`** from this repository, and click **Publish**.
 
-### 4. Publish the site on GitHub Pages
-1. In this GitHub repository: **Settings → Pages**.
-2. Under **Build and deployment**, choose **Deploy from a branch**, branch **main**, folder **/ (root)**, and click **Save**.
-3. After a minute the site is live at <https://xargel-insomniac.github.io/Eastridge-Rosters/>.
+### 4. Put the site online with Vercel (one time)
+1. Go to <https://vercel.com/new> and sign in with your GitHub account.
+2. Find **Eastridge-Rosters** in the list and click **Import**. (If it isn't listed, click *Adjust GitHub App Permissions* and allow the repository.)
+3. Leave every setting as it is (`vercel.json` in this repository already tells Vercel it's a static site) and click **Deploy**.
+4. Vercel gives you an address such as `https://eastridge-rosters.vercel.app`. Add that domain to Firebase's **Authorized domains** (step 2.4).
+
+From then on, every change pushed to `main` goes live by itself in under a minute.
 
 ### 5. Make yourself the coordinator
 1. Open the site, click **Create an account**, and fill in your details. You'll see **Waiting for approval** and **your user ID**. Copy it.
@@ -90,6 +93,7 @@ Approved doctors can technically write any doctor's roster, because accepting a 
 | File | What it is |
 |---|---|
 | `index.html` | The whole app (one page, no build step). |
+| `vercel.json` | Vercel settings: static site, no build, caching and security headers. |
 | `assets/` | Hospital logo, favicon and the hospital photo used on the home page. |
 | `docs/` | Screenshots used in this README. |
 | `firebase-config.js` | Your Firebase project settings. These values are not secret; access is controlled by the rules. |

@@ -1,0 +1,5 @@
+tests/
+package.json
+firebase.json
+README.md
+.gitignore
