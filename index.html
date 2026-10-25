@@ -225,6 +225,15 @@ button.chip { font: inherit; font-size: 0.8rem; font-weight: 600; }
 .note.ok { color: var(--ok); background: var(--ok-bg); }
 .empty { padding: 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--r); display: grid; gap: 10px; justify-items: center; }
 details > summary { cursor: pointer; font-weight: 600; }
+.hdot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-red); vertical-align: middle; margin: 0 4px 2px; flex: none; }
+.hname { display: flex; align-items: center; font-size: 0.68rem; line-height: 1.25; color: var(--brand-red); font-weight: 600; margin-top: 2px; }
+.hname .hdot { margin: 0 4px 0 0; }
+.bd.hol { box-shadow: inset 3px 0 0 var(--brand-red); }
+.cday.hol .dn { color: var(--brand-red); }
+.btn.wa { color: #128c4b; text-decoration: none; }
+.btn.wa:hover { border-color: #25d366; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.wa { color: #4ade80; } }
+:root[data-theme="dark"] .btn.wa { color: #4ade80; }
 .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: .1em; }
 .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .gbtn { justify-content: center; gap: 10px; padding-block: 10px; width: 100%; }
@@ -242,6 +251,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   .month h2 { min-width: 0; font-size: 1.1rem; }
   .board { grid-template-columns: 62px repeat(3, minmax(0, 1fr)); }
   .bd { padding: 6px; font-size: 0.75rem; }
+  .hname { font-size: 0.6rem; }
   .bh { padding: 8px 6px; }
   .chip small { display: none; }
   .tg { font-size: 0.68rem; }
@@ -258,13 +268,13 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   <div class="mast-inner mast-top">
     <div class="brand">
       <span class="logo-plate"><img class="logo" src="assets/eastridge-logo.png" alt="Eastridge Primecare, a project of FFH" width="502" height="207"></span>
-      <span class="bar-title">Doctors' Duty Roster</span>
+      <span class="bar-title">Doctor's Duty Roster</span>
     </div>
     <div class="who" id="who"></div>
   </div>
   <div class="mast-inner hero-copy">
     <span class="eyebrow">Eastridge Primecare · Medical staff</span>
-    <h1>Doctors' Duty Roster</h1>
+    <h1>Doctor's Duty Roster</h1>
     <p>Upload your month, swap or hand over duties, and see who's on for every shift across the hospital.</p>
   </div>
 </header>
@@ -309,6 +319,20 @@ const MAX_STRETCH = 12; // hours on duty without a break before we flag it
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MON_SHORT = MONTHS.map(m => m.slice(0, 3));
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DEPARTMENTS = ["ER", "IPD-1 / Gynae", "IPD-1 / NICU (Paediatrics)", "IPD-2 (Medicine) / Dialysis", "OT / IPD-4 (Surgery)", "ICU / HDU", "MSA"];
+/* Pakistan public holidays. 2026 from the Cabinet Division notification (Eid ul Adha as revised);
+   2027 Islamic holidays are expected dates and move with moon sighting. */
+const HOLIDAYS = {
+  "2026-02-05": "Kashmir Solidarity Day", "2026-03-21": "Eid ul Fitr", "2026-03-22": "Eid ul Fitr", "2026-03-23": "Eid ul Fitr · Pakistan Day",
+  "2026-05-01": "Labour Day", "2026-05-26": "Eid ul Adha", "2026-05-27": "Eid ul Adha", "2026-05-28": "Eid ul Adha · Youm-e-Takbeer",
+  "2026-06-24": "Ashura", "2026-06-25": "Ashura", "2026-08-14": "Independence Day", "2026-08-25": "Eid Milad-un-Nabi",
+  "2026-11-09": "Iqbal Day", "2026-12-25": "Quaid-e-Azam Day · Christmas",
+  "2027-02-05": "Kashmir Solidarity Day", "2027-03-10": "Eid ul Fitr (expected)", "2027-03-11": "Eid ul Fitr (expected)", "2027-03-12": "Eid ul Fitr (expected)",
+  "2027-03-23": "Pakistan Day", "2027-05-01": "Labour Day", "2027-05-17": "Eid ul Adha (expected)", "2027-05-18": "Eid ul Adha (expected)", "2027-05-19": "Eid ul Adha (expected)",
+  "2027-05-28": "Youm-e-Takbeer", "2027-06-15": "Ashura (expected)", "2027-06-16": "Ashura (expected)", "2027-08-14": "Independence Day",
+  "2027-08-15": "Eid Milad-un-Nabi (expected)", "2027-11-09": "Iqbal Day", "2027-12-25": "Quaid-e-Azam Day · Christmas",
+};
+const holidayOf = date => HOLIDAYS[date] || "";
 
 const pad = n => String(n).padStart(2, "0");
 const monthKey = (y, m) => y + "-" + pad(m);
@@ -508,6 +532,10 @@ const docName = id => { const d = state.doctors[id] || (!app.sample && app.allDo
 const me = () => state.doctors[app.uid];
 const rosterOf = (month, id) => (state.rosters[month] || {})[id];
 const canAct = () => !app.readOnly && (app.sample || app.phase === "app");
+/* A month closes when it's over (Pakistan time). After that only coordinators can change it; firestore.rules enforces the same. */
+function currentMonthKey() { const t = new Date(Date.now() + 5 * 3600e3); return monthKey(t.getUTCFullYear(), t.getUTCMonth() + 1); }
+const isClosed = month => month < currentMonthKey();
+const lockedForMe = month => isClosed(month) && !app.canEdit && !app.sample;
 function monthDocs(month) { return state.rosters[month] || {}; }
 /* Current + previous month combined, so a night on the last day links to a morning on the 1st. */
 function combined(id, month) { return { ...(rosterOf(addMonths(month, -1), id) || {}), ...(rosterOf(month, id) || {}) }; }
@@ -594,8 +622,8 @@ const store = {
 function buildSample() {
   const m = state.month, prev = addMonths(m, -1);
   const docs = [
-    ["s1", "Dr. Example Ayesha", "Emergency"], ["s2", "Dr. Example Bilal", "Emergency"], ["s3", "Dr. Example Chen", "Emergency"],
-    ["s4", "Dr. Example Danish", "Medicine"], ["s5", "Dr. Example Elena", "Medicine"], ["s6", "Dr. Example Farah", "Paediatrics"],
+    ["s1", "Dr. Example Ayesha", "ER"], ["s2", "Dr. Example Bilal", "ER"], ["s3", "Dr. Example Chen", "ER"],
+    ["s4", "Dr. Example Danish", "IPD-2 (Medicine) / Dialysis"], ["s5", "Dr. Example Elena", "IPD-2 (Medicine) / Dialysis"], ["s6", "Dr. Example Farah", "IPD-1 / NICU (Paediatrics)"],
   ];
   const doctors = {}; docs.forEach(([uid, name, dept]) => (doctors[uid] = { uid, name, dept }));
   const rosters = { [m]: {}, [prev]: {} };
@@ -633,7 +661,10 @@ function stopSample() {
 /* Approved staff who don't do duties (e.g. MSA): they keep access but stay off the roster, checks and swap lists. */
 const isOffRoster = id => !app.sample && !!(app.allDoctors && app.allDoctors[id] && app.allDoctors[id].offRoster);
 function offRosterStaff() { return Object.values(app.allDoctors || {}).filter(d => d.approved === true && d.offRoster).sort((a, b) => (a.name || "").localeCompare(b.name || "")); }
-function deptList() { return [...new Set(Object.values(state.doctors).map(d => d.dept || "No department"))].sort(); }
+function deptList() {
+  const rank = d => { const i = DEPARTMENTS.indexOf(d); return i < 0 ? 99 : i; };
+  return [...new Set(Object.values(state.doctors).map(d => d.dept || "No department"))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+}
 function sortedDoctors() { return Object.values(state.doctors).sort((a, b) => (a.name || "").localeCompare(b.name || "")); }
 function allRosterIds(month) { return [...new Set([...Object.keys(monthDocs(month)), ...Object.keys(state.doctors)])].filter(id => !isOffRoster(id)); }
 function audit(month) {
@@ -732,14 +763,13 @@ function renderTeam() {
 }
 function renderProfileForm() {
   const p = state.profile;
-  const depts = deptList().filter(x => x !== "No department");
   return `<form class="panel" id="profile-form" data-form="profile">
     <h2>${(app.sample ? me() : app.myDoc) ? "Edit your profile" : "Set up your doctor profile"}</h2>
     <p class="muted small">Colleagues see this name on the roster and when you ask them to swap.</p>
     <div class="row">
       <div class="field"><label for="pf-name">Name as it should appear</label><input type="text" id="pf-name" data-bind="profile.name" value="${esc(p.name)}" placeholder="Dr. Sana Malik" required maxlength="60"></div>
-      <div class="field"><label for="pf-dept">Department</label><input type="text" id="pf-dept" data-bind="profile.dept" value="${esc(p.dept)}" list="dept-list" placeholder="Emergency" maxlength="40"><datalist id="dept-list">${depts.map(x => `<option value="${esc(x)}"></option>`).join("")}</datalist></div>
-      <div class="field"><label for="pf-phone">Phone (optional)</label><input type="tel" id="pf-phone" data-bind="profile.phone" value="${esc(p.phone)}" placeholder="0300 1234567" maxlength="20"></div>
+      <div class="field"><label for="pf-dept">Department</label><select id="pf-dept" data-bind="profile.dept"><option value="">Choose your department</option>${DEPARTMENTS.map(x => `<option value="${esc(x)}" ${p.dept === x ? "selected" : ""}>${esc(x)}</option>`).join("")}${p.dept && !DEPARTMENTS.includes(p.dept) ? `<option value="${esc(p.dept)}" selected>${esc(p.dept)} (old name, please change)</option>` : ""}</select></div>
+      <div class="field"><label for="pf-phone">WhatsApp number (optional)</label><input type="tel" id="pf-phone" data-bind="profile.phone" value="${esc(p.phone)}" placeholder="0300 1234567" maxlength="20"><span class="muted small">Colleagues use it to message you about swaps.</span></div>
     </div>
     <div class="btns"><button class="btn primary" type="submit" id="pf-save" ${app.busy ? "disabled" : ""}>Save profile</button>${app.phase === "profile" && !app.sample ? `<button class="btn ghost" type="button" data-act="signout" id="pf-out">Sign out</button>` : `<button class="btn" type="button" data-act="profile-close" id="pf-cancel">Cancel</button>`}</div>
   </form>`;
@@ -778,15 +808,19 @@ function renderBoard() {
     <div class="filters">
       <label class="check" for="f-dept">Department <select id="f-dept" data-bind="dept"><option value="all">All departments</option>${deptList().map(d => `<option ${state.dept === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></label>
       ${me() ? `<label class="check" for="f-mine"><input type="checkbox" id="f-mine" data-bind="mineOnly" ${state.mineOnly ? "checked" : ""}> Only my duties</label>` : ""}
-      ${me() && canAct() ? `<span class="muted small">Tap one of your own duties to swap or move it.</span>` : ""}
+      ${me() && canAct() && !lockedForMe(month) ? `<span class="muted small">Tap one of your own duties to swap or move it.</span>` : ""}
+      <button class="btn" data-act="export" id="export-xlsx" ${app.busy ? "disabled" : ""}><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3 1.4 1.4L12 17.4l-5.7-5.7 1.4-1.4 3.3 3.3V4a1 1 0 0 1 1-1zM5 19h14v2H5z"/></svg>Download month as Excel</button>
     </div>
+    ${isClosed(month) && !app.sample ? `<p class="note">${esc(monthLabel(month))} is over and closed. ${app.canEdit ? "As coordinator you can still correct it." : "Only a coordinator can change it now."}</p>` : ""}
+    ${datesOf(month).some(holidayOf) ? `<p class="muted small"><span class="hdot" aria-hidden="true"></span> Public holiday. Islamic holidays marked “expected” may move a day with moon sighting.</p>` : ""}
   </section>`;
   html += `<div class="boardwrap"><div class="board" role="table" aria-label="Duty roster for ${esc(monthLabel(month))}">
     <div class="bh" role="columnheader">Date</div>${SHIFTS.map(s => `<div class="bh sh-${s.code}" role="columnheader">${s.name}<span class="mono">${s.time}</span></div>`).join("")}`;
   for (const date of datesOf(month)) {
     const we = dow(date) === 0 || dow(date) === 6 ? " we" : "";
     const [, , d] = date.split("-");
-    html += `<div class="bd${we}${date === todayKey ? " today" : ""}" role="rowheader"><b>${+d}</b><span class="muted">${DOW[dow(date)]}</span></div>`;
+    const hol = holidayOf(date);
+    html += `<div class="bd${we}${date === todayKey ? " today" : ""}${hol ? " hol" : ""}" role="rowheader"${hol ? ` title="${esc(hol)}"` : ""}><b>${+d}</b><span class="muted">${DOW[dow(date)]}</span>${hol ? `<span class="hname"><span class="hdot" aria-hidden="true"></span>${esc(hol)}</span>` : ""}</div>`;
     for (const s of SHIFTS) {
       const on = ids.filter(id => deptOk(id) && hasDuty(docs[id], date, s.code) && (!state.mineOnly || id === app.uid))
         .sort((x, y) => docName(x).localeCompare(docName(y)));
@@ -827,7 +861,8 @@ function renderMine() {
   const comb = { ...(rosterOf(addMonths(month, -1), id) || {}), ...work };
   const stretches = longStretches(comb, month);
   const flagDays = new Set(); stretches.forEach(st => { flagDays.add(st.from.date); flagDays.add(st.to.date); });
-  const disabled = !canAct() ? "disabled" : "";
+  const locked = lockedForMe(month);
+  const disabled = !canAct() || locked ? "disabled" : "";
   const who = id === app.uid ? "Your" : esc(docName(id)) + "'s";
   let html = `<div class="grid2" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))">
   <section class="panel" style="grid-column:1/-1">
@@ -836,6 +871,8 @@ function renderMine() {
       <p class="muted small">${dutyList(work).length} duties · ${hoursOf(work)} hours${saved ? "" : " · not uploaded yet"}</p></div>
       ${app.canEdit && sortedDoctors().length > 1 ? `<label class="check" for="edit-for">Editing for <select id="edit-for" data-bind="editFor">${sortedDoctors().map(d => `<option value="${esc(d.uid)}" ${d.uid === id ? "selected" : ""}>${esc(d.name)}</option>`).join("")}</select></label>` : ""}
     </div>
+    ${locked ? `<div class="note">${esc(monthLabel(month))} is over and closed. Only a coordinator can change it now.</div>` : isClosed(month) && !app.sample ? `<div class="note">${esc(monthLabel(month))} is closed for doctors. As coordinator you can still correct it.</div>` : ""}
+    ${datesOf(month).some(holidayOf) ? `<p class="muted small"><span class="hdot" aria-hidden="true"></span> Public holiday: hover or long-press the day to see which one.</p>` : ""}
     ${stale ? `<div class="note bad">This roster changed while you were editing (for example, a swap was accepted). Saving now would overwrite that change. <button class="btn ghost" data-act="discard" id="stale-reset">Start over from the latest</button></div>` : ""}
     ${stretches.map(st => `<div class="note">Long stretch: ${esc(stretchText(st))}. Night ends at 08:00, so a Night followed by a Morning means no rest.</div>`).join("")}
     <div class="cal" role="grid" aria-label="Pick shifts for each day">
@@ -843,7 +880,8 @@ function renderMine() {
       ${Array.from({ length: (dow(month + "-01") + 6) % 7 }, () => `<div class="cday blank"></div>`).join("")}
       ${datesOf(month).map(date => {
         const we = dow(date) === 0 || dow(date) === 6;
-        return `<div class="cday${we ? " we" : ""}${flagDays.has(date) ? " flag" : ""}"><span class="dn">${+date.slice(8)}</span>${SHIFTS.map(s => {
+        const hol = holidayOf(date);
+        return `<div class="cday${we ? " we" : ""}${flagDays.has(date) ? " flag" : ""}${hol ? " hol" : ""}"${hol ? ` title="${esc(hol)}"` : ""}><span class="dn">${+date.slice(8)}${hol ? `<span class="hdot" aria-label="${esc(hol)}"></span>` : ""}</span>${SHIFTS.map(s => {
           const on = hasDuty(work, date, s.code);
           return `<button class="tg ${s.code}${on ? " on" : ""}" data-act="toggle" data-date="${date}" data-shift="${s.code}" aria-pressed="${on}" aria-label="${s.name} on ${fmtDate(date)}" ${disabled}>${s.code}</button>`;
         }).join("")}</div>`;
@@ -851,12 +889,12 @@ function renderMine() {
     </div>
     <div class="btns">
       <button class="btn primary" data-act="save-roster" id="save-roster" ${!dirty || app.busy || disabled ? "disabled" : ""}>${saved ? "Save changes" : "Upload roster"}${dirty ? ` (+${diff.added} / −${diff.removed})` : ""}</button>
-      <button class="btn" data-act="discard" id="discard" ${!dirty ? "disabled" : ""}>Discard changes</button>
+      <button class="btn" data-act="discard" id="discard" ${!dirty || locked ? "disabled" : ""}>Discard changes</button>
       <button class="btn danger" data-act="clear-month" id="clear-month" ${disabled || !dutyList(work).length ? "disabled" : ""}>Clear month</button>
       <span class="muted small">${dirty ? "Not saved yet. Colleagues see the change once you save." : saved ? "Saved. Changes you save here are logged under Swaps & changes." : "Pick M / E / N on each day you're on duty, or upload a file below."}</span>
     </div>
   </section>
-  ${renderUpload(month)}
+  ${locked ? "" : renderUpload(month)}
   </div>`;
   return html;
 }
@@ -904,6 +942,20 @@ function describeReq(r) {
   if (r.type === "edit") return `${f}'s roster was ${r.first ? "uploaded" : "edited"}${r.by && r.by !== r.from ? " by " + esc(docName(r.by)) : ""}: ${r.added} added, ${r.removed} removed`;
   return "Change";
 }
+/* WhatsApp: free click-to-chat links. Pakistani numbers like 0300 1234567 become 923001234567. */
+function waNumber(phone) {
+  let d = String(phone || "").replace(/[^\d+]/g, "");
+  if (d.startsWith("+")) d = d.slice(1); else if (d.startsWith("00")) d = d.slice(2);
+  else if (/^0\d{10}$/.test(d)) d = "92" + d.slice(1); else if (/^3\d{9}$/.test(d)) d = "92" + d;
+  return /^\d{10,15}$/.test(d) ? d : "";
+}
+function plainReq(r) { return describeReq(r).replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">"); }
+function waButton(toId, text, id) {
+  const d = state.doctors[toId] || (app.allDoctors && app.allDoctors[toId]), n = waNumber(d && d.phone);
+  const site = location.origin + location.pathname;
+  const href = "https://wa.me/" + n + "?text=" + encodeURIComponent(text + "\n\n" + site);
+  return `<a class="btn wa" href="${esc(href)}" target="_blank" rel="noopener" id="${esc(id)}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>${n ? "WhatsApp " + esc(docName(toId)) : "Send on WhatsApp"}</a>${n ? "" : `<span class="muted small">${esc(docName(toId))} hasn't added a WhatsApp number, so you'll pick the chat yourself.</span>`}`;
+}
 function when(ts) { if (!ts) return ""; const d = new Date(ts); return d.getDate() + " " + MON_SHORT[d.getMonth()] + ", " + pad(d.getHours()) + ":" + pad(d.getMinutes()); }
 const STATUS = { pending: "Waiting", accepted: "Done", done: "Done", declined: "Declined", cancelled: "Cancelled", failed: "Couldn't apply" };
 function previewWarnings(req) {
@@ -928,12 +980,13 @@ function renderChanges() {
     return `<div class="item"><div class="head"><span class="pill pending">${r.type === "swap" ? "Swap" : "Cover"}</span><span class="muted small">${when(r.createdAt)}</span></div>
       <p>${describeReq(r)}</p>${r.note ? `<p class="small muted">“${esc(r.note)}”</p>` : ""}
       ${pv.error ? `<div class="note bad">${esc(pv.error)}</div>` : ""}${pv.warns.map(w => `<div class="note">If you accept: ${esc(w)}</div>`).join("")}
-      <div class="btns"><button class="btn primary" data-act="accept" data-id="${esc(r.id)}" id="acc-${esc(r.id)}" ${app.busy || !canAct() ? "disabled" : ""}>Accept</button><button class="btn" data-act="decline" data-id="${esc(r.id)}" id="dec-${esc(r.id)}" ${app.busy || !canAct() ? "disabled" : ""}>Decline</button></div></div>`;
+      ${lockedForMe(r.month) ? `<div class="note">${esc(monthLabel(r.month))} is closed, so this can no longer be accepted.</div>` : ""}<div class="btns"><button class="btn primary" data-act="accept" data-id="${esc(r.id)}" id="acc-${esc(r.id)}" ${app.busy || !canAct() || lockedForMe(r.month) ? "disabled" : ""}>Accept</button><button class="btn" data-act="decline" data-id="${esc(r.id)}" id="dec-${esc(r.id)}" ${app.busy || !canAct() ? "disabled" : ""}>Decline</button></div></div>`;
   }).join("")}</div>` : `<p class="muted">Nothing waiting. When a colleague asks you to swap or cover a duty, it shows up here.</p>`}</section>`;
-  html += mine && canAct() ? renderRequestForm(month) : `<section class="panel"><h2>Ask for a change</h2><p class="muted">${!canAct() ? "Your account can't make changes yet." : app.myDoc && app.myDoc.offRoster ? "You're not on the duty roster, so you have no duties to swap." + (app.canEdit ? " You can correct any doctor's roster under Edit rosters." : "") : "Set up your doctor profile to swap or move duties."}</p></section>`;
+  html += mine && canAct() && lockedForMe(month) ? `<section class="panel"><h2>Ask for a change</h2><p class="muted">${esc(monthLabel(month))} is over and closed, so duties can't be swapped or moved. Ask a coordinator if something needs correcting.</p></section>` : mine && canAct() ? renderRequestForm(month) : `<section class="panel"><h2>Ask for a change</h2><p class="muted">${!canAct() ? "Your account can't make changes yet." : app.myDoc && app.myDoc.offRoster ? "You're not on the duty roster, so you have no duties to swap." + (app.canEdit ? " You can correct any doctor's roster under Edit rosters." : "") : "Set up your doctor profile to swap or move duties."}</p></section>`;
   html += `</div>`;
-  if (outgoing.length || othersPending.length) html += `<section class="panel"><h2>Sent and waiting</h2><div class="list">${[...outgoing, ...othersPending].map(r => `<div class="item"><div class="head"><span class="pill pending">Waiting for ${esc(docName(r.to))}</span><span class="muted small">${when(r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.note ? `<p class="small muted">“${esc(r.note)}”</p>` : ""}${r.from === app.uid ? `<div class="btns"><button class="btn" data-act="cancel-req" data-id="${esc(r.id)}" id="can-${esc(r.id)}" ${app.busy ? "disabled" : ""}>Cancel request</button></div>` : ""}</div>`).join("")}</div></section>`;
-  html += `<section class="panel"><h2>Change log for ${esc(monthLabel(month))}</h2>${history.length ? `<div class="list">${history.map(r => `<div class="item"><div class="head"><span class="pill ${esc(r.status)}">${STATUS[r.status] || esc(r.status)}</span><span class="muted small">${when(r.decidedAt || r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.reason ? `<p class="small muted">${esc(r.reason)}</p>` : ""}</div>`).join("")}</div>` : `<p class="muted">No changes this month yet. Uploads, edits, swaps, hand-overs and moves are all recorded here.</p>`}</section>`;
+  if (outgoing.length || othersPending.length) html += `<section class="panel"><h2>Sent and waiting</h2><div class="list">${[...outgoing, ...othersPending].map(r => `<div class="item"><div class="head"><span class="pill pending">Waiting for ${esc(docName(r.to))}</span><span class="muted small">${when(r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.note ? `<p class="small muted">“${esc(r.note)}”</p>` : ""}${r.from === app.uid ? `<div class="btns">${app.sample ? "" : waButton(r.to, "Assalam o Alaikum " + docName(r.to) + ", I've sent you a duty " + (r.type === "swap" ? "swap" : "cover") + " request on the Eastridge duty roster: " + plainReq(r) + ". Please accept or decline it here:", "wa-req-" + r.id)}<button class="btn" data-act="cancel-req" data-id="${esc(r.id)}" id="can-${esc(r.id)}" ${app.busy ? "disabled" : ""}>Cancel request</button></div>` : ""}</div>`).join("")}</div></section>`;
+  const answered = r => r.to === app.uid && r.from !== app.uid && (r.status === "accepted" || r.status === "declined");
+  html += `<section class="panel"><h2>Change log for ${esc(monthLabel(month))}</h2>${history.length ? `<div class="list">${history.map(r => `<div class="item"><div class="head"><span class="pill ${esc(r.status)}">${STATUS[r.status] || esc(r.status)}</span><span class="muted small">${when(r.decidedAt || r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.reason ? `<p class="small muted">${esc(r.reason)}</p>` : ""}${answered(r) && !app.sample ? `<div class="btns">${waButton(r.from, "Assalam o Alaikum " + docName(r.from) + ", I've " + r.status + " your request on the Eastridge duty roster: " + plainReq(r) + ".", "wa-ans-" + r.id)}</div>` : ""}</div>`).join("")}</div>` : `<p class="muted">No changes this month yet. Uploads, edits, swaps, hand-overs and moves are all recorded here.</p>`}</section>`;
   return html;
 }
 function renderRequestForm(month) {
@@ -1041,7 +1094,7 @@ const actions = {
   "revoke-cancel"() { state.confirmRevoke = null; render(); },
   async revoke(b) { const id = b.dataset.id; state.confirmRevoke = null; await guarded(() => store.setApproved(id, false), "Access removed."); },
   toggle(b) {
-    if (!canAct()) return;
+    if (!canAct() || lockedForMe(state.month)) return;
     const id = editTarget(), month = state.month, d = ensureDraft(month, id);
     d.shifts = hasDuty(d.shifts, b.dataset.date, b.dataset.shift) ? withoutDuty(d.shifts, b.dataset.date, b.dataset.shift) : withDuty(d.shifts, b.dataset.date, b.dataset.shift);
     settleDraft(month, id); render();
@@ -1068,6 +1121,10 @@ const actions = {
     toast(u.entries.length + " duties placed on the calendar. Check them, then press Save.");
   },
   "drop-upload"() { state.upload = null; render(); },
+  async export() {
+    try { await exportMonth(); toast("Downloaded the " + monthLabel(state.month) + " roster."); }
+    catch (err) { toast("Couldn't create the Excel file: " + ((err && err.message) || "try again") + "."); }
+  },
   async copy(b) {
     const el = document.getElementById(b.dataset.src); if (!el) return;
     try { await navigator.clipboard.writeText(el.textContent); toast("Copied. Paste it into a spreadsheet or the box above."); }
@@ -1089,7 +1146,7 @@ const actions = {
     } else {
       const dup = state.requests.find(r => r.status === "pending" && r.from === app.uid && r.give.date === req.give.date && r.give.shift === req.give.shift);
       if (dup) { toast("You already have a waiting request for this duty. Cancel it first to send a new one."); return; }
-      await guarded(() => store.addRequest({ ...req, status: "pending" }), "Request sent to " + docName(req.to) + ".");
+      await guarded(() => store.addRequest({ ...req, status: "pending" }), "Request sent. Use the WhatsApp button under “Sent and waiting” to let " + docName(req.to) + " know.");
     }
     resetForm(); render();
   },
@@ -1135,6 +1192,7 @@ document.addEventListener("submit", async e => {
   e.preventDefault();
   const p = state.profile, name = p.name.trim();
   if (!name) { toast("Add your name so colleagues can find you."); return; }
+  if (!p.dept) { toast("Choose your department."); return; }
   if (!app.uid) return;
   const ok = await guarded(() => store.saveDoctor(app.uid, { name, dept: p.dept.trim(), phone: p.phone.trim() }), "Profile saved.");
   if (ok) { state.profileOpen = false; render(); }
@@ -1167,6 +1225,29 @@ function authMessage(err) {
     "auth/web-storage-unsupported": "This browser is blocking sign-in. Open the site in Chrome or Safari.",
     "auth/internal-error": "Google sign-in didn't finish. If you opened this link from WhatsApp, open it in Chrome or Safari instead.",
   })[c] || ((err && err.message) || "Sign-in failed. Try again.");
+}
+
+/* One workbook per month: day-by-shift, doctor-by-day, and the change log. */
+async function exportMonth() {
+  const XLSX = await loadXLSX();
+  const month = state.month, docs = monthDocs(month), dates = datesOf(month);
+  const ids = allRosterIds(month).filter(id => docs[id] || state.doctors[id]).sort((a, b) => docName(a).localeCompare(docName(b)));
+  const deptOf = id => (state.doctors[id] && state.doctors[id].dept) || (app.allDoctors && app.allDoctors[id] && app.allDoctors[id].dept) || "";
+  const withDept = id => docName(id) + (deptOf(id) ? " (" + deptOf(id) + ")" : "");
+  const title = "Eastridge Primecare · Doctor's Duty Roster · " + monthLabel(month);
+  const byDay = [[title], ["Downloaded " + when(Date.now())], [], ["Date", "Day", "Public holiday", ...SHIFTS.map(s => s.name + " (" + s.time.replace(/\s/g, "") + ")")]];
+  for (const date of dates) byDay.push([fmtDate(date).replace(/^\w+ /, ""), DOW[dow(date)], holidayOf(date), ...SHIFTS.map(s => ids.filter(id => hasDuty(docs[id], date, s.code)).map(withDept).join(", ") || (ids.length ? "UNCOVERED" : ""))]);
+  const byDoc = [[title], [], ["Doctor", "Department", ...dates.map(d => +d.slice(8) + " " + DOW[dow(d)].slice(0, 2)), "Duties", "Hours"]];
+  for (const id of ids) { const sh = onlyMonth(docs[id] || {}, month); byDoc.push([docName(id), deptOf(id), ...dates.map(d => (sh[d] || []).join("+")), dutyList(sh).length, hoursOf(sh)]); }
+  byDoc.push([], ["M = Morning 08:00–14:00 · E = Evening 14:00–20:00 · N = Night 20:00–08:00"]);
+  const log = [[title + " · Change log"], [], ["When", "Status", "Change", "Note"]];
+  state.requests.filter(r => r.month === month).slice().reverse().forEach(r => log.push([when(r.decidedAt || r.createdAt), STATUS[r.status] || r.status, plainReq(r), r.note || r.reason || ""]));
+  const wb = XLSX.utils.book_new();
+  const add = (rows, name, cols) => { const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = cols.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
+  add(byDay, "By day", [12, 6, 26, 40, 40, 40]);
+  add(byDoc, "By doctor", [26, 24, ...dates.map(() => 6), 8, 8]);
+  add(log, "Change log", [16, 14, 70, 30]);
+  XLSX.writeFile(wb, "Eastridge-Duty-Roster-" + month + ".xlsx");
 }
 
 let xlsxPromise = null;

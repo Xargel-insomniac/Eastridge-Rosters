@@ -15,6 +15,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/doctors/$(uid())).data.approved == true;
     }
     function isMember() { return isAdmin() || isApproved(); }
+    // A month ("2026-10") closes once it's over in Pakistan time (UTC+5); after that only coordinators change it.
+    function monthNum(m) { return int(m.split('-')[0]) * 12 + int(m.split('-')[1]); }
+    function nowMonthNum() {
+      return (request.time + duration.value(5, 'h')).year() * 12 + (request.time + duration.value(5, 'h')).month();
+    }
+    function monthOpen(m) { return isAdmin() || monthNum(m) >= nowMonthNum(); }
     function validName() {
       return request.resource.data.name is string
         && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60;
@@ -52,7 +58,8 @@ service cloud.firestore {
         && request.resource.data.doctorId is string
         && rosterId == request.resource.data.month + '_' + request.resource.data.doctorId
         && request.resource.data.shifts is map
-        && request.resource.data.updatedBy == uid();
+        && request.resource.data.updatedBy == uid()
+        && monthOpen(request.resource.data.month);
       allow delete: if isAdmin();
     }
 
@@ -63,8 +70,10 @@ service cloud.firestore {
         && request.resource.data.by == uid()
         && request.resource.data.type in ['swap', 'cover', 'move', 'edit']
         && request.resource.data.status in ['pending', 'done']
-        && (request.resource.data.type in ['edit'] || request.resource.data.from == uid() || isAdmin());
+        && (request.resource.data.type in ['edit'] || request.resource.data.from == uid() || isAdmin())
+        && request.resource.data.month is string && monthOpen(request.resource.data.month);
       // Only the colleague asked can accept or decline; only the sender can cancel.
+      // Accepting a request from a closed month is blocked by the roster rule above.
       allow update: if isMember()
         && resource.data.status == 'pending'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedAt', 'decidedBy', 'reason'])

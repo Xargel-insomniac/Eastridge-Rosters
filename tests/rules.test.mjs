@@ -31,6 +31,10 @@ await t("approved writes own roster", as("amy").doc("rosters/2026-11_amy").set(R
 await t("approved writes colleague roster (swap accept)", as("ben").doc("rosters/2026-11_amy").set(R("ben")), true);
 await t("roster id must match month_doctor", as("amy").doc("rosters/2026-11_ben").set(R("amy")), false);
 await t("roster updatedBy must be self", as("amy").doc("rosters/2026-11_amy").set(R("ben")), false);
+await t("approved can't write a closed (past) month", as("amy").doc("rosters/2026-09_amy").set({ month: "2026-09", doctorId: "amy", shifts: {}, updatedBy: "amy" }), false);
+await t("approved can write the current month", as("amy").doc("rosters/2026-10_amy").set({ month: "2026-10", doctorId: "amy", shifts: {}, updatedBy: "amy" }), true);
+await t("coordinator can correct a closed month", as("boss").doc("rosters/2026-09_amy").set({ month: "2026-09", doctorId: "amy", shifts: {}, updatedBy: "boss" }), true);
+await t("approved can't log a change in a closed month", as("amy").collection("requests").add({ type: "move", status: "done", from: "amy", by: "amy", month: "2026-09" }), false);
 await t("approved can't approve others", as("amy").doc("doctors/pat").update({ approved: true }), false);
 await t("approved can't read admins of others", as("amy").doc("admins/boss").get(), false);
 await t("admin reads own admin doc", as("boss").doc("admins/boss").get(), true);
