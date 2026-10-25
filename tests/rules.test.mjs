@@ -35,6 +35,12 @@ await t("approved can't write a closed (past) month", as("amy").doc("rosters/202
 await t("approved can write the current month", as("amy").doc("rosters/2026-10_amy").set({ month: "2026-10", doctorId: "amy", shifts: {}, updatedBy: "amy" }), true);
 await t("coordinator can correct a closed month", as("boss").doc("rosters/2026-09_amy").set({ month: "2026-09", doctorId: "amy", shifts: {}, updatedBy: "boss" }), true);
 await t("approved can't log a change in a closed month", as("amy").collection("requests").add({ type: "move", status: "done", from: "amy", by: "amy", month: "2026-09" }), false);
+const ANN = { active: true, text: "Upload December rosters by 20 Nov", level: "important", until: "", updatedAt: 1, updatedBy: "boss" };
+await t("doctor can't post the announcement", as("amy").doc("public/announcement").set(ANN), false);
+await t("coordinator posts the announcement", as("boss").doc("public/announcement").set(ANN), true);
+await t("signed-out visitor reads the announcement", as(null).doc("public/announcement").get(), true);
+await t("announcement level must be valid", as("boss").doc("public/announcement").set({ ...ANN, level: "party" }), false);
+await t("coordinator can't create other public docs", as("boss").doc("public/other").set(ANN), false);
 await t("approved can't approve others", as("amy").doc("doctors/pat").update({ approved: true }), false);
 await t("approved can't read admins of others", as("amy").doc("admins/boss").get(), false);
 await t("admin reads own admin doc", as("boss").doc("admins/boss").get(), true);

@@ -225,6 +225,25 @@ button.chip { font: inherit; font-size: 0.8rem; font-weight: 600; }
 .note.ok { color: var(--ok); background: var(--ok-bg); }
 .empty { padding: 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--r); display: grid; gap: 10px; justify-items: center; }
 details > summary { cursor: pointer; font-weight: 600; }
+/* announcement strip: scrolls like a ticker when the text is longer than the screen */
+#announce { --ann-bg: var(--brand-navy); --ann-ink: #ffffff; --ann-tag: var(--brand-red); background: var(--ann-bg); color: var(--ann-ink); position: relative; z-index: 9; }
+#announce.important { --ann-bg: #f6b73c; --ann-ink: #2a1a00; --ann-tag: #2a1a00; }
+#announce.urgent { --ann-bg: var(--brand-red); --ann-ink: #ffffff; --ann-tag: #ffffff; }
+.ann-inner { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding-block: 9px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.ann-tag { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; padding: 3px 9px; border-radius: 999px; border: 1.5px solid var(--ann-tag); color: var(--ann-tag); }
+#announce.urgent .ann-tag { background: rgba(255,255,255,.16); }
+.ann-view { flex: 1; min-width: 0; overflow: hidden; font-weight: 600; font-size: 0.92rem; }
+.ann-track { display: inline-flex; white-space: nowrap; }
+.ann-track > span { padding-right: 64px; }
+.ann-view.scroll .ann-track { animation: ticker var(--ann-dur, 20s) linear infinite; }
+.ann-view.scroll:hover .ann-track, .ann-view.scroll:focus-within .ann-track { animation-play-state: paused; }
+.ann-view:not(.scroll) .ann-track > span + span { display: none; }
+.ann-view a { color: inherit; text-decoration: underline; }
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .ann-view.scroll .ann-track { white-space: normal; } .ann-view.scroll .ann-track > span + span { display: none; } }
+.ann-x { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 0; background: transparent; color: inherit; font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.ann-x:hover { background: rgba(255,255,255,.18); }
+textarea.plain { font-family: var(--f-body); font-size: 0.95rem; min-height: 72px; }
 .hdot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-red); vertical-align: middle; margin: 0 4px 2px; flex: none; }
 .hname { display: flex; align-items: center; font-size: 0.68rem; line-height: 1.25; color: var(--brand-red); font-weight: 600; margin-top: 2px; }
 .hname .hdot { margin: 0 4px 0 0; }
@@ -263,6 +282,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 </head>
 <body>
 
+<div id="announce" role="region" aria-label="Announcement" hidden></div>
 <header class="masthead" id="masthead">
   <img class="photo" src="assets/hospital.webp" srcset="assets/hospital-900.webp 900w, assets/hospital.webp 1803w" sizes="100vw" alt="" fetchpriority="high">
   <div class="mast-inner mast-top">
@@ -520,6 +540,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
+  ann: null, annDraft: null,
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -751,6 +772,7 @@ function renderTeam() {
   const pend = pendingDoctors(), ok = sortedDoctors(), dis = app.busy ? "disabled" : "";
   const row = (d, btns) => `<div class="item"><div class="head"><b>${esc(d.name || "No name")}</b><span class="muted small">${esc(d.dept || "No department")}</span></div>${d.email || d.phone ? `<p class="small muted">${esc(d.email || "")}${d.email && d.phone ? " · " : ""}${esc(d.phone || "")}</p>` : ""}<div class="btns">${btns}</div></div>`;
   return `<div class="grid2">
+    ${renderAnnForm()}
     <section class="panel"><h2>Waiting for approval</h2>${pend.length ? `<div class="list">${pend.map(d => row(d, `<button class="btn primary" data-act="approve" data-id="${esc(d.uid)}" id="ap-${esc(d.uid)}" ${dis}>Approve</button><button class="btn danger" data-act="reject-doc" data-id="${esc(d.uid)}" id="rj-${esc(d.uid)}" ${dis}>Reject</button>`)).join("")}</div>` : `<p class="muted">No one is waiting. New sign-ups appear here.</p>`}
       <p class="muted small">Only approve people you recognise. Approved doctors see the full roster and can change duties.</p></section>
     <section class="panel"><h2>On the duty roster (${ok.length})</h2>${ok.length ? `<div class="list">${ok.map(d => row(d, d.uid === app.uid ? `<button class="btn" data-act="roster-off" data-id="${esc(d.uid)}" id="off-${esc(d.uid)}" ${dis}>I don't do duties: take me off</button>` :
@@ -1044,7 +1066,7 @@ function renderChecks() {
 
 /* ---------- actions ---------- */
 function setBind(path, value) {
-  const parts = path.split("."); let o = state; while (parts.length > 1) o = o[parts.shift()]; o[parts[0]] = value;
+  const parts = path.split("."); let o = state; while (parts.length > 1) { const k = parts.shift(); o = o[k] || (o[k] = {}); } o[parts[0]] = value;
 }
 function ensureDraft(month, id) {
   const k = draftKey(month, id);
@@ -1121,6 +1143,21 @@ const actions = {
     toast(u.entries.length + " duties placed on the calendar. Check them, then press Save.");
   },
   "drop-upload"() { state.upload = null; render(); },
+  "ann-dismiss"() { try { localStorage.setItem("ann-dismissed", String(state.ann && state.ann.updatedAt)); } catch (_) {} annShownKey = null; updateAnnouncement(); },
+  async "ann-publish"() {
+    const d = state.annDraft || {}, text = (d.text || "").trim();
+    if (!text) { toast("Write the announcement first."); return; }
+    await guarded(async () => {
+      await dbCall(() => app.db.collection("public").doc("announcement").set({ active: true, text, level: ANN_LEVELS[d.level] ? d.level : "info", until: d.until || "", updatedAt: Date.now(), updatedBy: app.uid }));
+      state.annDraft = null;
+    }, "Banner is live for everyone.");
+  },
+  async "ann-remove"() {
+    await guarded(async () => {
+      await dbCall(() => app.db.collection("public").doc("announcement").set({ active: false, text: "", level: "info", until: "", updatedAt: Date.now(), updatedBy: app.uid }));
+      state.annDraft = null;
+    }, "Banner removed.");
+  },
   async export() {
     try { await exportMonth(); toast("Downloaded the " + monthLabel(state.month) + " roster."); }
     catch (err) { toast("Couldn't create the Excel file: " + ((err && err.message) || "try again") + "."); }
@@ -1171,7 +1208,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
 });
-const LIVE_BINDS = new Set(["auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "form.note"]);
+const LIVE_BINDS = new Set(["annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "form.note"]);
 document.addEventListener("input", e => {
   const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;
   setBind(path, el.value);
@@ -1250,6 +1287,48 @@ async function exportMonth() {
   XLSX.writeFile(wb, "Eastridge-Duty-Roster-" + month + ".xlsx");
 }
 
+/* ---------- announcement banner (public/announcement, readable by anyone, written by coordinators) ---------- */
+const ANN_LEVELS = { info: "Notice", important: "Important", urgent: "Urgent" };
+let annShownKey = null;
+function annActive(a) { return !!(a && a.active && a.text && (!a.until || a.until >= ymd(...(d => [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()])(new Date(Date.now() + 5 * 3600e3))))); }
+function annDismissed(a) { try { return a.level !== "urgent" && localStorage.getItem("ann-dismissed") === String(a.updatedAt); } catch (_) { return false; } }
+function linkify(t) { return esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
+function updateAnnouncement() {
+  const el = $("#announce"), a = state.ann;
+  const show = annActive(a) && !annDismissed(a);
+  const key = show ? JSON.stringify([a.text, a.level, a.updatedAt]) : "";
+  if (key === annShownKey) return;
+  annShownKey = key;
+  if (!show) { el.hidden = true; el.innerHTML = ""; return; }
+  const level = ANN_LEVELS[a.level] ? a.level : "info";
+  el.className = level; el.hidden = false;
+  el.innerHTML = `<div class="ann-inner"><span class="ann-tag"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 10v4a1 1 0 0 0 1 1h2l5 4V5L6 9H4a1 1 0 0 0-1 1zm13.5 2A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>${ANN_LEVELS[level]}</span>
+    <div class="ann-view" tabindex="0"><div class="ann-track"><span>${linkify(a.text)}</span><span aria-hidden="true">${linkify(a.text)}</span></div></div>
+    ${level === "urgent" ? "" : `<button class="ann-x" data-act="ann-dismiss" aria-label="Hide this announcement" id="ann-x">×</button>`}</div>`;
+  const view = el.querySelector(".ann-view"), first = el.querySelector(".ann-track > span");
+  requestAnimationFrame(() => {
+    const scroll = first.scrollWidth > view.clientWidth + 4;
+    view.classList.toggle("scroll", scroll);
+    if (scroll) view.style.setProperty("--ann-dur", Math.max(12, Math.round(first.scrollWidth / 60)) + "s");
+  });
+}
+function subscribeAnnouncement() {
+  app.db.collection("public").doc("announcement").onSnapshot(snap => { state.ann = snap.exists ? snap.data() : null; updateAnnouncement(); if (state.tab === "team" && app.phase === "app") render(); }, () => {});
+}
+function renderAnnForm() {
+  const cur = state.ann, d = state.annDraft || (state.annDraft = { text: cur && cur.active ? cur.text : "", level: (cur && cur.level) || "info", until: (cur && cur.active && cur.until) || "" });
+  const live = annActive(cur), dis = app.busy ? "disabled" : "";
+  return `<section class="panel" style="grid-column:1/-1"><div class="bar"><h2>Announcement banner</h2>${live ? `<span class="pill done">Showing now</span>` : cur && cur.active ? `<span class="pill declined">Expired</span>` : `<span class="pill declined">Off</span>`}</div>
+    <p class="muted small">Shown across the top of every page for everyone, including the sign-in page. Long messages scroll across the screen. Doctors can hide Notice and Important banners; Urgent ones stay until you remove them.</p>
+    <div class="field"><label for="ann-text">Message</label><textarea class="plain" id="ann-text" data-bind="annDraft.text" maxlength="300" placeholder="e.g. Rosters for December must be uploaded by 20 November.">${esc(d.text)}</textarea><span class="muted small">Up to 300 characters. Web links become clickable.</span></div>
+    <div class="row">
+      <div class="field"><label for="ann-level">Type</label><select id="ann-level" data-bind="annDraft.level">${Object.entries(ANN_LEVELS).map(([k, v]) => `<option value="${k}" ${d.level === k ? "selected" : ""}>${v}${k === "info" ? " (navy)" : k === "important" ? " (amber)" : " (red)"}</option>`).join("")}</select></div>
+      <div class="field"><label for="ann-until">Show until (optional)</label><input type="date" id="ann-until" data-bind="annDraft.until" value="${esc(d.until)}" min="${todayKey}"></div>
+    </div>
+    <div class="btns"><button class="btn primary" data-act="ann-publish" id="ann-publish" ${dis}>${live ? "Update banner" : "Show banner"}</button>${cur && cur.active ? `<button class="btn danger" data-act="ann-remove" id="ann-remove" ${dis}>Remove banner</button>` : ""}</div>
+  </section>`;
+}
+
 let xlsxPromise = null;
 function loadXLSX() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -1314,6 +1393,7 @@ function init() {
   }
   catch (e) { app.phase = "setup"; app.setupError = "The settings in firebase-config.js look wrong: " + e.message; render(); return; }
   render();
+  subscribeAnnouncement();
   if (app.googleOn) app.auth.getRedirectResult().catch(err => { state.auth.err = authMessage(err); render(); });
   app.auth.onAuthStateChanged(async u => {
     if (unsubMe) { unsubMe(); unsubMe = null; }

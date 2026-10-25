@@ -27,6 +27,7 @@ A website where doctors at Eastridge Primecare upload their monthly duty rosters
 - **Hospital roster:** day-by-day board with Morning / Evening / Night columns, filterable by department, with Pakistan public holidays marked. Islamic holidays for 2027 are expected dates and may move a day with moon sighting.
 - **Download month as Excel:** one file per month with three sheets (*By day*, *By doctor* with M/E/N codes and hours, and the *Change log*). Use it as a backup and for printing.
 - **WhatsApp nudges:** after sending a swap or hand-over request (or answering one), a button opens WhatsApp with a ready-written message to the colleague. Free; it uses the number in their profile.
+- **Announcement banner:** coordinators post a message from the Team tab (Notice, Important or Urgent, with an optional end date). It shows across the top of every page for everyone, including the sign-in page, and scrolls like a ticker when it's long. Doctors can hide Notice and Important banners; Urgent ones stay until removed.
 - **Closed months:** once a month is over (Pakistan time), doctors can no longer change it; coordinators still can.
 - **Departments:** ER · IPD-1 / Gynae · IPD-1 / NICU (Paediatrics) · IPD-2 (Medicine) / Dialysis · OT / IPD-4 (Surgery) · ICU / HDU · MSA.
 - **Checks:** uncovered shifts per department, anyone on duty more than 12 hours without a break (e.g. Night then Morning = 18 h), and doctors who haven't uploaded.
@@ -105,7 +106,7 @@ Approved doctors can technically write any doctor's roster, because accepting a 
 | `docs/` | Screenshots used in this README. |
 | `firebase-config.js` | Your Firebase project settings. These values are not secret; access is controlled by the rules. |
 | `firestore.rules` | Database security rules. Paste into the Firebase console, or deploy with `npm run deploy:rules`. |
-| `tests/rules.test.mjs` | 38 automated checks of the security rules (`npm install && npm run test:rules`, needs Java). |
+| `tests/rules.test.mjs` | 43 automated checks of the security rules (`npm install && npm run test:rules`, needs Java). |
 
 Before `firebase-config.js` is filled in, the site shows a **Connect a database** screen with an example month you can explore. Nothing is saved there.
 
