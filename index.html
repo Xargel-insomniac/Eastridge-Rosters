@@ -1,7 +1,10 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body style="margin:0">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Eastridge Hospital doctors' duty roster: monthly rosters, swaps and coverage checks.">
 <title>Eastridge Duty Roster</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
@@ -47,7 +50,10 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
 .wrap { max-width: 1080px; margin: 0 auto; padding-block: 20px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.2; }
 h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; }
@@ -121,7 +127,7 @@ button.statlink:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* form */
 .field { display: grid; gap: 4px; min-width: 0; }
 .field label, .field .lab { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
-input[type=text], input[type=tel], input[type=date], select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 0; }
+input[type=text], input[type=tel], input[type=date], input[type=email], input[type=password], select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 0; }
 textarea { font-family: var(--f-mono); font-size: 0.82rem; min-height: 90px; resize: vertical; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
 .row > .field { flex: 1 1 180px; }
@@ -203,6 +209,8 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <header class="top">
@@ -224,7 +232,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 
   <div id="banner"></div>
 
-  <div class="bar">
+  <div class="bar" id="bar" hidden>
     <div class="month">
       <button class="iconbtn" id="m-prev" data-act="month" data-d="-1" aria-label="Previous month">‹</button>
       <h2 id="month-label"></h2>
@@ -237,6 +245,10 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 </div>
 <div id="toast" role="status" hidden></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 <script>
 /* ===== LOGIC START ===== */
 const SHIFTS = [
@@ -430,13 +442,14 @@ function coverageGaps(monthK, doctors, rosterMonth) {
 /* ===== LOGIC END ===== */
 
 /* ---------- app state ---------- */
-const app = { db: null, user: null, uid: null, isOwner: false, canEdit: false, canWrite: null, readOnly: false, sample: false, live: false, loading: true, busy: false };
+const app = { db: null, user: null, uid: null, isOwner: false, canEdit: false, canWrite: null, readOnly: false, sample: false, live: false, loading: true, busy: false, phase: "starting", myDoc: null, isAdmin: false, email: "", allDoctors: {}, liveDoctors: {} };
 const now = new Date();
 const state = {
   month: monthKey(now.getFullYear(), now.getMonth() + 1),
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
+  auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
 };
@@ -444,10 +457,10 @@ const todayKey = ymd(now.getFullYear(), now.getMonth() + 1, now.getDate());
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const safeId = s => String(s).replace(/[^A-Za-z0-9_\-.~:@]/g, c => "+" + c.charCodeAt(0).toString(16));
-const docName = id => (state.doctors[id] && state.doctors[id].name) || "Unnamed doctor";
+const docName = id => { const d = state.doctors[id] || (!app.sample && app.allDoctors && app.allDoctors[id]); return (d && d.name) || "Unnamed doctor"; };
 const me = () => state.doctors[app.uid];
 const rosterOf = (month, id) => (state.rosters[month] || {})[id];
-const canAct = () => !app.readOnly && (app.sample || app.live);
+const canAct = () => !app.readOnly && (app.sample || app.phase === "app");
 function monthDocs(month) { return state.rosters[month] || {}; }
 /* Current + previous month combined, so a night on the last day links to a morning on the 1st. */
 function combined(id, month) { return { ...(rosterOf(addMonths(month, -1), id) || {}), ...(rosterOf(month, id) || {}) }; }
@@ -455,14 +468,16 @@ function combined(id, month) { return { ...(rosterOf(addMonths(month, -1), id) |
 let toastTimer;
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 4200); }
 
-/* ---------- storage ---------- */
-let unsubDoctors = null, unsubRosters = null, unsubRequests = null;
+/* ---------- storage (Firebase Firestore) ---------- */
+let unsubDoctors = null, unsubRosters = null, unsubRequests = null, unsubMe = null;
 function onDbError(e) {
-  if (e && e.code === "revoked") { app.live = false; app.readOnly = true; render(); return; }
-  if (e && e.code === "unavailable") { setTimeout(subscribeMonth, 3000); }
+  app.loading = false;
+  if (e && e.code === "permission-denied") toast("You don't have access to the roster right now. If you were just approved or removed, reload the page.");
+  else if (e && e.code === "unavailable") setTimeout(subscribeMonth, 3000);
+  render();
 }
 function subscribeMonth() {
-  if (!app.db) return;
+  if (!app.db || app.phase !== "app") return;
   if (unsubRosters) unsubRosters();
   if (unsubRequests) unsubRequests();
   const ms = [addMonths(state.month, -1), state.month];
@@ -491,9 +506,8 @@ async function guarded(fn, okMsg) {
   try { await fn(); if (okMsg) toast(okMsg); return true; }
   catch (e) {
     const code = e && e.code;
-    if (code === "invalid_argument" && app.canWrite !== true) { app.readOnly = true; toast("Your access is view-only. Ask the roster coordinator to give you Contributor access."); }
-    else if (code === "quota_exceeded") toast("The roster's storage is full (" + (e.message || "limit reached") + "). Ask the coordinator to clear old months.");
-    else if (code === "resource_exhausted") toast("Too many saves at once. Wait a few seconds and try again.");
+    if (code === "permission-denied") toast("You don't have permission to do that. Ask the roster coordinator to approve your account.");
+    else if (code === "resource-exhausted") toast("The database's free daily limit is used up. Try again tomorrow, or ask the coordinator to upgrade the Firebase plan.");
     else toast("Couldn't save: " + ((e && e.message) || "check your connection and try again."));
     return false;
   } finally { app.busy = false; render(); }
@@ -501,17 +515,21 @@ async function guarded(fn, okMsg) {
 const store = {
   async saveDoctor(uid, data) {
     if (app.sample) { state.doctors[uid] = { uid, ...data }; return; }
-    await dbCall(() => app.db.doc("doctors/" + safeId(uid)).set({ uid, ...data, updatedAt: Date.now() }));
+    const ref = app.db.collection("doctors").doc(uid);
+    if (app.myDoc) await dbCall(() => ref.set({ uid, ...data, updatedAt: Date.now() }, { merge: true }));
+    else await dbCall(() => ref.set({ uid, ...data, email: app.email || "", approved: false, createdAt: Date.now(), updatedAt: Date.now() }));
   },
+  async setApproved(uid, approved) { await dbCall(() => app.db.collection("doctors").doc(uid).update({ approved, updatedAt: Date.now() })); },
+  async removeDoctor(uid) { await dbCall(() => app.db.collection("doctors").doc(uid).delete()); },
   async getRoster(month, id) {
     if (app.sample) return cloneShifts(rosterOf(month, id) || {});
-    const s = await dbCall(() => app.db.doc("rosters/" + month + "_" + safeId(id)).get());
+    const s = await dbCall(() => app.db.collection("rosters").doc(month + "_" + safeId(id)).get());
     return s.exists ? cloneShifts(s.data().shifts || {}) : {};
   },
   async saveRoster(month, id, shifts) {
     shifts = onlyMonth(shifts, month);
     if (app.sample) { (state.rosters[month] ||= {})[id] = shifts; return; }
-    await dbCall(() => app.db.doc("rosters/" + month + "_" + safeId(id)).set({ month, doctorId: id, shifts, updatedAt: Date.now(), updatedBy: app.uid }));
+    await dbCall(() => app.db.collection("rosters").doc(month + "_" + safeId(id)).set({ month, doctorId: id, shifts, updatedAt: Date.now(), updatedBy: app.uid }));
   },
   async addRequest(data) {
     data = { ...data, createdAt: Date.now(), by: app.uid };
@@ -520,7 +538,7 @@ const store = {
   },
   async updateRequest(id, patch) {
     if (app.sample) { const r = state.requests.find(x => x.id === id); if (r) Object.assign(r, patch); return; }
-    await dbCall(() => app.db.doc("requests/" + id).update(patch));
+    await dbCall(() => app.db.collection("requests").doc(id).update(patch));
   },
 };
 
@@ -556,10 +574,11 @@ function startSample(reason) {
   state.editFor = null; render();
 }
 function stopSample() {
-  if (!app.live) return;
-  app.sample = false; app.uid = app.realUid; app.canEdit = app.realCanEdit; app.readOnly = app.realReadOnly;
-  state.doctors = app.liveDoctors || {}; state.rosters = {}; state.requests = []; state.drafts = {}; state.editFor = null; app.loading = true;
-  startLive();
+  app.sample = false; app.uid = app.realUid; app.canEdit = app.isAdmin; app.readOnly = false;
+  state.drafts = {}; state.editFor = null; state.upload = null; state.requests = []; state.rosters = {};
+  state.doctors = app.liveDoctors || {};
+  if (app.phase === "app") { app.loading = true; subscribeMonth(); }
+  render();
 }
 
 /* ---------- derived ---------- */
@@ -587,40 +606,85 @@ function pendingForMe() { return state.requests.filter(r => r.status === "pendin
 function render() {
   const ae = document.activeElement, fid = ae && ae.id; let sel = null;
   try { if (fid && typeof ae.selectionStart === "number") sel = [ae.selectionStart, ae.selectionEnd]; } catch (_) {}
+  const inApp = app.sample || app.phase === "app";
   $("#who").innerHTML = renderWho();
   $("#banner").innerHTML = renderBanner();
+  $("#bar").hidden = !inApp;
   $("#month-label").textContent = monthLabel(state.month);
-  $("#tabs").innerHTML = renderTabs();
-  $("#main").innerHTML = app.loading ? `<div class="empty">Loading the roster…</div>` :
-    state.tab === "board" ? renderBoard() : state.tab === "mine" ? renderMine() : state.tab === "changes" ? renderChanges() : renderChecks();
+  $("#tabs").innerHTML = inApp ? renderTabs() : "";
+  $("#main").innerHTML = !inApp ? renderGate() : app.loading ? `<div class="empty">Loading the roster…</div>` :
+    state.tab === "board" ? renderBoard() : state.tab === "mine" ? renderMine() : state.tab === "changes" ? renderChanges() :
+    state.tab === "team" && app.isAdmin && !app.sample ? renderTeam() : renderChecks();
   if (fid) { const el = document.getElementById(fid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel) try { el.setSelectionRange(sel[0], sel[1]); } catch (_) {} } }
 }
 function renderWho() {
-  if (app.loading && !app.sample) return "";
-  const d = me();
-  if (d) return `<span>Signed in as <b>${esc(d.name)}</b> · ${esc(d.dept || "No department")}</span><button class="btn ghost" data-act="profile-open" id="who-edit">Edit profile</button>`;
-  if (!canAct() || !app.uid) return `<span class="muted">Viewing only</span>`;
-  return `<button class="btn primary" data-act="profile-open" id="who-setup">Set up my doctor profile</button>`;
+  if (app.sample || !app.uid || app.phase === "setup") return "";
+  const d = app.myDoc;
+  const role = app.isAdmin ? `<span class="pill done">Coordinator</span> ` : "";
+  const name = d ? `<b>${esc(d.name)}</b>${d.dept ? " · " + esc(d.dept) : ""}` : esc(app.email || "Signed in");
+  return `<span>${role}${name}</span>${d && app.phase === "app" ? `<button class="btn ghost" data-act="profile-open" id="who-edit">Edit profile</button>` : ""}<button class="btn ghost" data-act="signout" id="who-out">Sign out</button>`;
 }
 function renderBanner() {
   let out = "";
-  if (app.sample) out += `<div class="banner warn"><p><b>Example roster.</b> ${esc(app.sampleReason || "")} These doctors are made up and nothing you change here is saved.</p>${app.live ? `<button class="btn" data-act="sample-off" id="sample-off">Back to the real roster</button>` : ""}</div>`;
-  else if (app.readOnly) out += `<div class="banner"><p><b>View only.</b> You can see the roster but not change it. To upload a roster or swap duties, ask the coordinator to share this page with you as a Contributor or Editor.</p></div>`;
-  if (state.profileOpen) out += renderProfileForm();
+  if (app.sample) out += `<div class="banner warn"><p><b>Example roster.</b> ${esc(app.sampleReason || "")} These doctors are made up and nothing you change here is saved.</p><button class="btn" data-act="sample-off" id="sample-off">${app.phase === "app" ? "Back to the real roster" : "Close the example"}</button></div>`;
+  if (state.profileOpen && (app.phase === "app" || app.sample)) out += renderProfileForm();
   return out;
+}
+function renderGate() {
+  if (app.phase === "setup") return `<section class="panel" style="max-width:640px">
+    <h2>Connect a database to start</h2>
+    <p>This copy of the roster isn't connected to Firebase yet, so it can't save anything. Whoever manages the site fills in <span class="mono">firebase-config.js</span> using the steps in the README. It's free and takes about 10 minutes.</p>
+    ${app.setupError ? `<div class="note bad">${esc(app.setupError)}</div>` : ""}
+    <div class="btns"><button class="btn" data-act="sample-on" id="gate-sample">See an example month</button></div></section>`;
+  if (app.phase === "auth") return renderAuth();
+  if (app.phase === "profile") return renderProfileForm();
+  if (app.phase === "pending") return state.profileOpen ? renderProfileForm() : `<section class="panel" style="max-width:640px">
+    <h2>Waiting for approval</h2>
+    <p>Thanks${app.myDoc && app.myDoc.name ? ", " + esc(app.myDoc.name) : ""}. The roster coordinator needs to approve your account before you can see or change the roster. This page opens the roster by itself once you're approved.</p>
+    <div class="field"><span class="lab">Your user ID (the coordinator may ask for it)</span><div class="btns"><code class="mono" id="my-uid" style="word-break:break-all">${esc(app.uid)}</code><button class="btn" data-act="copy" data-src="my-uid" id="copy-uid">Copy</button></div></div>
+    <div class="btns"><button class="btn" data-act="profile-open" id="pend-edit">Edit my details</button></div>
+  </section>`;
+  return `<div class="empty">Connecting…</div>`;
+}
+function renderAuth() {
+  const a = state.auth, signup = a.mode === "signup";
+  return `<form class="panel" id="auth-form" style="max-width:460px" novalidate>
+    <h2>${signup ? "Create your account" : "Sign in"}</h2>
+    <p class="muted small">${signup ? "Doctors of Eastridge Hospital: create an account and add your details. The roster coordinator then approves you." : "Sign in to see the roster and manage your duties."}</p>
+    <div class="field"><label for="au-email">Email</label><input type="email" id="au-email" data-bind="auth.email" value="${esc(a.email)}" autocomplete="email"></div>
+    <div class="field"><label for="au-pw">Password</label><input type="password" id="au-pw" data-bind="auth.password" value="${esc(a.password)}" autocomplete="${signup ? "new-password" : "current-password"}">${signup ? `<span class="muted small">At least 6 characters.</span>` : ""}</div>
+    ${a.err ? `<div class="note bad">${esc(a.err)}</div>` : ""}${a.msg ? `<div class="note ok">${esc(a.msg)}</div>` : ""}
+    <div class="btns"><button class="btn primary" type="submit" id="au-submit" ${app.busy ? "disabled" : ""}>${signup ? "Create account" : "Sign in"}</button>
+    ${signup ? "" : `<button class="btn ghost" type="button" data-act="reset-pw" id="au-reset">Forgot password?</button>`}</div>
+    ${app.googleOn ? `<div class="btns"><button class="btn" type="button" data-act="google" id="au-google">Continue with Google</button></div>` : ""}
+    <p class="small">${signup ? `Already have an account? <button class="btn ghost" type="button" data-act="auth-mode" data-mode="signin" id="au-to-in">Sign in</button>` : `New here? <button class="btn ghost" type="button" data-act="auth-mode" data-mode="signup" id="au-to-up">Create an account</button>`}</p>
+  </form>`;
+}
+function pendingDoctors() { return Object.values(app.allDoctors || {}).filter(d => d.approved !== true).sort((a, b) => (a.name || "").localeCompare(b.name || "")); }
+function renderTeam() {
+  const pend = pendingDoctors(), ok = sortedDoctors(), dis = app.busy ? "disabled" : "";
+  const row = (d, btns) => `<div class="item"><div class="head"><b>${esc(d.name || "No name")}</b><span class="muted small">${esc(d.dept || "No department")}</span></div>${d.email || d.phone ? `<p class="small muted">${esc(d.email || "")}${d.email && d.phone ? " · " : ""}${esc(d.phone || "")}</p>` : ""}<div class="btns">${btns}</div></div>`;
+  return `<div class="grid2">
+    <section class="panel"><h2>Waiting for approval</h2>${pend.length ? `<div class="list">${pend.map(d => row(d, `<button class="btn primary" data-act="approve" data-id="${esc(d.uid)}" id="ap-${esc(d.uid)}" ${dis}>Approve</button><button class="btn danger" data-act="reject-doc" data-id="${esc(d.uid)}" id="rj-${esc(d.uid)}" ${dis}>Reject</button>`)).join("")}</div>` : `<p class="muted">No one is waiting. New sign-ups appear here.</p>`}
+      <p class="muted small">Only approve people you recognise. Approved doctors see the full roster and can change duties.</p></section>
+    <section class="panel"><h2>Approved doctors (${ok.length})</h2>${ok.length ? `<div class="list">${ok.map(d => row(d, d.uid === app.uid ? `<span class="muted small">This is you.</span>` :
+      state.confirmRevoke === d.uid ? `<span class="small">Remove ${esc(d.name)}'s access?</span><button class="btn danger" data-act="revoke" data-id="${esc(d.uid)}" id="rv-${esc(d.uid)}" ${dis}>Yes, remove</button><button class="btn" data-act="revoke-cancel" id="rvc-${esc(d.uid)}">Keep</button>` :
+      `<button class="btn" data-act="revoke-ask" data-id="${esc(d.uid)}" id="rva-${esc(d.uid)}">Remove access</button>`)).join("")}</div>` : `<p class="muted">No approved doctors yet.</p>`}
+      <p class="muted small">Removing access keeps their past rosters and change log, and puts their account back to waiting for approval.</p></section>
+  </div>`;
 }
 function renderProfileForm() {
   const p = state.profile;
   const depts = deptList().filter(x => x !== "No department");
   return `<form class="panel" id="profile-form" data-form="profile">
-    <h2>${me() ? "Edit your profile" : "Set up your doctor profile"}</h2>
+    <h2>${(app.sample ? me() : app.myDoc) ? "Edit your profile" : "Set up your doctor profile"}</h2>
     <p class="muted small">Colleagues see this name on the roster and when you ask them to swap.</p>
     <div class="row">
       <div class="field"><label for="pf-name">Name as it should appear</label><input type="text" id="pf-name" data-bind="profile.name" value="${esc(p.name)}" placeholder="Dr. Sana Malik" required maxlength="60"></div>
       <div class="field"><label for="pf-dept">Department</label><input type="text" id="pf-dept" data-bind="profile.dept" value="${esc(p.dept)}" list="dept-list" placeholder="Emergency" maxlength="40"><datalist id="dept-list">${depts.map(x => `<option value="${esc(x)}"></option>`).join("")}</datalist></div>
       <div class="field"><label for="pf-phone">Phone (optional)</label><input type="tel" id="pf-phone" data-bind="profile.phone" value="${esc(p.phone)}" placeholder="0300 1234567" maxlength="20"></div>
     </div>
-    <div class="btns"><button class="btn primary" type="submit" id="pf-save" ${app.busy ? "disabled" : ""}>Save profile</button><button class="btn" type="button" data-act="profile-close" id="pf-cancel">Cancel</button></div>
+    <div class="btns"><button class="btn primary" type="submit" id="pf-save" ${app.busy ? "disabled" : ""}>Save profile</button>${app.phase === "profile" && !app.sample ? `<button class="btn ghost" type="button" data-act="signout" id="pf-out">Sign out</button>` : `<button class="btn" type="button" data-act="profile-close" id="pf-cancel">Cancel</button>`}</div>
   </form>`;
 }
 function renderTabs() {
@@ -629,6 +693,7 @@ function renderTabs() {
   const pend = pendingForMe().length;
   const t = [["board", "Hospital roster", ""], ["mine", "My roster", unsavedCount() ? `<span class="count soft" title="Unsaved changes">•</span>` : ""],
     ["changes", "Swaps & changes", pend ? `<span class="count">${pend}</span>` : ""], ["checks", "Checks", issues ? `<span class="count">${issues > 99 ? "99+" : issues}</span>` : ""]];
+  if (app.isAdmin && !app.sample) { const pc = pendingDoctors().length; t.push(["team", "Team", pc ? `<span class="count">${pc}</span>` : ""]); }
   return t.map(([k, l, extra]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${state.tab === k}" data-act="tab" data-tab="${k}">${l}${extra}</button>`).join("");
 }
 function unsavedCount() { return Object.keys(state.drafts).length; }
@@ -692,7 +757,7 @@ function workingShifts(month, id) { const d = state.drafts[draftKey(month, id)];
 function renderMine() {
   const month = state.month, id = editTarget();
   if (!id) {
-    if (!canAct()) return `<div class="empty"><p>You can view the hospital roster, but uploading needs Contributor access.</p></div>`;
+    if (!canAct()) return `<div class="empty"><p>Your account can view the roster but not change it.</p></div>`;
     return `<div class="empty"><h2>Set up your profile first</h2><p>Add your name and department so your duties show up on the hospital roster.</p><button class="btn primary" data-act="profile-open" id="mine-setup">Set up my doctor profile</button></div>`;
   }
   const key = draftKey(month, id), draft = state.drafts[key], saved = rosterOf(month, id);
@@ -806,7 +871,7 @@ function renderChanges() {
       ${pv.error ? `<div class="note bad">${esc(pv.error)}</div>` : ""}${pv.warns.map(w => `<div class="note">If you accept: ${esc(w)}</div>`).join("")}
       <div class="btns"><button class="btn primary" data-act="accept" data-id="${esc(r.id)}" id="acc-${esc(r.id)}" ${app.busy || !canAct() ? "disabled" : ""}>Accept</button><button class="btn" data-act="decline" data-id="${esc(r.id)}" id="dec-${esc(r.id)}" ${app.busy || !canAct() ? "disabled" : ""}>Decline</button></div></div>`;
   }).join("")}</div>` : `<p class="muted">Nothing waiting. When a colleague asks you to swap or cover a duty, it shows up here.</p>`}</section>`;
-  html += mine && canAct() ? renderRequestForm(month) : `<section class="panel"><h2>Ask for a change</h2><p class="muted">${canAct() ? "Set up your doctor profile to swap or move duties." : "You need Contributor access to swap or move duties."}</p></section>`;
+  html += mine && canAct() ? renderRequestForm(month) : `<section class="panel"><h2>Ask for a change</h2><p class="muted">${canAct() ? "Set up your doctor profile to swap or move duties." : "Your account can't make changes yet."}</p></section>`;
   html += `</div>`;
   if (outgoing.length || othersPending.length) html += `<section class="panel"><h2>Sent and waiting</h2><div class="list">${[...outgoing, ...othersPending].map(r => `<div class="item"><div class="head"><span class="pill pending">Waiting for ${esc(docName(r.to))}</span><span class="muted small">${when(r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.note ? `<p class="small muted">“${esc(r.note)}”</p>` : ""}${r.from === app.uid ? `<div class="btns"><button class="btn" data-act="cancel-req" data-id="${esc(r.id)}" id="can-${esc(r.id)}" ${app.busy ? "disabled" : ""}>Cancel request</button></div>` : ""}</div>`).join("")}</div></section>`;
   html += `<section class="panel"><h2>Change log for ${esc(monthLabel(month))}</h2>${history.length ? `<div class="list">${history.map(r => `<div class="item"><div class="head"><span class="pill ${esc(r.status)}">${STATUS[r.status] || esc(r.status)}</span><span class="muted small">${when(r.decidedAt || r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.reason ? `<p class="small muted">${esc(r.reason)}</p>` : ""}</div>`).join("")}</div>` : `<p class="muted">No changes this month yet. Uploads, edits, swaps, hand-overs and moves are all recorded here.</p>`}</section>`;
@@ -882,10 +947,25 @@ const actions = {
   tab(b) { state.tab = b.dataset.tab; render(); },
   month(b) { state.month = addMonths(state.month, +b.dataset.d); state.upload = null; if (app.sample) { const s = buildSample(); state.rosters = s.rosters; state.requests = s.requests; } else subscribeMonth(); resetForm(); render(); },
   "goto-month"(b) { const u = state.upload; state.month = b.dataset.month; if (!app.sample) subscribeMonth(); if (u) state.upload = reparse(u); render(); },
-  "profile-open"() { const d = me(); state.profile = { name: d ? d.name : "", dept: d ? d.dept || "" : "", phone: d ? d.phone || "" : "" }; state.profileOpen = true; render(); setTimeout(() => { const el = $("#pf-name"); if (el) el.focus(); }, 0); },
+  "profile-open"() { const d = app.sample ? me() : app.myDoc; state.profile = { name: d ? d.name : "", dept: d ? d.dept || "" : "", phone: d ? d.phone || "" : "" }; state.profileOpen = true; render(); setTimeout(() => { const el = $("#pf-name"); if (el) el.focus(); }, 0); },
   "profile-close"() { state.profileOpen = false; render(); },
   "sample-on"() { startSample("You asked to see how a filled-in month looks."); },
   "sample-off"() { stopSample(); },
+  signout() { state.profileOpen = false; if (app.auth) app.auth.signOut(); },
+  "auth-mode"(b) { state.auth.mode = b.dataset.mode; state.auth.err = state.auth.msg = ""; render(); },
+  async google() { state.auth.err = ""; try { await app.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); } catch (err) { state.auth.err = authMessage(err); render(); } },
+  async "reset-pw"() {
+    const a = state.auth; a.err = a.msg = "";
+    if (!a.email.trim()) { a.err = "Type your email above first, then press Forgot password."; render(); return; }
+    try { await app.auth.sendPasswordResetEmail(a.email.trim()); a.msg = "If there's an account for " + a.email.trim() + ", a reset email is on its way. Check your inbox and spam folder."; }
+    catch (err) { a.err = authMessage(err); }
+    render();
+  },
+  async approve(b) { const id = b.dataset.id; await guarded(() => store.setApproved(id, true), "Approved. They can now use the roster."); },
+  async "reject-doc"(b) { const id = b.dataset.id; await guarded(() => store.removeDoctor(id), "Sign-up rejected."); },
+  "revoke-ask"(b) { state.confirmRevoke = b.dataset.id; render(); },
+  "revoke-cancel"() { state.confirmRevoke = null; render(); },
+  async revoke(b) { const id = b.dataset.id; state.confirmRevoke = null; await guarded(() => store.setApproved(id, false), "Access removed."); },
   toggle(b) {
     if (!canAct()) return;
     const id = editTarget(), month = state.month, d = ensureDraft(month, id);
@@ -960,7 +1040,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
 });
-const LIVE_BINDS = new Set(["pasteText", "profile.name", "profile.dept", "profile.phone", "form.note"]);
+const LIVE_BINDS = new Set(["auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "form.note"]);
 document.addEventListener("input", e => {
   const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;
   setBind(path, el.value);
@@ -976,14 +1056,39 @@ document.addEventListener("change", async e => {
   if (!LIVE_BINDS.has(path)) render();
 });
 document.addEventListener("submit", async e => {
+  if (e.target.id === "auth-form") { e.preventDefault(); await doAuth(); return; }
   if (e.target.id !== "profile-form") return;
   e.preventDefault();
   const p = state.profile, name = p.name.trim();
   if (!name) { toast("Add your name so colleagues can find you."); return; }
-  if (!app.uid) { toast("Sign in to claude.ai to set up a profile."); return; }
+  if (!app.uid) return;
   const ok = await guarded(() => store.saveDoctor(app.uid, { name, dept: p.dept.trim(), phone: p.phone.trim() }), "Profile saved.");
-  if (ok) { state.profileOpen = false; if (!rosterOf(state.month, app.uid)) state.tab = "mine"; render(); }
+  if (ok) { state.profileOpen = false; render(); }
 });
+async function doAuth() {
+  const a = state.auth; a.err = a.msg = "";
+  if (!a.email.trim() || !a.password) { a.err = "Enter your email and password."; render(); return; }
+  app.busy = true; render();
+  try {
+    if (a.mode === "signup") await app.auth.createUserWithEmailAndPassword(a.email.trim(), a.password);
+    else await app.auth.signInWithEmailAndPassword(a.email.trim(), a.password);
+  } catch (err) { a.err = authMessage(err); }
+  finally { app.busy = false; render(); }
+}
+function authMessage(err) {
+  const c = err && err.code;
+  return ({
+    "auth/invalid-credential": "Wrong email or password.", "auth/wrong-password": "Wrong email or password.",
+    "auth/user-not-found": "No account with that email. Create one instead.",
+    "auth/email-already-in-use": "There's already an account with that email. Sign in instead.",
+    "auth/weak-password": "Use a password of at least 6 characters.", "auth/invalid-email": "That email address doesn't look right.",
+    "auth/missing-password": "Enter your password.", "auth/too-many-requests": "Too many attempts. Wait a few minutes and try again.",
+    "auth/network-request-failed": "No connection. Check your internet and try again.",
+    "auth/popup-closed-by-user": "The Google window was closed before signing in.",
+    "auth/unauthorized-domain": "This website isn't allowed to sign in yet. Add it under Firebase Authentication → Settings → Authorized domains.",
+    "auth/operation-not-allowed": "This sign-in method isn't turned on in Firebase yet.",
+  })[c] || ((err && err.message) || "Sign-in failed. Try again.");
+}
 
 let xlsxPromise = null;
 function loadXLSX() {
@@ -1010,29 +1115,61 @@ async function readFile(file) {
 }
 
 /* ---------- start ---------- */
-async function startLive() {
+function startLive() {
   subscribeMonth();
   if (!unsubDoctors) unsubDoctors = app.db.collection("doctors").limit(1000).onSnapshot(snap => {
-    const d = {}; snap.docs.forEach(x => { const v = x.data(); if (v && v.uid) d[v.uid] = v; });
-    app.liveDoctors = d; if (app.sample) return;
-    state.doctors = d; render();
+    const all = {}; snap.docs.forEach(x => { const v = x.data(); if (v && v.uid) all[v.uid] = v; });
+    app.allDoctors = all;
+    app.liveDoctors = Object.fromEntries(Object.entries(all).filter(([, v]) => v.approved === true));
+    if (app.sample) return;
+    state.doctors = app.liveDoctors; render();
   }, onDbError);
+}
+function stopLive() {
+  [unsubDoctors, unsubRosters, unsubRequests].forEach(u => u && u());
+  unsubDoctors = unsubRosters = unsubRequests = null;
+  state.doctors = {}; state.rosters = {}; state.requests = []; state.drafts = {}; state.upload = null; state.editFor = null;
+  app.allDoctors = {}; app.liveDoctors = {};
+}
+/* Decide what a signed-in person sees: profile setup, waiting for approval, or the roster. */
+function decidePhase() {
+  const d = app.myDoc, member = app.isAdmin || (d && d.approved === true);
+  if (member) { if (app.phase !== "app") { app.phase = "app"; app.loading = true; startLive(); } }
+  else {
+    if (app.phase === "app") stopLive();
+    if (!d && app.phase !== "profile") state.profile = { name: "", dept: "", phone: "" };
+    app.phase = d ? "pending" : "profile";
+  }
   render();
 }
-async function init() {
-  render();
-  const cl = window.claude;
-  let db = null, user = null;
-  try { [db, user] = await Promise.all([cl && cl.use ? cl.use("db") : null, cl && cl.use ? cl.use("user") : null]); } catch (_) {}
-  if (user) {
-    try { [app.uid, app.isOwner, app.canEdit, app.canWrite] = await Promise.all([user.id(), user.isOwner(), user.canEdit(), user.can("data.write")]); } catch (_) {}
+function init() {
+  const cfg = window.FIREBASE_CONFIG;
+  app.googleOn = !!window.ROSTER_GOOGLE_SIGNIN;
+  if (!window.firebase) { app.phase = "setup"; app.setupError = "Couldn't load Firebase. Check your internet connection and reload the page."; render(); return; }
+  if (!cfg || !cfg.apiKey || /PASTE/i.test(cfg.apiKey)) { app.phase = "setup"; render(); return; }
+  try {
+    firebase.initializeApp(cfg); app.db = firebase.firestore(); app.auth = firebase.auth();
+    const emu = window.FIREBASE_EMULATOR; // local testing only
+    if (emu) { app.auth.useEmulator("http://" + emu.host + ":" + emu.authPort); app.db.useEmulator(emu.host, emu.firestorePort); }
   }
-  if (!db) { startSample("This view can't reach the shared roster, so you're seeing a sample month. Open the page signed in to claude.ai to see the real one."); return; }
-  app.db = db; app.live = true;
-  app.readOnly = app.canWrite === false || !app.uid;
-  app.realUid = app.uid; app.realCanEdit = app.canEdit; app.realReadOnly = app.readOnly;
-  startLive();
+  catch (e) { app.phase = "setup"; app.setupError = "The settings in firebase-config.js look wrong: " + e.message; render(); return; }
+  render();
+  app.auth.onAuthStateChanged(async u => {
+    if (unsubMe) { unsubMe(); unsubMe = null; }
+    stopLive();
+    app.sample = false; app.myDoc = null; app.isAdmin = false; app.canEdit = false; app.loading = true; state.profileOpen = false;
+    if (!u) { app.uid = app.realUid = null; app.busy = false; state.auth = { mode: "signin", email: state.auth.email, password: "", err: "", msg: "" }; app.phase = "auth"; render(); return; }
+    app.uid = app.realUid = u.uid; app.email = u.email || "";
+    state.auth.password = ""; state.auth.err = state.auth.msg = "";
+    app.phase = "starting"; render();
+    try { app.isAdmin = (await app.db.collection("admins").doc(u.uid).get()).exists; } catch (_) { app.isAdmin = false; }
+    app.canEdit = app.isAdmin;
+    unsubMe = app.db.collection("doctors").doc(u.uid).onSnapshot(snap => { app.myDoc = snap.exists ? snap.data() : null; decidePhase(); },
+      e => { app.phase = "setup"; app.setupError = "Couldn't read your account (" + ((e && (e.code || e.message)) || "unknown error") + "). Check that the Firestore rules from the README are published."; render(); });
+  });
 }
 init();
 </script>
-</body></html>
+
+</body>
+</html>
