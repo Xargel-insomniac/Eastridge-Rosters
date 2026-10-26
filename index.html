@@ -24,8 +24,8 @@
   --brand-navy: #041f34;
   --brand-red: #e5261f;
   --hero-ink: #ffffff;
-  --m: #9a6400; --m-bg: #fcefd2; --m-line: #f0d08a;
-  --e: #b0432b; --e-bg: #fbe2da; --e-line: #f1b3a2;
+  --m: #7d5000; --m-bg: #fcefd2; --m-line: #f0d08a;
+  --e: #9c3822; --e-bg: #fbe2da; --e-line: #f1b3a2;
   --n: #4446a3; --n-bg: #e3e4f8; --n-line: #b9bcef;
   --bad: #b42318; --bad-bg: #fdecea;
   --warn: #9a4d00; --warn-bg: #fff1dc;
@@ -99,14 +99,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hero-copy p { font-size: 1.02rem; color: rgba(255,255,255,.88); }
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 /* compact */
-.masthead.compact { min-height: 0; background: var(--surface); color: var(--ink); border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 8; overflow: visible; }
+.masthead.compact { min-height: 0; background: var(--surface); color: var(--ink); border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 8; overflow: hidden; }
 .masthead.compact .photo, .masthead.compact::before { opacity: 0; }
 .masthead.compact .mast-top { padding-block: 8px; }
 .masthead.compact .logo-plate { padding: 4px 6px; box-shadow: none; border-radius: 8px; }
 .masthead.compact .logo { height: 38px; }
 .masthead.compact .bar-title { display: block; }
 .masthead.compact .who { background: transparent; border-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; padding-left: 0; }
-.masthead.compact .hero-copy { display: none; }
+.masthead.compact .hero-copy { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; animation: none; }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
 
 .key { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -175,9 +175,10 @@ textarea { font-family: var(--f-mono); font-size: 0.82rem; min-height: 90px; res
 .check { min-width: 0; max-width: 100%; }
 .check { display: inline-flex; gap: 6px; align-items: center; font-size: 0.9rem; cursor: pointer; }
 .boardwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.brow { display: contents; }
 .board { display: grid; grid-template-columns: minmax(84px, 108px) repeat(3, minmax(0, 1fr)); min-width: 0; }
 .bh { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; padding: 10px; font-size: 0.8rem; font-weight: 700; border-bottom: 1px solid var(--line); background: var(--surface); display: grid; }
-.bh .mono { font-weight: 500; font-size: 0.72rem; opacity: .85; }
+.bh .mono { font-weight: 500; font-size: 0.72rem; }
 .bh.sh-M, .bh.sh-E, .bh.sh-N { border-width: 0 0 1px 0; border-style: solid; }
 .bd { padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 0.85rem; display: grid; align-content: start; }
 .bd b { font-family: var(--f-display); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
@@ -188,7 +189,7 @@ textarea { font-family: var(--f-mono); font-size: 0.82rem; min-height: 90px; res
 .bc.gap { background: var(--bad-bg); }
 .gaptag { color: var(--bad); font-weight: 700; font-size: 0.78rem; padding: 2px 4px; }
 .chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: 1px solid; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--surface); }
-.chip small { font-weight: 500; opacity: .75; }
+.chip small { font-weight: 500; }
 .chip.mine { outline: 2px solid var(--accent); outline-offset: 0; cursor: pointer; }
 .chip.flag::before { content: "!"; display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: var(--surface); font-size: 0.65rem; font-weight: 800; }
 button.chip { font: inherit; font-size: 0.8rem; font-weight: 600; }
@@ -340,7 +341,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   </div>
 </header>
 
-<div class="wrap">
+<main class="wrap">
 
   <div class="key" aria-label="Shift times">
     <span class="keyitem sh-M"><b>Morning</b><span class="mono">08:00 – 14:00</span></span>
@@ -359,9 +360,9 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
     <nav class="tabs" role="tablist" id="tabs"></nav>
   </div>
 
-  <main id="main"></main>
-</div>
-<div id="toast" role="status" hidden></div>
+  <div id="main"></div>
+  <div id="toast" role="status" hidden></div>
+</main>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -952,12 +953,12 @@ function renderBoard() {
     ${datesOf(month).some(holidayOf) ? `<p class="muted small"><span class="hdot" aria-hidden="true"></span> Public holiday. Islamic holidays marked “expected” may move a day with moon sighting.</p>` : ""}
   </section>`;
   html += `<div class="boardwrap"><div class="board" role="table" aria-label="Duty roster for ${esc(monthLabel(month))}">
-    <div class="bh" role="columnheader">Date</div>${SHIFTS.map(s => `<div class="bh sh-${s.code}" role="columnheader">${s.name}<span class="mono">${s.time}</span></div>`).join("")}`;
+    <div role="row" class="brow"><div class="bh" role="columnheader">Date</div>${SHIFTS.map(s => `<div class="bh sh-${s.code}" role="columnheader">${s.name}<span class="mono">${s.time}</span></div>`).join("")}</div>`;
   for (const date of datesOf(month)) {
     const we = dow(date) === 0 || dow(date) === 6 ? " we" : "";
     const [, , d] = date.split("-");
     const hol = holidayOf(date);
-    html += `<div class="bd${we}${date === todayKey ? " today" : ""}${hol ? " hol" : ""}" role="rowheader"${hol ? ` title="${esc(hol)}"` : ""}><b>${+d}</b><span class="muted">${DOW[dow(date)]}</span>${hol ? `<span class="hname"><span class="hdot" aria-hidden="true"></span>${esc(hol)}</span>` : ""}</div>`;
+    html += `<div role="row" class="brow"><div class="bd${we}${date === todayKey ? " today" : ""}${hol ? " hol" : ""}" role="rowheader"${hol ? ` title="${esc(hol)}"` : ""}><b>${+d}</b><span class="muted">${DOW[dow(date)]}</span>${hol ? `<span class="hname"><span class="hdot" aria-hidden="true"></span>${esc(hol)}</span>` : ""}</div>`;
     for (const s of SHIFTS) {
       const on = ids.filter(id => deptOk(id) && hasDuty(docs[id], date, s.code) && (!state.mineOnly || id === app.uid))
         .sort((x, y) => docName(x).localeCompare(docName(y)));
@@ -971,6 +972,7 @@ function renderBoard() {
           : `<span class="chip c-${s.code}${fl ? " flag" : ""}" title="${title}">${esc(docName(id))}${dept}</span>`;
       }).join("")}</div>`;
     }
+    html += `</div>`;
   }
   return html + `</div></div>`;
 }
@@ -1013,7 +1015,7 @@ function renderMine() {
     ${datesOf(month).some(holidayOf) ? `<p class="muted small"><span class="hdot" aria-hidden="true"></span> Public holiday: hover or long-press the day to see which one.</p>` : ""}
     ${stale ? `<div class="note bad">This roster changed while you were editing (for example, a swap was accepted). Saving now would overwrite that change. <button class="btn ghost" data-act="discard" id="stale-reset">Start over from the latest</button></div>` : ""}
     ${stretches.map(st => `<div class="note">Long stretch: ${esc(stretchText(st))}. Night ends at 08:00, so a Night followed by a Morning means no rest.</div>`).join("")}
-    <div class="cal" role="grid" aria-label="Pick shifts for each day">
+    <div class="cal" role="group" aria-label="Pick shifts for each day">
       ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => `<div class="dow">${d}</div>`).join("")}
       ${Array.from({ length: (dow(month + "-01") + 6) % 7 }, () => `<div class="cday blank"></div>`).join("")}
       ${datesOf(month).map(date => {
