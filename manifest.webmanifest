@@ -1,0 +1,16 @@
+{
+  "name": "Eastridge Primecare Duty Roster",
+  "short_name": "Eastridge Roster",
+  "description": "Doctor's duty roster for Eastridge Primecare: monthly rosters, swaps and who's on duty now.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#041f34",
+  "theme_color": "#041f34",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

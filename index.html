@@ -6,6 +6,13 @@
 <meta name="description" content="Eastridge Primecare doctors' duty roster: monthly rosters, swaps and coverage checks.">
 <title>Eastridge Primecare Roster</title>
 <link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta name="theme-color" content="#041f34">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Eastridge Roster">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
@@ -226,6 +233,30 @@ button.chip { font: inherit; font-size: 0.8rem; font-weight: 600; }
 .note.ok { color: var(--ok); background: var(--ok-bg); }
 .empty { padding: 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--r); display: grid; gap: 10px; justify-items: center; }
 details > summary { cursor: pointer; font-weight: 600; }
+.install { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
+.install img { border-radius: 10px; flex: none; }
+.install-text { flex: 1; min-width: 0; display: grid; font-size: 0.88rem; }
+.install-text span { color: var(--muted); }
+.install-text svg { vertical-align: -2px; }
+.install .ann-x { color: var(--muted); }
+.onduty .od-grid { display: grid; grid-template-columns: minmax(120px, 0.8fr) 1.4fr 1.4fr; border-top: 1px solid var(--line); }
+.od-grid > div { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.od-h { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.od-dept { font-weight: 600; font-size: 0.88rem; }
+.od-label { display: none; }
+.duty-person { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--sunk); font-size: 0.85rem; font-weight: 600; }
+.duty-person small { font-weight: 500; color: var(--muted); }
+.icon-link { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--accent); background: var(--surface); border: 1px solid var(--line); }
+.icon-link.wa { color: #128c4b; }
+.icon-link:hover { border-color: var(--accent); }
+@media (max-width: 640px) {
+  .onduty .od-grid { grid-template-columns: 1fr; }
+  .od-grid > .od-h { display: none; }
+  .od-dept { border-bottom: 0 !important; padding-bottom: 0 !important; padding-top: 12px !important; }
+  .od-now, .od-next { border-bottom: 0 !important; padding-block: 4px !important; }
+  .od-next { border-bottom: 1px solid var(--line) !important; padding-bottom: 12px !important; }
+  .od-label { display: block; width: 100%; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+}
 /* welcome effect: once per browser session. The logo's crescent draws itself around the logo, a greeting rises, then the screen lifts away. */
 #welcome { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 6px; padding: 24px; text-align: center; color: #ffffff; cursor: pointer;
   background: radial-gradient(120% 90% at 50% 40%, #0b3150 0%, var(--brand-navy) 55%, #020f1a 100%); transition: transform .8s cubic-bezier(.7,0,.2,1), opacity .8s; }
@@ -289,6 +320,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 
 @media (max-width: 560px) {
   .masthead { min-height: 300px; }
+  .who { border-radius: 14px; padding: 6px 8px 6px 12px; }
   .logo { height: 56px; }
   .logo-plate { padding: 8px 12px; border-radius: 12px; }
   .masthead.compact .logo { height: 30px; }
@@ -688,8 +720,9 @@ function subscribeMonth() {
   if (unsubRosters) unsubRosters();
   if (unsubRequests) unsubRequests();
   const ms = [addMonths(state.month, -1), state.month];
-  unsubRosters = app.db.collection("rosters").where("month", "in", ms).onSnapshot(snap => {
+  unsubRosters = app.db.collection("rosters").where("month", "in", ms).onSnapshot({ includeMetadataChanges: true }, snap => {
     if (app.sample) return;
+    noteConnection(snap.metadata.fromCache);
     const r = {};
     snap.docs.forEach(d => { const x = d.data(); if (x && x.month && x.doctorId) (r[x.month] ||= {})[x.doctorId] = x.shifts || {}; });
     state.rosters = r; app.loading = false; render();
@@ -709,15 +742,22 @@ async function dbCall(fn) {
 }
 async function guarded(fn, okMsg) {
   if (app.busy) return false;
+  if (app.offline && !app.sample) { toast("You're offline. Connect to the internet to save changes."); return false; }
   app.busy = true; render();
-  try { await fn(); if (okMsg) toast(okMsg); return true; }
+  let slow;
+  try {
+    const timeout = new Promise((_, no) => { slow = setTimeout(() => no({ code: "slow-network" }), 15000); });
+    await Promise.race([fn(), timeout]);
+    if (okMsg) toast(okMsg); return true;
+  }
   catch (e) {
     const code = e && e.code;
-    if (code === "permission-denied") toast("You don't have permission to do that. Ask the roster coordinator to approve your account.");
+    if (code === "slow-network") { app.offline = true; toast("No connection right now. Your change is kept on this device and will be sent automatically when you're back online."); }
+    else if (code === "permission-denied") toast("You don't have permission to do that. Ask the roster coordinator to approve your account.");
     else if (code === "resource-exhausted") toast("The database's free daily limit is used up. Try again tomorrow, or ask the coordinator to upgrade the Firebase plan.");
     else toast("Couldn't save: " + ((e && e.message) || "check your connection and try again."));
     return false;
-  } finally { app.busy = false; render(); }
+  } finally { clearTimeout(slow); app.busy = false; render(); }
 }
 const store = {
   async saveDoctor(uid, data) {
@@ -842,6 +882,8 @@ function renderWho() {
 }
 function renderBanner() {
   let out = "";
+  if (app.offline && !app.sample) out += `<div class="banner warn"><p><b>You're offline.</b> Showing the roster as it was last loaded on this device. Changes can't be saved until you're back online.</p></div>`;
+  out += renderInstall();
   if (app.sample) out += `<div class="banner warn"><p><b>Example roster.</b> ${esc(app.sampleReason || "")} These doctors are made up and nothing you change here is saved.</p><button class="btn" data-act="sample-off" id="sample-off">${app.phase === "app" ? "Back to the real roster" : "Close the example"}</button></div>`;
   if (!state.profileOpen && app.phase === "app" && !app.sample && needsDesignation(app.myDoc)) out += `<div class="banner warn"><p><b>Add your designation.</b> Every doctor needs to choose MO, SMO, Registrar or Senior Registrar in their profile.</p><button class="btn" data-act="profile-open" id="desig-add">Add designation</button></div>`;
   if (state.profileOpen && (app.phase === "app" || app.sample)) out += renderProfileForm();
@@ -936,7 +978,7 @@ function renderBoard() {
   const uploadedInScope = scopeIds.some(id => docs[id]);
   const flags = {}; ids.forEach(id => (flags[id] = flaggedSlots(id, month)));
   const uploaded = doctors.filter(d => docs[d.uid]).length;
-  let html = `<section class="panel">
+  let html = renderOnDuty() + `<section class="panel">
     ${app.canEdit || app.sample ? `<div class="stats">
       <div class="stat okc"><b>${uploaded}<span class="muted" style="font-size:.9rem"> / ${doctors.length}</span></b><span>rosters uploaded</span></div>
       <button class="statlink stat ${a.gaps.length ? "bad" : ""}" data-act="tab" data-tab="checks" id="st-gaps"><b>${a.gaps.length}</b><span>uncovered shifts</span></button>
@@ -1304,6 +1346,8 @@ const actions = {
     toast(u.entries.length + " duties placed on the calendar. Check them, then press Save.");
   },
   "drop-upload"() { state.upload = null; render(); },
+  async install() { if (!installEvent) return; installEvent.prompt(); try { await installEvent.userChoice; } catch (_) {} installEvent = null; render(); },
+  "install-dismiss"() { try { localStorage.setItem("install-dismissed", "1"); } catch (_) {} render(); },
   "dept-read-paste"() { state.deptUpload = deptParse("Pasted rows", parseCSV(state.deptPaste)); render(); },
   "dept-drop"() { state.deptUpload = null; render(); },
   "dept-mode"(b) { state.deptMode = b.dataset.mode; render(); },
@@ -1479,6 +1523,77 @@ async function exportMonth() {
   XLSX.writeFile(wb, "Eastridge-Duty-Roster-" + month + ".xlsx");
 }
 
+/* ---------- phone app (install prompt + offline) ---------- */
+let installEvent = null;
+const isStandalone = () => { try { return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; } catch (_) { return false; } };
+const isIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent || "") || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+function installDismissed() { try { return localStorage.getItem("install-dismissed") === "1"; } catch (_) { return false; } }
+function renderInstall() {
+  if (app.sample || isStandalone() || installDismissed() || inAppBrowser() || !(app.phase === "app" || app.phase === "auth")) return "";
+  const ios = isIOS() && !installEvent;
+  if (!installEvent && !ios) return "";
+  return `<div class="install"><img src="assets/icon-192.png" alt="" width="44" height="44"><div class="install-text"><b>Install Eastridge Roster</b><span>${ios ? `Tap <b>Share</b> <svg width="14" height="14" viewBox="0 0 24 24" aria-label="Share icon"><path fill="currentColor" d="M12 2l4 4-1.4 1.4L13 5.8V15h-2V5.8L9.4 7.4 8 6zM5 10h3v2H6v8h12v-8h-2v-2h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1z"/></svg> then <b>Add to Home Screen</b>.` : "Opens from your home screen like an app, and shows the last-loaded roster without internet."}</span></div>
+    ${ios ? "" : `<button class="btn primary" data-act="install" id="install-btn">Install</button>`}<button class="ann-x" data-act="install-dismiss" aria-label="Don't show again" id="install-x">×</button></div>`;
+}
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvent = e; render(); });
+window.addEventListener("appinstalled", () => { installEvent = null; toast("Installed. Open Eastridge Roster from your home screen."); render(); });
+window.addEventListener("online", () => { if (!cacheTimer) { app.offline = false; render(); } });
+window.addEventListener("offline", () => { app.offline = true; render(); });
+app.offline = typeof navigator.onLine === "boolean" ? !navigator.onLine : false;
+if ("serviceWorker" in navigator && (location.protocol === "https:" || /^(localhost|127\.0\.0\.1)$/.test(location.hostname))) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+
+/* The browser's online flag stays "true" on Wi-Fi with no internet, so also watch whether the database answers:
+   if the roster only comes from this device's copy for a few seconds, treat it as offline. */
+let cacheTimer = null;
+function noteConnection(fromCache) {
+  if (fromCache) { if (!cacheTimer && !app.offline) cacheTimer = setTimeout(() => { cacheTimer = null; app.offline = true; render(); }, 4000); return; }
+  clearTimeout(cacheTimer); cacheTimer = null;
+  if (app.offline && navigator.onLine !== false) { app.offline = false; render(); }
+}
+
+/* ---------- on duty now (Pakistan time) ---------- */
+function shiftNow() {
+  const t = new Date(Date.now() + 5 * 3600e3), h = t.getUTCHours();
+  const day = off => { const d = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate() + off)); return ymd(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()); };
+  if (h >= 8 && h < 14) return { cur: { date: day(0), shift: "M" }, next: { date: day(0), shift: "E" }, ends: "14:00" };
+  if (h >= 14 && h < 20) return { cur: { date: day(0), shift: "E" }, next: { date: day(0), shift: "N" }, ends: "20:00" };
+  if (h >= 20) return { cur: { date: day(0), shift: "N" }, next: { date: day(1), shift: "M" }, ends: "08:00" };
+  return { cur: { date: day(-1), shift: "N" }, next: { date: day(0), shift: "M" }, ends: "08:00" };
+}
+function onDutyIds(slot, dept) {
+  const roster = state.rosters[slot.date.slice(0, 7)];
+  if (!roster) return null; // that month isn't loaded
+  return Object.keys(state.doctors).filter(id => (dept === "*" || (state.doctors[id].dept || "No department") === dept) && hasDuty(roster[id], slot.date, slot.shift))
+    .sort((a, b) => docName(a).localeCompare(docName(b)));
+}
+function contactLinks(id) {
+  const d = state.doctors[id], n = waNumber(d && d.phone);
+  if (!n || id === app.uid) return "";
+  return `<a class="icon-link wa" href="https://wa.me/${n}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(docName(id))}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm4.5 12.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg></a><a class="icon-link" href="tel:+${n}" aria-label="Call ${esc(docName(id))}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.2 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .6 3.6 1 1 0 0 1-.3 1z"/></svg></a>`;
+}
+function dutyPeople(ids) {
+  if (ids === null) return `<span class="muted small">Next month's roster opens on the 1st</span>`;
+  if (!ids.length) return `<span class="gaptag">No one rostered</span>`;
+  return ids.map(id => `<span class="duty-person"><span>${esc(docName(id))}${id === app.uid ? " (you)" : ""}${DESIG_SHORT[desigOf(id)] ? ` <small>${esc(DESIG_SHORT[desigOf(id)])}</small>` : ""}</span>${contactLinks(id)}</span>`).join("");
+}
+function renderOnDuty() {
+  if (state.month !== currentMonthKey() || app.sample && !state.doctors) return "";
+  const now = shiftNow(), cur = SHIFT[now.cur.shift], nxt = SHIFT[now.next.shift];
+  const depts = seesAll() ? deptList().filter(d => d !== "MSA") : [myDept()].filter(Boolean);
+  if (!depts.length) return "";
+  return `<section class="panel onduty" aria-label="On duty now">
+    <div class="bar"><h2>On duty now</h2><span class="keyitem sh-${cur.code}"><b>${cur.name}</b><span class="mono">until ${now.ends}</span></span></div>
+    <div class="od-grid">
+      <div class="od-h">Department</div><div class="od-h">Now · ${cur.name}</div><div class="od-h">Next · ${nxt.name} from ${nxt.time.slice(0, 5)}</div>
+      ${depts.map(d => `<div class="od-dept">${esc(d)}</div><div class="od-now"><span class="od-label">Now</span>${dutyPeople(onDutyIds(now.cur, d))}</div><div class="od-next"><span class="od-label">Next · ${nxt.name}</span>${dutyPeople(onDutyIds(now.next, d))}</div>`).join("")}
+    </div>
+  </section>`;
+}
+let lastShiftKey = "";
+setInterval(() => { const k = JSON.stringify(shiftNow().cur); if (k !== lastShiftKey) { lastShiftKey = k; if (state.tab === "board") render(); } }, 60000);
+
 /* ---------- announcement banner (public/announcement, readable by anyone, written by coordinators) ---------- */
 const ANN_LEVELS = { info: "Notice", important: "Important", urgent: "Urgent" };
 let annShownKey = null;
@@ -1633,6 +1748,8 @@ function init() {
     firebase.initializeApp(cfg); app.db = firebase.firestore(); app.auth = firebase.auth();
     const emu = window.FIREBASE_EMULATOR; // local testing only
     if (emu) { app.auth.useEmulator("http://" + emu.host + ":" + emu.authPort); app.db.useEmulator(emu.host, emu.firestorePort); }
+    // Keep a copy of the roster on the device: faster reopening, and it still shows without internet.
+    app.db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
   }
   catch (e) { app.phase = "setup"; app.setupError = "The settings in firebase-config.js look wrong: " + e.message; render(); return; }
   render();
