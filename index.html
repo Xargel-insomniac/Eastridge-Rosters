@@ -380,6 +380,11 @@ const MAX_STRETCH = 12; // hours on duty without a break before we flag it
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MON_SHORT = MONTHS.map(m => m.slice(0, 3));
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DESIGNATIONS = ["MO", "SMO", "Registrar", "Senior Registrar"];
+const DESIG_SHORT = { "MO": "MO", "SMO": "SMO", "Registrar": "Reg", "Senior Registrar": "SR" };
+/* Every doctor states a designation; MSA / admin staff don't need one. */
+const needsDesignation = d => !!d && d.dept !== "MSA" && !DESIGNATIONS.includes(d.designation);
+const desigOf = id => { const d = state.doctors[id] || (app.allDoctors && app.allDoctors[id]); return (d && d.designation) || ""; };
 const DEPARTMENTS = ["ER", "IPD-1 / Gynae", "IPD-1 / NICU (Paediatrics)", "IPD-2 (Medicine) / Dialysis", "OT / IPD-4 (Surgery)", "ICU / HDU", "MSA"];
 /* Pakistan public holidays. 2026 from the Cabinet Division notification (Eid ul Adha as revised);
    2027 Islamic holidays are expected dates and move with moon sighting. */
@@ -642,7 +647,7 @@ const state = {
   drafts: {}, editFor: null, upload: null, pasteText: "",
   ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
-  profileOpen: false, profile: { name: "", dept: "", phone: "" },
+  profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
 };
 const todayKey = ymd(now.getFullYear(), now.getMonth() + 1, now.getDate());
@@ -751,7 +756,7 @@ function buildSample() {
     ["s1", "Dr. Example Ayesha", "ER"], ["s2", "Dr. Example Bilal", "ER"], ["s3", "Dr. Example Chen", "ER"],
     ["s4", "Dr. Example Danish", "IPD-2 (Medicine) / Dialysis"], ["s5", "Dr. Example Elena", "IPD-2 (Medicine) / Dialysis"], ["s6", "Dr. Example Farah", "IPD-1 / NICU (Paediatrics)"],
   ];
-  const doctors = {}; docs.forEach(([uid, name, dept]) => (doctors[uid] = { uid, name, dept }));
+  const doctors = {}; docs.forEach(([uid, name, dept], i) => (doctors[uid] = { uid, name, dept, designation: DESIGNATIONS[i % 4] }));
   const rosters = { [m]: {}, [prev]: {} };
   const pattern = ["M", "E", "N", "", ""];
   [m, prev].forEach(month => {
@@ -831,12 +836,13 @@ function renderWho() {
   if (app.sample || !app.uid || app.phase === "setup") return "";
   const d = app.myDoc;
   const role = app.isAdmin ? `<span class="pill done">Coordinator</span> ` : "";
-  const name = d ? `<b>${esc(d.name)}</b>${d.dept ? " · " + esc(d.dept) : ""}` : esc(app.email || "Signed in");
+  const name = d ? `<b>${esc(d.name)}</b>${d.designation ? " · " + esc(d.designation) : ""}${d.dept ? " · " + esc(d.dept) : ""}` : esc(app.email || "Signed in");
   return `<span>${role}${name}</span>${d && app.phase === "app" ? `<button class="btn ghost" data-act="profile-open" id="who-edit">Edit profile</button>` : ""}<button class="btn ghost" data-act="signout" id="who-out">Sign out</button>`;
 }
 function renderBanner() {
   let out = "";
   if (app.sample) out += `<div class="banner warn"><p><b>Example roster.</b> ${esc(app.sampleReason || "")} These doctors are made up and nothing you change here is saved.</p><button class="btn" data-act="sample-off" id="sample-off">${app.phase === "app" ? "Back to the real roster" : "Close the example"}</button></div>`;
+  if (!state.profileOpen && app.phase === "app" && !app.sample && needsDesignation(app.myDoc)) out += `<div class="banner warn"><p><b>Add your designation.</b> Every doctor needs to choose MO, SMO, Registrar or Senior Registrar in their profile.</p><button class="btn" data-act="profile-open" id="desig-add">Add designation</button></div>`;
   if (state.profileOpen && (app.phase === "app" || app.sample)) out += renderProfileForm();
   return out;
 }
@@ -875,7 +881,7 @@ function renderAuth() {
 function pendingDoctors() { return Object.values(app.allDoctors || {}).filter(d => d.approved !== true).sort((a, b) => (a.name || "").localeCompare(b.name || "")); }
 function renderTeam() {
   const pend = pendingDoctors(), ok = sortedDoctors(), dis = app.busy ? "disabled" : "";
-  const row = (d, btns) => `<div class="item"><div class="head"><b>${esc(d.name || "No name")}</b><span class="muted small">${esc(d.dept || "No department")}</span></div>${d.email || d.phone ? `<p class="small muted">${esc(d.email || "")}${d.email && d.phone ? " · " : ""}${esc(d.phone || "")}</p>` : ""}<div class="btns">${btns}</div></div>`;
+  const row = (d, btns) => `<div class="item"><div class="head"><b>${esc(d.name || "No name")}</b><span class="muted small">${d.designation ? esc(d.designation) + " · " : ""}${esc(d.dept || "No department")}</span></div>${d.email || d.phone ? `<p class="small muted">${esc(d.email || "")}${d.email && d.phone ? " · " : ""}${esc(d.phone || "")}</p>` : ""}<div class="btns">${btns}</div></div>`;
   return `<div class="grid2">
     ${renderAnnForm()}
     ${renderMsaForm()}
@@ -897,6 +903,7 @@ function renderProfileForm() {
     <div class="row">
       <div class="field"><label for="pf-name">Name as it should appear</label><input type="text" id="pf-name" data-bind="profile.name" value="${esc(p.name)}" placeholder="Dr. Sana Malik" required maxlength="60"></div>
       <div class="field"><label for="pf-dept">Department</label><select id="pf-dept" data-bind="profile.dept"><option value="">Choose your department</option>${DEPARTMENTS.map(x => `<option value="${esc(x)}" ${p.dept === x ? "selected" : ""}>${esc(x)}</option>`).join("")}${p.dept && !DEPARTMENTS.includes(p.dept) ? `<option value="${esc(p.dept)}" selected>${esc(p.dept)} (old name, please change)</option>` : ""}</select></div>
+      <div class="field"><label for="pf-desig">Designation${p.dept === "MSA" ? " (not needed for MSA)" : ""}</label><select id="pf-desig" data-bind="profile.designation"><option value="">Choose your designation</option>${DESIGNATIONS.map(x => `<option value="${esc(x)}" ${p.designation === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
       <div class="field"><label for="pf-phone">WhatsApp number (optional)</label><input type="tel" id="pf-phone" data-bind="profile.phone" value="${esc(p.phone)}" placeholder="0300 1234567" maxlength="20"><span class="muted small">Colleagues use it to message you about swaps.</span></div>
     </div>
     <div class="btns"><button class="btn primary" type="submit" id="pf-save" ${app.busy ? "disabled" : ""}>Save profile</button>${app.phase === "profile" && !app.sample ? `<button class="btn ghost" type="button" data-act="signout" id="pf-out">Sign out</button>` : `<button class="btn" type="button" data-act="profile-close" id="pf-cancel">Cancel</button>`}</div>
@@ -957,8 +964,9 @@ function renderBoard() {
       const gap = !state.mineOnly && uploadedInScope && !ids.some(id => deptOk(id) && hasDuty(docs[id], date, s.code));
       html += `<div class="bc${we}${gap ? " gap" : ""}" role="cell">${gap ? `<span class="gaptag">Uncovered</span>` : ""}${on.map(id => {
         const mine = id === app.uid, fl = flags[id] && flags[id].has(date + "|" + s.code);
-        const dept = deptSel === "all" && state.doctors[id] && state.doctors[id].dept ? ` <small>${esc(state.doctors[id].dept)}</small>` : "";
-        const title = esc(docName(id) + " · " + fmtDuty({ date, shift: s.code }) + (fl ? " · part of a stretch over " + MAX_STRETCH + " h" : ""));
+        const ds = DESIG_SHORT[desigOf(id)] || "";
+        const dept = (ds ? ` <small>${esc(ds)}</small>` : "") + (deptSel === "all" && state.doctors[id] && state.doctors[id].dept ? ` <small>${esc(state.doctors[id].dept)}</small>` : "");
+        const title = esc(docName(id) + (desigOf(id) ? " (" + desigOf(id) + ")" : "") + " · " + fmtDuty({ date, shift: s.code }) + (fl ? " · part of a stretch over " + MAX_STRETCH + " h" : ""));
         return mine && canAct() ? `<button class="chip c-${s.code} mine${fl ? " flag" : ""}" data-act="pick-duty" data-date="${date}" data-shift="${s.code}" title="${title}">${esc(docName(id))}${dept}</button>`
           : `<span class="chip c-${s.code}${fl ? " flag" : ""}" title="${title}">${esc(docName(id))}${dept}</span>`;
       }).join("")}</div>`;
@@ -1173,7 +1181,7 @@ function renderRequestForm(month) {
   if (!my.length) body = `<p class="muted">You have no duties in ${esc(monthLabel(month))} to change. Upload your roster under My roster first.</p>`;
   else {
     body = `<div class="field"><label for="rq-give">Your duty</label><select id="rq-give" data-bind="form.give"><option value="">Choose one of your duties</option>${giveOpts}</select></div>`;
-    if (f.type !== "move") body += `<div class="field"><label for="rq-col">Colleague</label><select id="rq-col" data-bind="form.colleague"><option value="">Choose a colleague</option>${colleagues.map(d => `<option value="${esc(d.uid)}" ${f.colleague === d.uid ? "selected" : ""}>${esc(d.name)} · ${esc(d.dept || "No department")}</option>`).join("")}</select></div>`;
+    if (f.type !== "move") body += `<div class="field"><label for="rq-col">Colleague</label><select id="rq-col" data-bind="form.colleague"><option value="">Choose a colleague</option>${colleagues.map(d => `<option value="${esc(d.uid)}" ${f.colleague === d.uid ? "selected" : ""}>${esc(d.name)}${d.designation ? " · " + esc(d.designation) : ""} · ${esc(d.dept || "No department")}</option>`).join("")}</select></div>`;
     if (f.type === "swap" && f.colleague) body += theirs.length ? `<div class="field"><label for="rq-take">Their duty you'll take</label><select id="rq-take" data-bind="form.take"><option value="">Choose their duty</option>${theirs.map(x => { const v = x.date + "|" + x.shift; return `<option value="${v}" ${f.take === v ? "selected" : ""}>${esc(fmtDuty(x))}</option>`; }).join("")}</select></div>` : `<p class="muted small">${esc(docName(f.colleague))} has no duties in ${esc(monthLabel(month))} to swap with. Try “Hand over” instead.</p>`;
     if (f.type === "move") body += `<div class="row"><div class="field"><label for="rq-date">New date</label><input type="date" id="rq-date" data-bind="form.moveDate" value="${esc(f.moveDate)}" min="${month}-01" max="${month}-${pad(daysIn(month))}"></div><div class="field"><label for="rq-shift">New shift</label><select id="rq-shift" data-bind="form.moveShift">${SHIFTS.map(s => `<option value="${s.code}" ${f.moveShift === s.code ? "selected" : ""}>${s.name} (${s.time})</option>`).join("")}</select></div></div>`;
     if (f.type !== "move") body += `<div class="field"><label for="rq-note">Note for your colleague (optional)</label><input type="text" id="rq-note" data-bind="form.note" value="${esc(f.note)}" maxlength="140" placeholder="e.g. exam that day"></div>`;
@@ -1232,7 +1240,7 @@ const actions = {
   tab(b) { state.tab = b.dataset.tab; render(); },
   month(b) { state.month = addMonths(state.month, +b.dataset.d); state.upload = null; if (app.sample) { const s = buildSample(); state.rosters = s.rosters; state.requests = s.requests; } else subscribeMonth(); resetForm(); render(); },
   "goto-month"(b) { const u = state.upload; state.month = b.dataset.month; if (!app.sample) subscribeMonth(); if (u) state.upload = reparse(u); render(); },
-  "profile-open"() { const d = app.sample ? me() : app.myDoc; state.profile = { name: d ? d.name : "", dept: d ? d.dept || "" : "", phone: d ? d.phone || "" : "" }; state.profileOpen = true; render(); setTimeout(() => { const el = $("#pf-name"); if (el) el.focus(); }, 0); },
+  "profile-open"() { const d = app.sample ? me() : app.myDoc; state.profile = { name: d ? d.name : "", dept: d ? d.dept || "" : "", designation: d ? d.designation || "" : "", phone: d ? d.phone || "" : "" }; state.profileOpen = true; render(); setTimeout(() => { const el = $("#pf-name"); if (el) el.focus(); }, 0); },
   "profile-close"() { state.profileOpen = false; render(); },
   "sample-on"() { startSample("You asked to see how a filled-in month looks."); },
   "sample-off"() { stopSample(); },
@@ -1411,8 +1419,9 @@ document.addEventListener("submit", async e => {
   const p = state.profile, name = p.name.trim();
   if (!name) { toast("Add your name so colleagues can find you."); return; }
   if (!p.dept) { toast("Choose your department."); return; }
+  if (p.dept !== "MSA" && !DESIGNATIONS.includes(p.designation)) { toast("Choose your designation: MO, SMO, Registrar or Senior Registrar."); return; }
   if (!app.uid) return;
-  const ok = await guarded(() => store.saveDoctor(app.uid, { name, dept: p.dept.trim(), phone: p.phone.trim() }), "Profile saved.");
+  const ok = await guarded(() => store.saveDoctor(app.uid, { name, dept: p.dept.trim(), designation: DESIGNATIONS.includes(p.designation) ? p.designation : "", phone: p.phone.trim() }), "Profile saved.");
   if (ok) { state.profileOpen = false; render(); }
 });
 async function doAuth() {
@@ -1455,15 +1464,15 @@ async function exportMonth() {
   const title = "Eastridge Primecare · Doctor's Duty Roster · " + monthLabel(month);
   const byDay = [[title], ["Downloaded " + when(Date.now())], [], ["Date", "Day", "Public holiday", ...SHIFTS.map(s => s.name + " (" + s.time.replace(/\s/g, "") + ")")]];
   for (const date of dates) byDay.push([fmtDate(date).replace(/^\w+ /, ""), DOW[dow(date)], holidayOf(date), ...SHIFTS.map(s => ids.filter(id => hasDuty(docs[id], date, s.code)).map(withDept).join(", ") || (ids.length ? "UNCOVERED" : ""))]);
-  const byDoc = [[title], [], ["Doctor", "Department", ...dates.map(d => +d.slice(8) + " " + DOW[dow(d)].slice(0, 2)), "Duties", "Hours"]];
-  for (const id of ids) { const sh = onlyMonth(docs[id] || {}, month); byDoc.push([docName(id), deptOf(id), ...dates.map(d => (sh[d] || []).join("+")), dutyList(sh).length, hoursOf(sh)]); }
+  const byDoc = [[title], [], ["Doctor", "Designation", "Department", ...dates.map(d => +d.slice(8) + " " + DOW[dow(d)].slice(0, 2)), "Duties", "Hours"]];
+  for (const id of ids) { const sh = onlyMonth(docs[id] || {}, month); byDoc.push([docName(id), desigOf(id), deptOf(id), ...dates.map(d => (sh[d] || []).join("+")), dutyList(sh).length, hoursOf(sh)]); }
   byDoc.push([], ["M = Morning 08:00–14:00 · E = Evening 14:00–20:00 · N = Night 20:00–08:00"]);
   const log = [[title + " · Change log"], [], ["When", "Status", "Change", "Note"]];
   state.requests.filter(r => r.month === month && reqVisible(r)).slice().reverse().forEach(r => log.push([when(r.decidedAt || r.createdAt), STATUS[r.status] || r.status, plainReq(r), r.note || r.reason || ""]));
   const wb = XLSX.utils.book_new();
   const add = (rows, name, cols) => { const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = cols.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
   add(byDay, "By day", [12, 6, 26, 40, 40, 40]);
-  add(byDoc, "By doctor", [26, 24, ...dates.map(() => 6), 8, 8]);
+  add(byDoc, "By doctor", [26, 16, 24, ...dates.map(() => 6), 8, 8]);
   add(log, "Change log", [16, 14, 70, 30]);
   XLSX.writeFile(wb, "Eastridge-Duty-Roster-" + month + ".xlsx");
 }
@@ -1588,7 +1597,7 @@ function decidePhase() {
   if (member) { if (app.phase !== "app") { app.phase = "app"; app.loading = true; startLive(); } }
   else {
     if (app.phase === "app") stopLive();
-    if (!d && app.phase !== "profile") state.profile = { name: "", dept: "", phone: "" };
+    if (!d && app.phase !== "profile") state.profile = { name: "", dept: "", designation: "", phone: "" };
     app.phase = d ? "pending" : "profile";
   }
   render();
