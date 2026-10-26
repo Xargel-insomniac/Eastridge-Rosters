@@ -244,6 +244,7 @@ details > summary { cursor: pointer; font-weight: 600; }
 .od-h { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .od-dept { font-weight: 600; font-size: 0.88rem; }
 .od-label { display: none; }
+.od-own { color: var(--accent); }
 .duty-person { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--sunk); font-size: 0.85rem; font-weight: 600; }
 .duty-person small { font-weight: 500; color: var(--muted); }
 .icon-link { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--accent); background: var(--surface); border: 1px solid var(--line); }
@@ -255,6 +256,8 @@ details > summary { cursor: pointer; font-weight: 600; }
   .od-dept { border-bottom: 0 !important; padding-bottom: 0 !important; padding-top: 12px !important; }
   .od-now, .od-next { border-bottom: 0 !important; padding-block: 4px !important; }
   .od-next { border-bottom: 1px solid var(--line) !important; padding-bottom: 12px !important; }
+  .od-next.od-other { padding: 0 !important; min-height: 0; }
+  .od-next.od-other .od-dash { display: none; }
   .od-label { display: block; width: 100%; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 }
 /* welcome effect: once per browser session. The logo's crescent draws itself around the logo, a greeting rises, then the screen lifts away. */
@@ -1581,13 +1584,17 @@ function dutyPeople(ids) {
 function renderOnDuty() {
   if (state.month !== currentMonthKey() || app.sample && !state.doctors) return "";
   const now = shiftNow(), cur = SHIFT[now.cur.shift], nxt = SHIFT[now.next.shift];
-  const depts = seesAll() ? deptList().filter(d => d !== "MSA") : [myDept()].filter(Boolean);
+  // Everyone sees who's on now in every department (so an ER doctor can find tonight's ICU doctor);
+  // doctors see the next shift only for their own department, which is listed first.
+  const own = seesAll() ? "" : myDept();
+  const depts = deptList().filter(d => d !== "MSA").sort((a, b) => (b === own) - (a === own));
   if (!depts.length) return "";
+  const nextCell = d => !own || d === own ? `<span class="od-label">Next · ${nxt.name}</span>${dutyPeople(onDutyIds(now.next, d))}` : `<span class="muted small od-dash" aria-label="Not shown for other departments">–</span>`;
   return `<section class="panel onduty" aria-label="On duty now">
     <div class="bar"><h2>On duty now</h2><span class="keyitem sh-${cur.code}"><b>${cur.name}</b><span class="mono">until ${now.ends}</span></span></div>
     <div class="od-grid">
       <div class="od-h">Department</div><div class="od-h">Now · ${cur.name}</div><div class="od-h">Next · ${nxt.name} from ${nxt.time.slice(0, 5)}</div>
-      ${depts.map(d => `<div class="od-dept">${esc(d)}</div><div class="od-now"><span class="od-label">Now</span>${dutyPeople(onDutyIds(now.cur, d))}</div><div class="od-next"><span class="od-label">Next · ${nxt.name}</span>${dutyPeople(onDutyIds(now.next, d))}</div>`).join("")}
+      ${depts.map(d => `<div class="od-dept${d === own ? " od-own" : ""}">${esc(d)}${d === own ? ` <span class="pill done">Yours</span>` : ""}</div><div class="od-now"><span class="od-label">Now</span>${dutyPeople(onDutyIds(now.cur, d))}</div><div class="od-next${own && d !== own ? " od-other" : ""}">${nextCell(d)}</div>`).join("")}
     </div>
   </section>`;
 }

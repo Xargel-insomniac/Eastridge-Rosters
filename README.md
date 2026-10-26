@@ -19,7 +19,7 @@ A website where doctors at Eastridge Primecare upload their monthly duty rosters
 ## What it does
 
 - **Accounts:** doctors create an account with email and password (Google sign-in optional) and add their name, department and phone. A **coordinator approves** each account before they can see or change anything.
-- **On duty now:** the home page opens with who's on the current shift and the next one, per department (doctors see their own; coordinators see all), with WhatsApp and call buttons. It follows Pakistan time and switches over by itself at 08:00, 14:00 and 20:00 (after midnight it correctly shows the previous night's team).
+- **On duty now:** the home page opens with who's on the current shift and the next one, for every department (doctors also see the next shift for their own department, listed first), with WhatsApp and call buttons. It follows Pakistan time and switches over by itself at 08:00, 14:00 and 20:00 (after midnight it correctly shows the previous night's team).
 - **Phone app:** the site can be installed to the home screen as *Eastridge Roster* (Android: **Install** button on the site or Chrome menu → *Install app*; iPhone: Safari → Share → *Add to Home Screen*). It opens full-screen, starts instantly, and shows the last-loaded roster without internet; saving waits until the connection is back.
 - **My roster:** tap M / E / N on a calendar, upload a CSV or Excel (.xlsx) file, or paste rows from a spreadsheet. Dates are read day first (03/11/2026 = 3 November).
 - **Swaps & changes:**
