@@ -681,7 +681,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -975,7 +975,9 @@ function renderBoard() {
       <div class="btns">${canAct() && app.uid && !app.myDoc && !app.sample ? `<button class="btn primary" data-act="profile-open" id="empty-setup">Set up my profile</button>` : ""}${app.canEdit && !app.sample ? `<button class="btn primary" data-act="tab" data-tab="team" id="empty-team">Approve doctors in the Team tab</button>` : ""}${!app.sample ? `<button class="btn" data-act="sample-on" id="sample-on">Show an example</button>` : ""}</div></div>`;
   }
   const ids = Object.keys(docs).filter(id => !isOffRoster(id));
-  const deptSel = seesAll() ? state.dept : myDept();
+  const deptSel = seesAll() ? state.dept : (state.docDept || myDept() || "all");
+  // Doctors can browse every department's rota, but coverage gaps and the over-12-hour marks are only shown to them for their own department.
+  const showGaps = seesAll() || deptSel === myDept();
   const deptOk = id => deptSel === "all" || ((state.doctors[id] && state.doctors[id].dept) || "No department") === deptSel;
   const scopeIds = allRosterIds(month).filter(deptOk);
   const uploadedInScope = scopeIds.some(id => docs[id]);
@@ -989,7 +991,7 @@ function renderBoard() {
       <button class="statlink stat" data-act="tab" data-tab="changes" id="st-req"><b>${state.requests.filter(r => r.status === "pending" && r.month === month).length}</b><span>swaps waiting</span></button>
     </div>` : ""}
     <div class="filters">
-      ${seesAll() ? `<label class="check" for="f-dept">Department <select id="f-dept" data-bind="dept"><option value="all">All departments</option>${deptList().map(d => `<option ${state.dept === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></label>` : `<span class="check"><b>${esc(myDept() || "Your department")}</b></span>`}
+      ${seesAll() ? `<label class="check" for="f-dept">Department <select id="f-dept" data-bind="dept"><option value="all">All departments</option>${deptList().map(d => `<option ${state.dept === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></label>` : `<label class="check" for="f-dept">Department <select id="f-dept" data-bind="docDept">${[myDept(), ...deptList().filter(d => d !== myDept() && d !== "MSA")].filter(Boolean).map(d => `<option value="${esc(d)}" ${deptSel === d ? "selected" : ""}>${esc(d)}${d === myDept() ? " (yours)" : ""}</option>`).join("")}<option value="all" ${deptSel === "all" ? "selected" : ""}>All departments (master rota)</option></select></label>`}
       ${me() ? `<label class="check" for="f-mine"><input type="checkbox" id="f-mine" data-bind="mineOnly" ${state.mineOnly ? "checked" : ""}> Only my duties</label>` : ""}
       ${me() && canAct() && !lockedForMe(month) ? `<span class="muted small">Tap one of your own duties to swap or move it.</span>` : ""}
       <button class="btn" data-act="export" id="export-xlsx" ${app.busy ? "disabled" : ""}><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3 1.4 1.4L12 17.4l-5.7-5.7 1.4-1.4 3.3 3.3V4a1 1 0 0 1 1-1zM5 19h14v2H5z"/></svg>Download month as Excel</button>
@@ -1007,9 +1009,9 @@ function renderBoard() {
     for (const s of SHIFTS) {
       const on = ids.filter(id => deptOk(id) && hasDuty(docs[id], date, s.code) && (!state.mineOnly || id === app.uid))
         .sort((x, y) => docName(x).localeCompare(docName(y)));
-      const gap = !state.mineOnly && uploadedInScope && !ids.some(id => deptOk(id) && hasDuty(docs[id], date, s.code));
+      const gap = showGaps && !state.mineOnly && uploadedInScope && !ids.some(id => deptOk(id) && hasDuty(docs[id], date, s.code));
       html += `<div class="bc${we}${gap ? " gap" : ""}" role="cell">${gap ? `<span class="gaptag">Uncovered</span>` : ""}${on.map(id => {
-        const mine = id === app.uid, fl = flags[id] && flags[id].has(date + "|" + s.code);
+        const mine = id === app.uid, fl = (seesAll() || mine) && flags[id] && flags[id].has(date + "|" + s.code);
         const ds = DESIG_SHORT[desigOf(id)] || "";
         const dept = (ds ? ` <small>${esc(ds)}</small>` : "") + (deptSel === "all" && state.doctors[id] && state.doctors[id].dept ? ` <small>${esc(state.doctors[id].dept)}</small>` : "");
         const title = esc(docName(id) + (desigOf(id) ? " (" + desigOf(id) + ")" : "") + " · " + fmtDuty({ date, shift: s.code }) + (fl ? " · part of a stretch over " + MAX_STRETCH + " h" : ""));
@@ -1507,12 +1509,13 @@ function authMessage(err) {
 async function exportMonth() {
   const XLSX = await loadXLSX();
   const month = state.month, docs = monthDocs(month), dates = datesOf(month);
-  const ids = allRosterIds(month).filter(id => (docs[id] || state.doctors[id]) && (seesAll() || deptOfId(id) === myDept())).sort((a, b) => docName(a).localeCompare(docName(b)));
+  const full = seesAll(), view = full ? "all" : (state.docDept || myDept() || "all");
+  const ids = allRosterIds(month).filter(id => (docs[id] || state.doctors[id]) && (view === "all" || deptOfId(id) === view)).sort((a, b) => docName(a).localeCompare(docName(b)));
   const deptOf = id => (state.doctors[id] && state.doctors[id].dept) || (app.allDoctors && app.allDoctors[id] && app.allDoctors[id].dept) || "";
   const withDept = id => docName(id) + (deptOf(id) ? " (" + deptOf(id) + ")" : "");
   const title = "Eastridge Primecare · Doctor's Duty Roster · " + monthLabel(month);
   const byDay = [[title], ["Downloaded " + when(Date.now())], [], ["Date", "Day", "Public holiday", ...SHIFTS.map(s => s.name + " (" + s.time.replace(/\s/g, "") + ")")]];
-  for (const date of dates) byDay.push([fmtDate(date).replace(/^\w+ /, ""), DOW[dow(date)], holidayOf(date), ...SHIFTS.map(s => ids.filter(id => hasDuty(docs[id], date, s.code)).map(withDept).join(", ") || (ids.length ? "UNCOVERED" : ""))]);
+  for (const date of dates) byDay.push([fmtDate(date).replace(/^\w+ /, ""), DOW[dow(date)], holidayOf(date), ...SHIFTS.map(s => ids.filter(id => hasDuty(docs[id], date, s.code)).map(withDept).join(", ") || (full && ids.length ? "UNCOVERED" : ""))]);
   const byDoc = [[title], [], ["Doctor", "Designation", "Department", ...dates.map(d => +d.slice(8) + " " + DOW[dow(d)].slice(0, 2)), "Duties", "Hours"]];
   for (const id of ids) { const sh = onlyMonth(docs[id] || {}, month); byDoc.push([docName(id), desigOf(id), deptOf(id), ...dates.map(d => (sh[d] || []).join("+")), dutyList(sh).length, hoursOf(sh)]); }
   byDoc.push([], ["M = Morning 08:00–14:00 · E = Evening 14:00–20:00 · N = Night 20:00–08:00"]);
@@ -1521,8 +1524,7 @@ async function exportMonth() {
   const wb = XLSX.utils.book_new();
   const add = (rows, name, cols) => { const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = cols.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
   add(byDay, "By day", [12, 6, 26, 40, 40, 40]);
-  add(byDoc, "By doctor", [26, 16, 24, ...dates.map(() => 6), 8, 8]);
-  add(log, "Change log", [16, 14, 70, 30]);
+  if (full) { add(byDoc, "By doctor", [26, 16, 24, ...dates.map(() => 6), 8, 8]); add(log, "Change log", [16, 14, 70, 30]); }
   XLSX.writeFile(wb, "Eastridge-Duty-Roster-" + month + ".xlsx");
 }
 
