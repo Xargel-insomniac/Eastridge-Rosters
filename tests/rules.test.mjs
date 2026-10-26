@@ -41,6 +41,11 @@ await t("coordinator posts the announcement", as("boss").doc("public/announcemen
 await t("signed-out visitor reads the announcement", as(null).doc("public/announcement").get(), true);
 await t("announcement level must be valid", as("boss").doc("public/announcement").set({ ...ANN, level: "party" }), false);
 await t("coordinator can't create other public docs", as("boss").doc("public/other").set(ANN), false);
+await t("coordinator sets the MSA WhatsApp number", as("boss").doc("settings/contact").set({ msaWhatsApp: "+923366033073" }), true);
+await t("approved doctor reads the MSA number", as("amy").doc("settings/contact").get(), true);
+await t("pending user can't read the MSA number", as("pat").doc("settings/contact").get(), false);
+await t("signed-out visitor can't read the MSA number", as(null).doc("settings/contact").get(), false);
+await t("doctor can't change the MSA number", as("amy").doc("settings/contact").set({ msaWhatsApp: "+920000000000" }), false);
 await t("approved can't approve others", as("amy").doc("doctors/pat").update({ approved: true }), false);
 await t("approved can't read admins of others", as("amy").doc("admins/boss").get(), false);
 await t("admin reads own admin doc", as("boss").doc("admins/boss").get(), true);

@@ -225,6 +225,9 @@ button.chip { font: inherit; font-size: 0.8rem; font-weight: 600; }
 .note.ok { color: var(--ok); background: var(--ok-bg); }
 .empty { padding: 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--r); display: grid; gap: 10px; justify-items: center; }
 details > summary { cursor: pointer; font-weight: 600; }
+table.mini { border-collapse: collapse; width: 100%; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+table.mini th, table.mini td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.mini th { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 /* announcement strip: scrolls like a ticker when the text is longer than the screen */
 #announce { --ann-bg: var(--brand-navy); --ann-ink: #ffffff; --ann-tag: var(--brand-red); background: var(--ann-bg); color: var(--ann-ink); position: relative; z-index: 9; }
 #announce.important { --ann-bg: #f6b73c; --ann-ink: #2a1a00; --ann-tag: #2a1a00; }
@@ -530,6 +533,65 @@ function coverageGaps(monthK, doctors, rosterMonth) {
   }
   return out;
 }
+/* Department rota: one file with many doctors. Three layouts are recognised:
+   list (doctor | date | shift), by day (date | Morning | Evening | Night with names in the cells, like this site's Excel "By day" sheet),
+   and grid (doctor | 1 | 2 | 3 … with M/E/N codes, like the "By doctor" sheet). */
+function normName(s) { return String(s == null ? "" : s).toLowerCase().replace(/\([^)]*\)/g, " ").replace(/\b(dr|doctor|prof|mr|ms|mrs|miss)\b\.?/g, " ").replace(/[^a-z0-9]+/g, ""); }
+function parseDeptRows(rows, monthK, doctors) {
+  rows = (rows || []).map(r => (r || []).map(c => (typeof c === "string" ? c.trim() : c)));
+  const res = { byDoc: {}, unmatched: {}, ambiguous: [], skipped: [], otherMonths: {}, layout: "" };
+  const idx = {}, dup = new Set();
+  for (const d of doctors) { const k = normName(d.name); if (!k) continue; if (idx[k] && idx[k] !== d.uid) dup.add(k); else idx[k] = d.uid; }
+  const who = name => {
+    const raw = String(name == null ? "" : name).trim(), k = normName(raw); if (!k) return null;
+    if (dup.has(k)) { if (!res.ambiguous.includes(raw)) res.ambiguous.push(raw); return null; }
+    if (idx[k]) return idx[k];
+    res.unmatched[raw] = (res.unmatched[raw] || 0) + 1; return null;
+  };
+  const add = (uid, date, code) => { res.byDoc[uid] = withDuty(res.byDoc[uid] || {}, date, code); };
+  const { y: my, m: mm } = parseMonth(monthK);
+  let h = -1, L = {};
+  for (let i = 0; i < Math.min(rows.length, 8) && h < 0; i++) {
+    const hdr = rows[i].map(c => String(c == null ? "" : c).toLowerCase().trim());
+    const find = re => hdr.findIndex(x => re.test(x));
+    const doc = find(/doctor|^name|consultant|staff/), date = find(/date|^day$/), shift = find(/shift|duty/);
+    const col = { M: find(/^morn/), E: find(/^even/), N: find(/^night/) };
+    const days = hdr.map((x, j) => (/^\d{1,2}(\s|$)/.test(x) && +x.match(/^\d+/)[0] <= 31 ? j : -1)).filter(j => j >= 0);
+    if (doc >= 0 && days.length >= 7) { h = i; L = { type: "grid", doc, days: days.map(j => [j, +hdr[j].match(/^\d+/)[0]]) }; }
+    else if (doc >= 0 && date >= 0 && shift >= 0) { h = i; L = { type: "list", doc, date, shift }; }
+    else if (date >= 0 && (col.M >= 0 || col.E >= 0 || col.N >= 0)) { h = i; L = { type: "byday", date, col }; }
+  }
+  if (h < 0) return res;
+  res.layout = L.type;
+  const other = (date, n) => { const k = date.slice(0, 7); res.otherMonths[k] = (res.otherMonths[k] || 0) + n; };
+  for (let i = h + 1; i < rows.length; i++) {
+    const row = rows[i], line = i + 1;
+    if (!row.some(c => c !== "" && c != null)) continue;
+    if (L.type === "grid") {
+      const cells = L.days.map(([j, d]) => [validYmd(my, mm, d), parseShiftCell(row[j])]).filter(([, p]) => !p.empty && !p.off);
+      if (!cells.length) continue;
+      const uid = who(row[L.doc]); if (!uid) continue;
+      for (const [date, p] of cells) { if (!date) continue; if (p.bad) { res.skipped.push({ line, reason: "couldn't read a shift for " + row[L.doc] }); continue; } p.codes.forEach(c => add(uid, date, c)); }
+    } else if (L.type === "list") {
+      const p = parseShiftCell(row[L.shift]); if (p.empty || p.off) continue;
+      const date = parseDateCell(row[L.date], monthK);
+      if (!date) { res.skipped.push({ line, reason: "couldn't read the date “" + String(row[L.date] ?? "") + "”" }); continue; }
+      if (p.bad) { res.skipped.push({ line, reason: "couldn't read the shift “" + String(row[L.shift]) + "”" }); continue; }
+      const uid = who(row[L.doc]); if (!uid) continue;
+      if (!date.startsWith(monthK + "-")) { other(date, p.codes.length); continue; }
+      p.codes.forEach(c => add(uid, date, c));
+    } else {
+      const date = parseDateCell(row[L.date], monthK);
+      if (!date) { if (CODES.some(c => L.col[c] >= 0 && String(row[L.col[c]] ?? "").trim())) res.skipped.push({ line, reason: "couldn't read the date “" + String(row[L.date] ?? "") + "”" }); continue; }
+      for (const c of CODES) {
+        if (L.col[c] < 0) continue;
+        const names = String(row[L.col[c]] ?? "").replace(/\([^)]*\)/g, " ").split(/[,;\n]+/).map(x => x.trim()).filter(x => x && !/^(uncovered|-|—|none|off)$/i.test(x));
+        for (const n of names) { const uid = who(n); if (!uid) continue; if (!date.startsWith(monthK + "-")) { other(date, 1); continue; } add(uid, date, c); }
+      }
+    }
+  }
+  return res;
+}
 /* ===== LOGIC END ===== */
 
 /* ---------- app state ---------- */
@@ -540,7 +602,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  ann: null, annDraft: null,
+  ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -556,6 +618,11 @@ const canAct = () => !app.readOnly && (app.sample || app.phase === "app");
 /* A month closes when it's over (Pakistan time). After that only coordinators can change it; firestore.rules enforces the same. */
 function currentMonthKey() { const t = new Date(Date.now() + 5 * 3600e3); return monthKey(t.getUTCFullYear(), t.getUTCMonth() + 1); }
 const isClosed = month => month < currentMonthKey();
+/* Coordinators (and MSA staff off the roster) see every department and the summary numbers; doctors see only their own department. */
+const seesAll = () => app.sample || app.canEdit || !!(app.myDoc && app.myDoc.offRoster);
+const myDept = () => (app.myDoc && app.myDoc.dept) || "";
+const deptOfId = id => (state.doctors[id] && state.doctors[id].dept) || (app.allDoctors && app.allDoctors[id] && app.allDoctors[id].dept) || "";
+const reqVisible = r => seesAll() || r.from === app.uid || r.to === app.uid || deptOfId(r.from) === myDept();
 const lockedForMe = month => isClosed(month) && !app.canEdit && !app.sample;
 function monthDocs(month) { return state.rosters[month] || {}; }
 /* Current + previous month combined, so a night on the last day links to a morning on the 1st. */
@@ -719,7 +786,7 @@ function render() {
   $("#tabs").innerHTML = inApp ? renderTabs() : "";
   $("#main").innerHTML = !inApp ? renderGate() : app.loading ? `<div class="empty">Loading the roster…</div>` :
     state.tab === "board" ? renderBoard() : state.tab === "mine" ? renderMine() : state.tab === "changes" ? renderChanges() :
-    state.tab === "team" && app.isAdmin && !app.sample ? renderTeam() : renderChecks();
+    state.tab === "team" && app.isAdmin && !app.sample ? renderTeam() : app.canEdit || app.sample ? renderChecks() : renderBoard();
   if (fid) { const el = document.getElementById(fid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel) try { el.setSelectionRange(sel[0], sel[1]); } catch (_) {} } }
 }
 function renderWho() {
@@ -773,6 +840,7 @@ function renderTeam() {
   const row = (d, btns) => `<div class="item"><div class="head"><b>${esc(d.name || "No name")}</b><span class="muted small">${esc(d.dept || "No department")}</span></div>${d.email || d.phone ? `<p class="small muted">${esc(d.email || "")}${d.email && d.phone ? " · " : ""}${esc(d.phone || "")}</p>` : ""}<div class="btns">${btns}</div></div>`;
   return `<div class="grid2">
     ${renderAnnForm()}
+    ${renderMsaForm()}
     <section class="panel"><h2>Waiting for approval</h2>${pend.length ? `<div class="list">${pend.map(d => row(d, `<button class="btn primary" data-act="approve" data-id="${esc(d.uid)}" id="ap-${esc(d.uid)}" ${dis}>Approve</button><button class="btn danger" data-act="reject-doc" data-id="${esc(d.uid)}" id="rj-${esc(d.uid)}" ${dis}>Reject</button>`)).join("")}</div>` : `<p class="muted">No one is waiting. New sign-ups appear here.</p>`}
       <p class="muted small">Only approve people you recognise. Approved doctors see the full roster and can change duties.</p></section>
     <section class="panel"><h2>On the duty roster (${ok.length})</h2>${ok.length ? `<div class="list">${ok.map(d => row(d, d.uid === app.uid ? `<button class="btn" data-act="roster-off" data-id="${esc(d.uid)}" id="off-${esc(d.uid)}" ${dis}>I don't do duties: take me off</button>` :
@@ -801,7 +869,8 @@ function renderTabs() {
   const issues = a ? a.stretches.length + a.gaps.length : 0;
   const pend = pendingForMe().length;
   const t = [["board", "Hospital roster", ""], ["mine", me() || !app.canEdit ? "My roster" : "Edit rosters", unsavedCount() ? `<span class="count soft" title="Unsaved changes">•</span>` : ""],
-    ["changes", "Swaps & changes", pend ? `<span class="count">${pend}</span>` : ""], ["checks", "Checks", issues ? `<span class="count">${issues > 99 ? "99+" : issues}</span>` : ""]];
+    ["changes", "Swaps & changes", pend ? `<span class="count">${pend}</span>` : ""]];
+  if (app.canEdit || app.sample) t.push(["checks", "Checks", issues ? `<span class="count">${issues > 99 ? "99+" : issues}</span>` : ""]);
   if (app.isAdmin && !app.sample) { const pc = pendingDoctors().length; t.push(["team", "Team", pc ? `<span class="count">${pc}</span>` : ""]); }
   return t.map(([k, l, extra]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${state.tab === k}" data-act="tab" data-tab="${k}">${l}${extra}</button>`).join("");
 }
@@ -815,20 +884,21 @@ function renderBoard() {
       <div class="btns">${canAct() && app.uid && !app.myDoc && !app.sample ? `<button class="btn primary" data-act="profile-open" id="empty-setup">Set up my profile</button>` : ""}${app.canEdit && !app.sample ? `<button class="btn primary" data-act="tab" data-tab="team" id="empty-team">Approve doctors in the Team tab</button>` : ""}${!app.sample ? `<button class="btn" data-act="sample-on" id="sample-on">Show an example</button>` : ""}</div></div>`;
   }
   const ids = Object.keys(docs).filter(id => !isOffRoster(id));
-  const deptOk = id => state.dept === "all" || ((state.doctors[id] && state.doctors[id].dept) || "No department") === state.dept;
+  const deptSel = seesAll() ? state.dept : myDept();
+  const deptOk = id => deptSel === "all" || ((state.doctors[id] && state.doctors[id].dept) || "No department") === deptSel;
   const scopeIds = allRosterIds(month).filter(deptOk);
   const uploadedInScope = scopeIds.some(id => docs[id]);
   const flags = {}; ids.forEach(id => (flags[id] = flaggedSlots(id, month)));
   const uploaded = doctors.filter(d => docs[d.uid]).length;
   let html = `<section class="panel">
-    <div class="stats">
+    ${app.canEdit || app.sample ? `<div class="stats">
       <div class="stat okc"><b>${uploaded}<span class="muted" style="font-size:.9rem"> / ${doctors.length}</span></b><span>rosters uploaded</span></div>
       <button class="statlink stat ${a.gaps.length ? "bad" : ""}" data-act="tab" data-tab="checks" id="st-gaps"><b>${a.gaps.length}</b><span>uncovered shifts</span></button>
       <button class="statlink stat ${a.stretches.length ? "warn" : ""}" data-act="tab" data-tab="checks" id="st-str"><b>${a.stretches.length}</b><span>over ${MAX_STRETCH} h without a break</span></button>
       <button class="statlink stat" data-act="tab" data-tab="changes" id="st-req"><b>${state.requests.filter(r => r.status === "pending" && r.month === month).length}</b><span>swaps waiting</span></button>
-    </div>
+    </div>` : ""}
     <div class="filters">
-      <label class="check" for="f-dept">Department <select id="f-dept" data-bind="dept"><option value="all">All departments</option>${deptList().map(d => `<option ${state.dept === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></label>
+      ${seesAll() ? `<label class="check" for="f-dept">Department <select id="f-dept" data-bind="dept"><option value="all">All departments</option>${deptList().map(d => `<option ${state.dept === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></label>` : `<span class="check"><b>${esc(myDept() || "Your department")}</b></span>`}
       ${me() ? `<label class="check" for="f-mine"><input type="checkbox" id="f-mine" data-bind="mineOnly" ${state.mineOnly ? "checked" : ""}> Only my duties</label>` : ""}
       ${me() && canAct() && !lockedForMe(month) ? `<span class="muted small">Tap one of your own duties to swap or move it.</span>` : ""}
       <button class="btn" data-act="export" id="export-xlsx" ${app.busy ? "disabled" : ""}><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3 1.4 1.4L12 17.4l-5.7-5.7 1.4-1.4 3.3 3.3V4a1 1 0 0 1 1-1zM5 19h14v2H5z"/></svg>Download month as Excel</button>
@@ -849,7 +919,7 @@ function renderBoard() {
       const gap = !state.mineOnly && uploadedInScope && !ids.some(id => deptOk(id) && hasDuty(docs[id], date, s.code));
       html += `<div class="bc${we}${gap ? " gap" : ""}" role="cell">${gap ? `<span class="gaptag">Uncovered</span>` : ""}${on.map(id => {
         const mine = id === app.uid, fl = flags[id] && flags[id].has(date + "|" + s.code);
-        const dept = state.dept === "all" && state.doctors[id] && state.doctors[id].dept ? ` <small>${esc(state.doctors[id].dept)}</small>` : "";
+        const dept = deptSel === "all" && state.doctors[id] && state.doctors[id].dept ? ` <small>${esc(state.doctors[id].dept)}</small>` : "";
         const title = esc(docName(id) + " · " + fmtDuty({ date, shift: s.code }) + (fl ? " · part of a stretch over " + MAX_STRETCH + " h" : ""));
         return mine && canAct() ? `<button class="chip c-${s.code} mine${fl ? " flag" : ""}" data-act="pick-duty" data-date="${date}" data-shift="${s.code}" title="${title}">${esc(docName(id))}${dept}</button>`
           : `<span class="chip c-${s.code}${fl ? " flag" : ""}" title="${title}">${esc(docName(id))}${dept}</span>`;
@@ -917,8 +987,51 @@ function renderMine() {
     </div>
   </section>
   ${locked ? "" : renderUpload(month)}
+  ${renderMsaSend(month, id, work)}
+  ${app.canEdit ? renderDeptUpload(month) : ""}
   </div>`;
   return html;
+}
+function renderDeptUpload(month) {
+  const u = state.deptUpload && state.deptUpload.month === month ? state.deptUpload : null;
+  const ids = u ? Object.keys(u.byDoc).sort((a, b) => docName(a).localeCompare(docName(b))) : [];
+  const unmatched = u ? Object.entries(u.unmatched) : [], other = u ? Object.entries(u.otherMonths) : [];
+  const busy = app.busy ? "disabled" : "";
+  const yy = month.slice(0, 4), mo = month.slice(5);
+  return `<section class="panel" style="grid-column:1/-1">
+    <h2>Upload a department rota</h2>
+    <p class="muted small">One file with many doctors, for ${esc(monthLabel(month))}. Names in the file are matched to doctors' profile names (“Dr.” and the department in brackets are ignored). The Excel file you download from this site can be uploaded straight back.</p>
+    <div class="row">
+      <div class="field"><label for="dept-file">Department rota file (Excel or CSV)</label><input type="file" id="dept-file" accept=".csv,.tsv,.txt,.xlsx,.xls" ${busy}></div>
+    </div>
+    <div class="field"><label for="dept-paste">Or paste rows from a spreadsheet</label><textarea id="dept-paste" data-bind="deptPaste" placeholder="doctor,date,shift&#10;Dr. Amna,01/${mo}/${yy},Morning&#10;Dr. Bilal,01/${mo}/${yy},Night" ${busy}>${esc(state.deptPaste)}</textarea></div>
+    <div class="btns"><button class="btn" data-act="dept-read-paste" id="dept-read-paste" ${busy || !state.deptPaste.trim() ? "disabled" : ""}>Read pasted rows</button></div>
+    ${u ? `<div class="item">
+      <div class="head"><b>${esc(u.fileName)}</b><span class="muted small">${u.layout ? ids.length + " doctors · " + ids.reduce((n, id) => n + dutyList(u.byDoc[id]).length, 0) + " duties" : "layout not recognised"}</span></div>
+      ${!u.layout ? `<div class="note bad">Couldn't find the columns. Use one of the layouts below: the header row needs “doctor”, “date” and “shift”, or “date” with “morning / evening / night”, or “doctor” with day numbers 1, 2, 3 …</div>` : ""}
+      ${ids.length ? `<div class="boardwrap"><table class="mini"><thead><tr><th>Doctor</th><th>Department</th><th>Duties</th><th>Hours</th><th>Now on file</th></tr></thead><tbody>${ids.map(id => `<tr><td>${esc(docName(id))}</td><td>${esc(deptOfId(id))}</td><td>${dutyList(u.byDoc[id]).length}</td><td>${hoursOf(u.byDoc[id])}</td><td>${rosterOf(month, id) ? dutyList(onlyMonth(rosterOf(month, id), month)).length + " duties" : "nothing yet"}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      ${unmatched.length ? `<div class="note">No doctor found for: ${unmatched.slice(0, 12).map(([n, c]) => `<b>${esc(n)}</b> (${c})`).join(", ")}${unmatched.length > 12 ? " …" : ""}. Check the spelling matches their profile name, or that they've been approved.</div>` : ""}
+      ${u.ambiguous.length ? `<div class="note">More than one doctor is called ${u.ambiguous.map(n => `<b>${esc(n)}</b>`).join(", ")}. Enter their duties one by one instead.</div>` : ""}
+      ${u.skipped.length ? `<div class="note">Skipped ${u.skipped.length} row${u.skipped.length > 1 ? "s" : ""}: ${u.skipped.slice(0, 5).map(x => "row " + x.line + " (" + esc(x.reason) + ")").join("; ")}</div>` : ""}
+      ${other.length ? `<div class="note">${other.map(([k, n]) => n + " duties are in " + esc(monthLabel(k))).join(", ")}. Switch to that month and upload again for those.</div>` : ""}
+      ${ids.length ? `<div class="seg" role="group" aria-label="How to apply"><button data-act="dept-mode" data-mode="replace" aria-pressed="${state.deptMode === "replace"}" id="dm-replace">Replace these doctors' ${esc(monthLabel(month))}</button><button data-act="dept-mode" data-mode="merge" aria-pressed="${state.deptMode === "merge"}" id="dm-merge">Add to what they have</button></div>
+      <div class="btns"><button class="btn primary" data-act="dept-apply" id="dept-apply" ${busy}>${state.deptSaving || "Save rosters for " + ids.length + " doctor" + (ids.length > 1 ? "s" : "")}</button><button class="btn ghost" data-act="dept-drop" id="dept-drop" ${busy}>Discard file</button></div>
+      <p class="muted small">Only the doctors listed above are changed. Each one's update is recorded in the change log.</p>` : `<div class="btns"><button class="btn ghost" data-act="dept-drop" id="dept-drop2">Discard file</button></div>`}
+    </div>` : ""}
+    <details><summary>See the department file layouts</summary><div class="list" style="margin-top:10px">
+      <div><p class="small"><b>Layout 1:</b> one row per duty.</p><pre class="tpl" id="dtpl1">doctor,date,shift
+Dr. Amna,01/${mo}/${yy},Morning
+Dr. Bilal,01/${mo}/${yy},Night
+Dr. Amna,02/${mo}/${yy},M+E</pre></div>
+      <div><p class="small"><b>Layout 2:</b> one row per day, names under each shift (separate several names with commas).</p><pre class="tpl" id="dtpl2">date,morning,evening,night
+01/${mo}/${yy},Dr. Amna,Dr. Chen,Dr. Bilal
+02/${mo}/${yy},"Dr. Amna, Dr. Danish",,Dr. Chen</pre></div>
+      <div><p class="small"><b>Layout 3:</b> one row per doctor, day numbers across the top, M / E / N in the cells.</p><pre class="tpl" id="dtpl3">doctor,1,2,3,4,5,6,7
+Dr. Amna,M,M+E,,N,,M,
+Dr. Bilal,N,,E,,M,,N</pre></div>
+      <div class="btns"><button class="btn" data-act="copy" data-src="dtpl1" id="dcopy1">Copy layout 1</button><button class="btn" data-act="copy" data-src="dtpl2" id="dcopy2">Copy layout 2</button><button class="btn" data-act="copy" data-src="dtpl3" id="dcopy3">Copy layout 3</button></div>
+    </div></details>
+  </section>`;
 }
 function renderUpload(month) {
   const u = state.upload && state.upload.month === month ? state.upload : null;
@@ -961,7 +1074,7 @@ function describeReq(r) {
   if (r.type === "swap") return `${f} gives <b>${esc(fmtDuty(r.give))}</b> to ${t} and takes <b>${esc(fmtDuty(r.take))}</b>`;
   if (r.type === "cover") return `${f} hands <b>${esc(fmtDuty(r.give))}</b> over to ${t}`;
   if (r.type === "move") return `${f} moved <b>${esc(fmtDuty(r.give))}</b> to <b>${esc(fmtDuty(r.take))}</b>`;
-  if (r.type === "edit") return `${f}'s roster was ${r.first ? "uploaded" : "edited"}${r.by && r.by !== r.from ? " by " + esc(docName(r.by)) : ""}: ${r.added} added, ${r.removed} removed`;
+  if (r.type === "edit") return `${f}'s roster was ${r.first ? "uploaded" : "edited"}${r.by && r.by !== r.from ? " by " + esc(docName(r.by)) + (r.bulk ? " (department file)" : "") : ""}: ${r.added} added, ${r.removed} removed`;
   return "Change";
 }
 /* WhatsApp: free click-to-chat links. Pakistani numbers like 0300 1234567 become 923001234567. */
@@ -994,8 +1107,8 @@ function renderChanges() {
   const month = state.month, mine = me();
   const incoming = pendingForMe();
   const outgoing = state.requests.filter(r => r.status === "pending" && r.from === app.uid);
-  const history = state.requests.filter(r => r.month === month && r.status !== "pending");
-  const othersPending = state.requests.filter(r => r.status === "pending" && r.from !== app.uid && r.to !== app.uid && r.month === month);
+  const history = state.requests.filter(r => r.month === month && r.status !== "pending" && reqVisible(r));
+  const othersPending = state.requests.filter(r => r.status === "pending" && r.from !== app.uid && r.to !== app.uid && r.month === month && reqVisible(r));
   let html = `<div class="grid2">`;
   html += `<section class="panel"><h2>Waiting for your answer</h2>${incoming.length ? `<div class="list">${incoming.map(r => {
     const pv = previewWarnings(r);
@@ -1014,7 +1127,7 @@ function renderChanges() {
 function renderRequestForm(month) {
   const f = state.form, my = dutyList(onlyMonth(rosterOf(month, app.uid) || {}, month));
   const giveOpts = my.map(x => { const v = x.date + "|" + x.shift; return `<option value="${v}" ${f.give === v ? "selected" : ""}>${esc(fmtDuty(x))}</option>`; }).join("");
-  const colleagues = sortedDoctors().filter(d => d.uid !== app.uid);
+  const colleagues = sortedDoctors().filter(d => d.uid !== app.uid && (seesAll() || d.dept === myDept()));
   const theirs = f.colleague ? dutyList(onlyMonth(rosterOf(month, f.colleague) || {}, month)) : [];
   const req = buildReq();
   const pv = req ? previewWarnings(req) : null;
@@ -1143,6 +1256,34 @@ const actions = {
     toast(u.entries.length + " duties placed on the calendar. Check them, then press Save.");
   },
   "drop-upload"() { state.upload = null; render(); },
+  "dept-read-paste"() { state.deptUpload = deptParse("Pasted rows", parseCSV(state.deptPaste)); render(); },
+  "dept-drop"() { state.deptUpload = null; render(); },
+  "dept-mode"(b) { state.deptMode = b.dataset.mode; render(); },
+  async "dept-apply"() {
+    const u = state.deptUpload, month = state.month; if (!u || u.month !== month) return;
+    const ids = Object.keys(u.byDoc); let done = 0;
+    const ok = await guarded(async () => {
+      for (const id of ids) {
+        state.deptSaving = "Saving " + (done + 1) + " of " + ids.length + "…"; render();
+        const before = await store.getRoster(month, id);
+        let after = state.deptMode === "replace" ? {} : onlyMonth(before, month);
+        for (const x of dutyList(u.byDoc[id])) after = withDuty(after, x.date, x.shift);
+        const diff = diffShifts(onlyMonth(before, month), after);
+        if (!diff.added && !diff.removed) { done++; continue; }
+        await store.saveRoster(month, id, after);
+        await store.addRequest({ type: "edit", status: "done", month, from: id, added: diff.added, removed: diff.removed, first: !rosterOf(month, id), bulk: true, decidedAt: Date.now() });
+        delete state.drafts[draftKey(month, id)]; done++;
+      }
+    }, "Saved department rota for " + ids.length + " doctor" + (ids.length > 1 ? "s" : "") + ".");
+    state.deptSaving = "";
+    if (ok) { state.deptUpload = null; state.deptPaste = ""; } else if (done) toast("Saved " + done + " of " + ids.length + " doctors before the error. Upload again to finish.");
+    render();
+  },
+  async "msa-save"() {
+    const v = String(state.msaDraft == null ? ((state.contact && state.contact.msaWhatsApp) || "") : state.msaDraft).trim();
+    if (v && !waNumber(v)) { toast("That doesn't look like a WhatsApp number. Use the format +92 336 6033073."); return; }
+    await guarded(async () => { await dbCall(() => app.db.collection("settings").doc("contact").set({ msaWhatsApp: v, updatedAt: Date.now(), updatedBy: app.uid })); state.msaDraft = null; }, v ? "Saved. Doctors now see “Send my rota to the MSA”." : "Number removed.");
+  },
   "ann-dismiss"() { try { localStorage.setItem("ann-dismissed", String(state.ann && state.ann.updatedAt)); } catch (_) {} annShownKey = null; updateAnnouncement(); },
   async "ann-publish"() {
     const d = state.annDraft || {}, text = (d.text || "").trim();
@@ -1208,15 +1349,17 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
 });
-const LIVE_BINDS = new Set(["annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "form.note"]);
+const LIVE_BINDS = new Set(["msaDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "form.note"]);
 document.addEventListener("input", e => {
   const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;
   setBind(path, el.value);
   if (path === "pasteText") { const b = $("#read-paste"); if (b) b.disabled = !canAct() || !el.value.trim(); }
+  if (path === "deptPaste") { const b = $("#dept-read-paste"); if (b) b.disabled = app.busy || !el.value.trim(); }
 });
 document.addEventListener("change", async e => {
   const el = e.target;
   if (el.id === "file-in") { if (el.files && el.files[0]) await readFile(el.files[0]); return; }
+  if (el.id === "dept-file") { if (el.files && el.files[0]) await readDeptFile(el.files[0]); return; }
   const path = el.dataset && el.dataset.bind; if (!path) return;
   setBind(path, el.type === "checkbox" ? el.checked : el.value);
   if (path === "form.colleague") state.form.take = "";
@@ -1268,7 +1411,7 @@ function authMessage(err) {
 async function exportMonth() {
   const XLSX = await loadXLSX();
   const month = state.month, docs = monthDocs(month), dates = datesOf(month);
-  const ids = allRosterIds(month).filter(id => docs[id] || state.doctors[id]).sort((a, b) => docName(a).localeCompare(docName(b)));
+  const ids = allRosterIds(month).filter(id => (docs[id] || state.doctors[id]) && (seesAll() || deptOfId(id) === myDept())).sort((a, b) => docName(a).localeCompare(docName(b)));
   const deptOf = id => (state.doctors[id] && state.doctors[id].dept) || (app.allDoctors && app.allDoctors[id] && app.allDoctors[id].dept) || "";
   const withDept = id => docName(id) + (deptOf(id) ? " (" + deptOf(id) + ")" : "");
   const title = "Eastridge Primecare · Doctor's Duty Roster · " + monthLabel(month);
@@ -1278,7 +1421,7 @@ async function exportMonth() {
   for (const id of ids) { const sh = onlyMonth(docs[id] || {}, month); byDoc.push([docName(id), deptOf(id), ...dates.map(d => (sh[d] || []).join("+")), dutyList(sh).length, hoursOf(sh)]); }
   byDoc.push([], ["M = Morning 08:00–14:00 · E = Evening 14:00–20:00 · N = Night 20:00–08:00"]);
   const log = [[title + " · Change log"], [], ["When", "Status", "Change", "Note"]];
-  state.requests.filter(r => r.month === month).slice().reverse().forEach(r => log.push([when(r.decidedAt || r.createdAt), STATUS[r.status] || r.status, plainReq(r), r.note || r.reason || ""]));
+  state.requests.filter(r => r.month === month && reqVisible(r)).slice().reverse().forEach(r => log.push([when(r.decidedAt || r.createdAt), STATUS[r.status] || r.status, plainReq(r), r.note || r.reason || ""]));
   const wb = XLSX.utils.book_new();
   const add = (rows, name, cols) => { const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = cols.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
   add(byDay, "By day", [12, 6, 26, 40, 40, 40]);
@@ -1315,6 +1458,26 @@ function updateAnnouncement() {
 function subscribeAnnouncement() {
   app.db.collection("public").doc("announcement").onSnapshot(snap => { state.ann = snap.exists ? snap.data() : null; updateAnnouncement(); if (state.tab === "team" && app.phase === "app") render(); }, () => {});
 }
+function renderMsaForm() {
+  const cur = (state.contact && state.contact.msaWhatsApp) || "", v = state.msaDraft == null ? cur : state.msaDraft;
+  return `<section class="panel" style="grid-column:1/-1"><h2>Rota by WhatsApp</h2>
+    <p class="muted small">Doctors who can't upload their roster get a button to send it to this WhatsApp number. Only approved staff can see it.</p>
+    <div class="row"><div class="field"><label for="msa-wa">MSA WhatsApp number</label><input type="tel" id="msa-wa" data-bind="msaDraft" value="${esc(v)}" placeholder="+92 336 6033073" maxlength="20"></div>
+    <div class="btns"><button class="btn primary" data-act="msa-save" id="msa-save" ${app.busy ? "disabled" : ""}>Save number</button></div></div>
+    ${cur ? `<p class="small">Currently: <b>${esc(cur)}</b>${waNumber(cur) ? "" : ` <span class="note bad">This doesn't look like a valid number.</span>`}</p>` : `<p class="note">No number set yet, so doctors don't see the WhatsApp option.</p>`}
+  </section>`;
+}
+function renderMsaSend(month, id, work) {
+  const n = waNumber(state.contact && state.contact.msaWhatsApp);
+  if (!n || app.sample || id !== app.uid) return "";
+  const d = app.myDoc || {}, list = dutyList(work);
+  const lines = list.map(x => "• " + fmtDate(x.date) + ": " + SHIFT[x.shift].name);
+  const text = "Assalam o Alaikum, this is " + (d.name || "a doctor") + (d.dept ? " (" + d.dept + ")" : "") + ". My duty rota for " + monthLabel(month) + (list.length ? ":\n" + lines.join("\n") + "\n\nI couldn't upload it on the roster site myself." : " is attached. I couldn't upload it on the roster site myself.");
+  return `<section class="panel"><h2>Can't upload? Send your rota to the MSA</h2>
+    <p class="muted small">This opens WhatsApp with a message to the MSA office. ${list.length ? "The duties on your calendar above are listed in it." : "Attach your rota file or a clear photo of it in the chat."} The MSA will enter it for you.</p>
+    <div class="btns"><a class="btn wa" href="https://wa.me/${n}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener" id="msa-send"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2z"/></svg>Send my rota to the MSA on WhatsApp</a></div>
+  </section>`;
+}
 function renderAnnForm() {
   const cur = state.ann, d = state.annDraft || (state.annDraft = { text: cur && cur.active ? cur.text : "", level: (cur && cur.level) || "info", until: (cur && cur.active && cur.until) || "" });
   const live = annActive(cur), dis = app.busy ? "disabled" : "";
@@ -1339,14 +1502,23 @@ function loadXLSX() {
     document.head.appendChild(s);
   }));
 }
+async function fileRows(file) {
+  if (/\.xlsx?$/i.test(file.name)) {
+    const XLSX = await loadXLSX();
+    const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+  }
+  return parseCSV(await file.text());
+}
+function deptParse(fileName, rows) { return { fileName, rows, month: state.month, ...parseDeptRows(rows, state.month, sortedDoctors()) }; }
+async function readDeptFile(file) {
+  try { state.deptUpload = deptParse(file.name, await fileRows(file)); }
+  catch (err) { toast("Couldn't read " + file.name + ": " + (err.message || "unknown error") + ". Save it as CSV and try again."); }
+  render();
+}
 async function readFile(file) {
   try {
-    let rows;
-    if (/\.xlsx?$/i.test(file.name)) {
-      const XLSX = await loadXLSX();
-      const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
-      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
-    } else rows = parseCSV(await file.text());
+    const rows = await fileRows(file);
     state.upload = reparse({ fileName: file.name, rows });
     if (!state.upload.entries.length && !state.upload.skipped.length && !Object.keys(state.upload.otherMonths).length) toast("That file has no duties in it. Check it has a date column and a shift column.");
   } catch (err) { toast("Couldn't read " + file.name + ": " + (err.message || "unknown error") + ". Save it as CSV and try again."); }
@@ -1354,8 +1526,10 @@ async function readFile(file) {
 }
 
 /* ---------- start ---------- */
+let unsubContact = null;
 function startLive() {
   subscribeMonth();
+  if (!unsubContact) unsubContact = app.db.collection("settings").doc("contact").onSnapshot(snap => { state.contact = snap.exists ? snap.data() : null; render(); }, () => {});
   if (!unsubDoctors) unsubDoctors = app.db.collection("doctors").limit(1000).onSnapshot(snap => {
     const all = {}; snap.docs.forEach(x => { const v = x.data(); if (v && v.uid) all[v.uid] = v; });
     app.allDoctors = all;
@@ -1365,8 +1539,8 @@ function startLive() {
   }, onDbError);
 }
 function stopLive() {
-  [unsubDoctors, unsubRosters, unsubRequests].forEach(u => u && u());
-  unsubDoctors = unsubRosters = unsubRequests = null;
+  [unsubDoctors, unsubRosters, unsubRequests, unsubContact].forEach(u => u && u());
+  unsubDoctors = unsubRosters = unsubRequests = unsubContact = null; state.contact = null;
   state.doctors = {}; state.rosters = {}; state.requests = []; state.drafts = {}; state.upload = null; state.editFor = null;
   app.allDoctors = {}; app.liveDoctors = {};
 }

@@ -24,10 +24,12 @@ A website where doctors at Eastridge Primecare upload their monthly duty rosters
   - *Swap with a colleague* or *hand a duty over*: nothing changes until the colleague accepts, then both rosters update.
   - *Move your own duty* to another day or shift: takes effect immediately.
   - Every upload, edit, swap and move is kept in a change log.
-- **Hospital roster:** day-by-day board with Morning / Evening / Night columns, filterable by department, with Pakistan public holidays marked. Islamic holidays for 2027 are expected dates and may move a day with moon sighting.
+- **Hospital roster:** doctors see their own department only; coordinators (and MSA staff) see every department plus the summary numbers and the Checks tab. Day-by-day board with Morning / Evening / Night columns, filterable by department, with Pakistan public holidays marked. Islamic holidays for 2027 are expected dates and may move a day with moon sighting.
 - **Download month as Excel:** one file per month with three sheets (*By day*, *By doctor* with M/E/N codes and hours, and the *Change log*). Use it as a backup and for printing.
 - **WhatsApp nudges:** after sending a swap or hand-over request (or answering one), a button opens WhatsApp with a ready-written message to the colleague. Free; it uses the number in their profile.
 - **Announcement banner:** coordinators post a message from the Team tab (Notice, Important or Urgent, with an optional end date). It shows across the top of every page for everyone, including the sign-in page, and scrolls like a ticker when it's long. Doctors can hide Notice and Important banners; Urgent ones stay until removed.
+- **Department rota upload** (coordinators, under *Edit rosters*): one Excel/CSV file with many doctors. Accepts *doctor · date · shift* rows, a *By day* sheet (names under Morning / Evening / Night), or a *By doctor* grid (day numbers across, M/E/N in cells). The site's own Excel download can be uploaded straight back. Names are matched to profile names; unknown names are listed before anything is saved.
+- **Send rota to the MSA:** doctors who can't upload get a WhatsApp button that sends their rota to the MSA office. The number is set by a coordinator in the Team tab and stored in the database (`settings/contact`), readable only by approved staff.
 - **Closed months:** once a month is over (Pakistan time), doctors can no longer change it; coordinators still can.
 - **Departments:** ER · IPD-1 / Gynae · IPD-1 / NICU (Paediatrics) · IPD-2 (Medicine) / Dialysis · OT / IPD-4 (Surgery) · ICU / HDU · MSA.
 - **Checks:** uncovered shifts per department, anyone on duty more than 12 hours without a break (e.g. Night then Morning = 18 h), and doctors who haven't uploaded.
@@ -90,6 +92,8 @@ Send them the site link. Each doctor creates an account, then appears in your **
 | See rosters and the change log | ✗ | ✓ | ✓ |
 | Upload / edit rosters, swap, hand over, move (current and future months) | ✗ | ✓ | ✓ (for anyone) |
 | Change a month that's over | ✗ | ✗ | ✓ |
+| See other departments, summary numbers, Checks tab | ✗ | ✗ (own department only) | ✓ |
+| Upload a department rota file | ✗ | ✗ | ✓ |
 | Accept or decline a swap | ✗ | only if it was sent to them | ✓ |
 | Approve doctors, remove access | ✗ | ✗ | ✓ |
 | Make someone a coordinator | ✗ | ✗ | Firebase console only |
@@ -106,7 +110,7 @@ Approved doctors can technically write any doctor's roster, because accepting a 
 | `docs/` | Screenshots used in this README. |
 | `firebase-config.js` | Your Firebase project settings. These values are not secret; access is controlled by the rules. |
 | `firestore.rules` | Database security rules. Paste into the Firebase console, or deploy with `npm run deploy:rules`. |
-| `tests/rules.test.mjs` | 43 automated checks of the security rules (`npm install && npm run test:rules`, needs Java). |
+| `tests/rules.test.mjs` | 48 automated checks of the security rules (`npm install && npm run test:rules`, needs Java). |
 
 Before `firebase-config.js` is filled in, the site shows a **Connect a database** screen with an example month you can explore. Nothing is saved there.
 

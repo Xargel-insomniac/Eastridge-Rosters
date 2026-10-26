@@ -36,6 +36,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Contact settings (MSA WhatsApp number): approved staff read, coordinators write.
+    match /settings/{docId} {
+      allow read: if isMember();
+      allow write: if isAdmin() && docId == 'contact';
+    }
+
     match /admins/{userId} {
       allow get: if signedIn() && uid() == userId;
       allow list, write: if false;
