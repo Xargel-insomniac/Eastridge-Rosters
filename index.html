@@ -233,6 +233,16 @@ button.chip { font: inherit; font-size: 0.8rem; font-weight: 600; }
 .note.ok { color: var(--ok); background: var(--ok-bg); }
 .empty { padding: 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--r); display: grid; gap: 10px; justify-items: center; }
 details > summary { cursor: pointer; font-weight: 600; }
+.pop-back { position: fixed; inset: 0; z-index: 60; background: rgba(4, 18, 30, .55); animation: pop-fade .2s ease-out; }
+.pop { position: fixed; z-index: 61; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100% - 32px)); max-height: calc(100% - 48px); overflow: auto;
+  background: var(--surface); color: var(--ink); border-radius: 18px; padding: 22px 20px 18px; box-shadow: 0 24px 60px rgba(0,0,0,.35); display: grid; gap: 12px; animation: pop-in .28s cubic-bezier(.2,.8,.2,1.1); }
+.pop h2 { font-size: 1.2rem; }
+.pop-icon { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--brand-red); color: #ffffff; box-shadow: 0 0 0 6px rgba(229,38,31,.15); }
+.pop-list { display: grid; gap: 8px; }
+.pop-item { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; background: var(--sunk); }
+.pop .btns .btn { flex: 1; justify-content: center; padding-block: 11px; }
+@keyframes pop-in { from { opacity: 0; transform: translate(-50%, -46%) scale(.96); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@keyframes pop-fade { from { opacity: 0; } }
 .install { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
 .install img { border-radius: 10px; flex: none; }
 .install-text { flex: 1; min-width: 0; display: grid; font-size: 0.88rem; }
@@ -397,6 +407,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 
   <div id="main"></div>
   <div id="toast" role="status" hidden></div>
+  <div id="popup"></div>
 </main>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -899,6 +910,7 @@ function render() {
   try { if (fid && typeof ae.selectionStart === "number") sel = [ae.selectionStart, ae.selectionEnd]; } catch (_) {}
   const inApp = app.sample || app.phase === "app";
   if (inApp && state.tab === "changes") ensureLog();
+  renderSwapPopup(inApp);
   const large = !inApp || state.tab === "board";
   $("#masthead").classList.toggle("compact", !large);
   $("#who").innerHTML = renderWho();
@@ -1386,6 +1398,8 @@ const actions = {
     toast(u.entries.length + " duties placed on the calendar. Check them, then press Save.");
   },
   "drop-upload"() { state.upload = null; render(); },
+  "popup-review"() { markSeen(pendingForMe().map(r => r.id)); state.tab = "changes"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); },
+  "popup-later"() { markSeen(pendingForMe().map(r => r.id)); render(); toast("You can answer it any time under Swaps & changes."); },
   async install() { if (!installEvent) return; installEvent.prompt(); try { await installEvent.userChoice; } catch (_) {} installEvent = null; render(); },
   "install-dismiss"() { try { localStorage.setItem("install-dismissed", "1"); } catch (_) {} render(); },
   "dept-read-paste"() { state.deptUpload = deptParse("Pasted rows", parseCSV(state.deptPaste)); render(); },
@@ -1477,6 +1491,7 @@ const actions = {
 function resetForm() { state.form = { type: state.form.type, give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" }; }
 function reparse(u) { return { ...u, month: state.month, ...parseRows(u.rows, state.month) }; }
 
+document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#popup") && $("#popup").innerHTML) actions["popup-later"](); });
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
@@ -1562,6 +1577,36 @@ async function exportMonth() {
   add(byDay, "By day", [12, 6, 26, 40, 40, 40]);
   if (full) { add(byDoc, "By doctor", [26, 16, 24, ...dates.map(() => 6), 8, 8]); add(log, "Change log", [16, 14, 70, 30]); }
   XLSX.writeFile(wb, "Eastridge-Duty-Roster-" + month + ".xlsx");
+}
+
+/* ---------- swap request pop-up: shown once per request, on any page, so nobody misses it ---------- */
+let popupSeen;
+function seenSet() {
+  if (!popupSeen) { try { popupSeen = new Set(JSON.parse(sessionStorage.getItem("swap-popup-seen") || "[]")); } catch (_) { popupSeen = new Set(); } }
+  return popupSeen;
+}
+function markSeen(ids) { const set = seenSet(); ids.forEach(id => set.add(id)); try { sessionStorage.setItem("swap-popup-seen", JSON.stringify([...set])); } catch (_) {} }
+let popupKey = "";
+function renderSwapPopup(inApp) {
+  const el = $("#popup"); if (!el) return;
+  const waiting = inApp ? pendingForMe() : [];
+  if (state.tab === "changes") markSeen(waiting.map(r => r.id));
+  const fresh = waiting.filter(r => !seenSet().has(r.id));
+  const show = fresh.length && !document.body.classList.contains("welcoming") && !state.profileOpen;
+  const key = show ? fresh.map(r => r.id).join() + "|" + waiting.length : "";
+  if (key === popupKey) return; // don't redraw (and steal focus) unless something changed
+  popupKey = key;
+  if (!show) { el.innerHTML = ""; return; }
+  const n = waiting.length;
+  el.innerHTML = `<div class="pop-back" data-act="popup-later"></div>
+    <div class="pop" role="alertdialog" aria-modal="true" aria-labelledby="pop-title" aria-describedby="pop-list">
+      <div class="pop-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24"><path fill="currentColor" d="M7 7h11l-3.3-3.3 1.4-1.4L22 8l-5.9 5.7-1.4-1.4L18 9H7zm10 10H6l3.3 3.3-1.4 1.4L2 16l5.9-5.7 1.4 1.4L6 15h11z"/></svg></div>
+      <h2 id="pop-title">${n === 1 ? "A colleague is waiting for your answer" : n + " swap requests are waiting for your answer"}</h2>
+      <div class="pop-list" id="pop-list">${waiting.slice(0, 3).map(r => `<div class="pop-item"><span class="pill pending">${r.type === "swap" ? "Swap" : "Cover"}</span><p>${describeReq(r)}</p>${r.note ? `<p class="small muted">“${esc(r.note)}”</p>` : ""}</div>`).join("")}${n > 3 ? `<p class="small muted">…and ${n - 3} more</p>` : ""}</div>
+      <p class="small muted">Nothing changes on either roster until you accept.</p>
+      <div class="btns"><button class="btn primary" data-act="popup-review" id="popup-review">Review now</button><button class="btn" data-act="popup-later" id="popup-later">Later</button></div>
+    </div>`;
+  setTimeout(() => { const b = $("#popup-review"); if (b) b.focus(); }, 30);
 }
 
 /* ---------- phone app (install prompt + offline) ---------- */
@@ -1779,7 +1824,7 @@ function startWelcome() {
   const finish = () => {
     if (done) return; done = true; clearTimeout(greet); clearTimeout(auto);
     el.classList.add("lift"); document.body.classList.remove("welcoming");
-    setTimeout(() => { el.hidden = true; }, 850);
+    setTimeout(() => { el.hidden = true; render(); }, 850);
   };
   const auto = setTimeout(finish, 2700);
   el.addEventListener("click", finish);
