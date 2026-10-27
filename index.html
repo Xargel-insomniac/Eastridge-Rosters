@@ -421,7 +421,7 @@ const DESIG_SHORT = { "MO": "MO", "SMO": "SMO", "Registrar": "Reg", "Senior Regi
 /* Every doctor states a designation; MSA / admin staff don't need one. */
 const needsDesignation = d => !!d && d.dept !== "MSA" && !DESIGNATIONS.includes(d.designation);
 const desigOf = id => { const d = state.doctors[id] || (app.allDoctors && app.allDoctors[id]); return (d && d.designation) || ""; };
-const DEPARTMENTS = ["ER", "IPD-1 / Gynae", "IPD-1 / NICU (Paediatrics)", "IPD-2 (Medicine) / Dialysis", "OT / IPD-4 (Surgery)", "ICU / HDU", "MSA"];
+const DEPARTMENTS = ["ER", "IPD-1 / Gynae", "IPD-1 / NICU (Paediatrics)", "IPD-2 (Medicine) / Dialysis", "OT / IPD-4 (Surgery)", "ICU / HDU", "Anaesthesia", "Radiology", "MSA"];
 /* Pakistan public holidays. 2026 from the Cabinet Division notification (Eid ul Adha as revised);
    2027 Islamic holidays are expected dates and move with moon sighting. */
 const HOLIDAYS = {

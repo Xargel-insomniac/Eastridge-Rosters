@@ -34,7 +34,7 @@ A website where doctors at Eastridge Primecare upload their monthly duty rosters
 - **Send rota to the MSA:** doctors who can't upload get a WhatsApp button that sends their rota to the MSA office. The number is set by a coordinator in the Team tab and stored in the database (`settings/contact`), readable only by approved staff.
 - **Closed months:** once a month is over (Pakistan time), doctors can no longer change it; coordinators still can.
 - **Designation** (required for doctors): MO, SMO, Registrar or Senior Registrar. Shown next to names on the board (MO / SMO / Reg / SR), in the Team tab, swap lists and the Excel download. Doctors who signed up before this was added are asked to fill it in.
-- **Departments:** ER · IPD-1 / Gynae · IPD-1 / NICU (Paediatrics) · IPD-2 (Medicine) / Dialysis · OT / IPD-4 (Surgery) · ICU / HDU · MSA.
+- **Departments:** ER · IPD-1 / Gynae · IPD-1 / NICU (Paediatrics) · IPD-2 (Medicine) / Dialysis · OT / IPD-4 (Surgery) · ICU / HDU · Anaesthesia · Radiology · MSA.
 - **Checks:** uncovered shifts per department, anyone on duty more than 12 hours without a break (e.g. Night then Morning = 18 h), and doctors who haven't uploaded.
 - **Team** (coordinators only): approve or reject sign-ups, remove access, and mark staff who don't do duties (e.g. MSA) as *not on the duty roster*. They keep access but stay off the board, the checks and swap lists.
 
