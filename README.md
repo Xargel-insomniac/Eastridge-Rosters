@@ -141,4 +141,6 @@ date,morning,evening,night
 
 ## Free-tier limits
 
+Each visit downloads only what's needed: doctors' profiles, the month on screen (coordinators also get last month), and swap requests waiting for an answer. The change log loads only when *Swaps & changes* is opened. With 60 doctors that is about 126 records per doctor visit (185 for a coordinator), against Firebase's free allowance of 50,000 reads a day.
+
 Firebase's free Spark plan allows 50,000 reads and 20,000 writes per day, which is plenty for a hospital department. No credit card is needed.

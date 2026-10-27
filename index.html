@@ -681,7 +681,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", pending: [], ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -718,24 +718,58 @@ function onDbError(e) {
   else if (e && e.code === "unavailable") setTimeout(subscribeMonth, 3000);
   render();
 }
+/* What each visit downloads, kept small for Firebase's free daily allowance:
+   - rosters: the month on screen for everyone; last month only for coordinators (12-hour checks across the 1st),
+     plus the doctor's own last month, plus everyone's last month in the hours before 08:00 on the 1st (last night's team);
+   - swap requests waiting for an answer (doctors: only those sent to them);
+   - the full change log only once someone opens Swaps & changes. */
+let unsubPrevOwn = null, unsubPending = null, logMonth = null, rosterSnap = {}, prevOwn = null;
+function rosterMonths() {
+  const prev = addMonths(state.month, -1);
+  if (seesAll()) return [prev, state.month];
+  return state.month === currentMonthKey() && shiftNow().cur.date.startsWith(prev + "-") ? [prev, state.month] : [state.month];
+}
+function applyRosters() {
+  const r = {}; for (const m in rosterSnap) r[m] = { ...rosterSnap[m] };
+  if (prevOwn && !(r[prevOwn.month] && r[prevOwn.month][app.uid])) (r[prevOwn.month] ||= {})[app.uid] = prevOwn.shifts;
+  state.rosters = r;
+}
 function subscribeMonth() {
   if (!app.db || app.phase !== "app") return;
   if (unsubRosters) unsubRosters();
-  if (unsubRequests) unsubRequests();
-  const ms = [addMonths(state.month, -1), state.month];
+  if (unsubPrevOwn) { unsubPrevOwn(); unsubPrevOwn = null; }
+  if (unsubRequests && logMonth !== state.month) { unsubRequests(); unsubRequests = null; logMonth = null; state.requests = []; }
+  const ms = rosterMonths(), prev = addMonths(state.month, -1);
+  rosterSnap = {}; prevOwn = null;
   unsubRosters = app.db.collection("rosters").where("month", "in", ms).onSnapshot({ includeMetadataChanges: true }, snap => {
     if (app.sample) return;
     noteConnection(snap.metadata.fromCache);
     const r = {};
     snap.docs.forEach(d => { const x = d.data(); if (x && x.month && x.doctorId) (r[x.month] ||= {})[x.doctorId] = x.shifts || {}; });
-    state.rosters = r; app.loading = false; render();
+    rosterSnap = r; applyRosters(); app.loading = false; render();
   }, onDbError);
-  unsubRequests = app.db.collection("requests").where("month", "in", ms).limit(1000).onSnapshot(snap => {
+  if (!ms.includes(prev) && app.uid) unsubPrevOwn = app.db.collection("rosters").doc(prev + "_" + safeId(app.uid)).onSnapshot(snap => {
+    if (app.sample) return;
+    prevOwn = snap.exists ? { month: prev, shifts: snap.data().shifts || {} } : null; applyRosters(); render();
+  }, () => {});
+}
+function subscribePending() {
+  if (unsubPending) unsubPending();
+  let q = app.db.collection("requests").where("status", "==", "pending");
+  if (!app.canEdit) q = q.where("to", "==", app.uid);
+  unsubPending = q.limit(300).onSnapshot(snap => { if (app.sample) return; state.pending = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, onDbError);
+}
+function ensureLog() {
+  if (app.sample || !app.db || app.phase !== "app" || (unsubRequests && logMonth === state.month)) return;
+  if (unsubRequests) unsubRequests();
+  logMonth = state.month;
+  unsubRequests = app.db.collection("requests").where("month", "in", [addMonths(state.month, -1), state.month]).limit(1000).onSnapshot(snap => {
     if (app.sample) return;
     state.requests = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     render();
   }, onDbError);
 }
+const pendingList = () => app.sample ? state.requests.filter(r => r.status === "pending") : state.pending;
 async function dbCall(fn) {
   try { return await fn(); }
   catch (e) {
@@ -857,13 +891,14 @@ function flaggedSlots(id, month) {
   }
   return set;
 }
-function pendingForMe() { return state.requests.filter(r => r.status === "pending" && r.to === app.uid && (r.type === "swap" || r.type === "cover")); }
+function pendingForMe() { return pendingList().filter(r => r.status === "pending" && r.to === app.uid && (r.type === "swap" || r.type === "cover")); }
 
 /* ---------- render ---------- */
 function render() {
   const ae = document.activeElement, fid = ae && ae.id; let sel = null;
   try { if (fid && typeof ae.selectionStart === "number") sel = [ae.selectionStart, ae.selectionEnd]; } catch (_) {}
   const inApp = app.sample || app.phase === "app";
+  if (inApp && state.tab === "changes") ensureLog();
   const large = !inApp || state.tab === "board";
   $("#masthead").classList.toggle("compact", !large);
   $("#who").innerHTML = renderWho();
@@ -988,7 +1023,7 @@ function renderBoard() {
       <div class="stat okc"><b>${uploaded}<span class="muted" style="font-size:.9rem"> / ${doctors.length}</span></b><span>rosters uploaded</span></div>
       <button class="statlink stat ${a.gaps.length ? "bad" : ""}" data-act="tab" data-tab="checks" id="st-gaps"><b>${a.gaps.length}</b><span>uncovered shifts</span></button>
       <button class="statlink stat ${a.stretches.length ? "warn" : ""}" data-act="tab" data-tab="checks" id="st-str"><b>${a.stretches.length}</b><span>over ${MAX_STRETCH} h without a break</span></button>
-      <button class="statlink stat" data-act="tab" data-tab="changes" id="st-req"><b>${state.requests.filter(r => r.status === "pending" && r.month === month).length}</b><span>swaps waiting</span></button>
+      <button class="statlink stat" data-act="tab" data-tab="changes" id="st-req"><b>${pendingList().filter(r => r.month === month).length}</b><span>swaps waiting</span></button>
     </div>` : ""}
     <div class="filters">
       ${seesAll() ? `<label class="check" for="f-dept">Department <select id="f-dept" data-bind="dept"><option value="all">All departments</option>${deptList().map(d => `<option ${state.dept === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></label>` : `<label class="check" for="f-dept">Department <select id="f-dept" data-bind="docDept">${[myDept(), ...deptList().filter(d => d !== myDept() && d !== "MSA")].filter(Boolean).map(d => `<option value="${esc(d)}" ${deptSel === d ? "selected" : ""}>${esc(d)}${d === myDept() ? " (yours)" : ""}</option>`).join("")}<option value="all" ${deptSel === "all" ? "selected" : ""}>All departments (master rota)</option></select></label>`}
@@ -1419,14 +1454,14 @@ const actions = {
         await store.addRequest({ ...req, status: "done", decidedAt: Date.now() });
       }, "Moved to " + fmtDuty(req.take) + ".");
     } else {
-      const dup = state.requests.find(r => r.status === "pending" && r.from === app.uid && r.give.date === req.give.date && r.give.shift === req.give.shift);
+      const dup = [...pendingList(), ...state.requests].find(r => r.status === "pending" && r.from === app.uid && r.give.date === req.give.date && r.give.shift === req.give.shift);
       if (dup) { toast("You already have a waiting request for this duty. Cancel it first to send a new one."); return; }
       await guarded(() => store.addRequest({ ...req, status: "pending" }), "Request sent. Use the WhatsApp button under “Sent and waiting” to let " + docName(req.to) + " know.");
     }
     resetForm(); render();
   },
   async accept(b) {
-    const r = state.requests.find(x => x.id === b.dataset.id); if (!r || r.to !== app.uid) return;
+    const r = [...pendingList(), ...state.requests].find(x => x.id === b.dataset.id); if (!r || r.to !== app.uid) return;
     await guarded(async () => {
       const A = await store.getRoster(r.month, r.from), B = await store.getRoster(r.month, r.to);
       const plan = planChange(r, A, B, { from: docName(r.from), to: docName(r.to) });
@@ -1520,7 +1555,8 @@ async function exportMonth() {
   for (const id of ids) { const sh = onlyMonth(docs[id] || {}, month); byDoc.push([docName(id), desigOf(id), deptOf(id), ...dates.map(d => (sh[d] || []).join("+")), dutyList(sh).length, hoursOf(sh)]); }
   byDoc.push([], ["M = Morning 08:00–14:00 · E = Evening 14:00–20:00 · N = Night 20:00–08:00"]);
   const log = [[title + " · Change log"], [], ["When", "Status", "Change", "Note"]];
-  state.requests.filter(r => r.month === month && reqVisible(r)).slice().reverse().forEach(r => log.push([when(r.decidedAt || r.createdAt), STATUS[r.status] || r.status, plainReq(r), r.note || r.reason || ""]));
+  const logRows = app.sample || logMonth === month ? state.requests : (await app.db.collection("requests").where("month", "==", month).limit(1000).get()).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  logRows.filter(r => r.month === month && reqVisible(r)).slice().reverse().forEach(r => log.push([when(r.decidedAt || r.createdAt), STATUS[r.status] || r.status, plainReq(r), r.note || r.reason || ""]));
   const wb = XLSX.utils.book_new();
   const add = (rows, name, cols) => { const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = cols.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
   add(byDay, "By day", [12, 6, 26, 40, 40, 40]);
@@ -1702,6 +1738,7 @@ async function readFile(file) {
 let unsubContact = null;
 function startLive() {
   subscribeMonth();
+  subscribePending();
   if (!unsubContact) unsubContact = app.db.collection("settings").doc("contact").onSnapshot(snap => { state.contact = snap.exists ? snap.data() : null; render(); }, () => {});
   if (!unsubDoctors) unsubDoctors = app.db.collection("doctors").limit(1000).onSnapshot(snap => {
     const all = {}; snap.docs.forEach(x => { const v = x.data(); if (v && v.uid) all[v.uid] = v; });
@@ -1712,8 +1749,9 @@ function startLive() {
   }, onDbError);
 }
 function stopLive() {
-  [unsubDoctors, unsubRosters, unsubRequests, unsubContact].forEach(u => u && u());
-  unsubDoctors = unsubRosters = unsubRequests = unsubContact = null; state.contact = null;
+  [unsubDoctors, unsubRosters, unsubRequests, unsubContact, unsubPending, unsubPrevOwn].forEach(u => u && u());
+  unsubDoctors = unsubRosters = unsubRequests = unsubContact = unsubPending = unsubPrevOwn = null; state.contact = null;
+  state.pending = []; logMonth = null; rosterSnap = {}; prevOwn = null;
   state.doctors = {}; state.rosters = {}; state.requests = []; state.drafts = {}; state.upload = null; state.editFor = null;
   app.allDoctors = {}; app.liveDoctors = {};
 }
@@ -1774,6 +1812,7 @@ function init() {
     app.phase = "starting"; render();
     try { app.isAdmin = (await app.db.collection("admins").doc(u.uid).get()).exists; } catch (_) { app.isAdmin = false; }
     app.canEdit = app.isAdmin;
+    if (app.phase === "app") { subscribeMonth(); subscribePending(); }
     unsubMe = app.db.collection("doctors").doc(u.uid).onSnapshot(snap => { app.myDoc = snap.exists ? snap.data() : null; decidePhase(); },
       e => { app.phase = "setup"; app.setupError = "Couldn't read your account (" + ((e && (e.code || e.message)) || "unknown error") + "). Check that the Firestore rules from the README are published."; render(); });
   });
