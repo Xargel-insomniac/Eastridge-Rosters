@@ -400,8 +400,26 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   .bc > .chip { margin: 0 4px 4px 0; }
   .chip { white-space: normal; overflow: visible; font-size: 0.82rem; padding: 3px 9px; }
   .chip small { display: inline; }
-  .clock { margin-left: 0; }
   .masthead.compact .ck-sub { display: none; }
+  .masthead:not(.compact) { min-height: 330px; }
+  .masthead:not(.compact) .mast-top { flex-wrap: nowrap; align-items: flex-start; padding-block: 14px 0; gap: 10px; }
+  .masthead:not(.compact) .logo { height: 44px; }
+  .masthead:not(.compact) .logo-plate { padding: 7px 10px; border-radius: 10px; }
+  .masthead:not(.compact) .clock { margin-left: auto; padding: 5px 12px 5px 5px; gap: 8px; flex: none; }
+  .masthead:not(.compact) .dial { width: 34px; height: 34px; }
+  .masthead:not(.compact) .ck-time { font-size: 1rem; }
+  .masthead:not(.compact) .ck-sub { font-size: .66rem; }
+  .ck-date { display: none; }
+  .masthead:not(.compact) .who { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: 12px; z-index: 1;
+    background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0; border-radius: 0; font-size: .8rem; gap: 2px 4px; text-shadow: 0 1px 3px rgba(0,0,0,.5); flex-wrap: nowrap; }
+  .masthead:not(.compact) .who > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .masthead:not(.compact) .who .btn.ghost { flex: none; }
+  .masthead:not(.compact) .who .btn.ghost { padding: 2px 6px; font-size: .8rem; }
+  .masthead:not(.compact) .who .pill { font-size: .6rem; }
+  .masthead:not(.compact) .hero-copy { padding-block: 8px 46px; gap: 4px; }
+  .masthead:not(.compact) .hero-copy p { display: none; }
+  .masthead:not(.compact) .hero-copy h1 { font-size: 1.85rem; }
+  .masthead::before { background: linear-gradient(180deg, rgba(4,31,52,.6) 0%, rgba(4,31,52,0) 30%), linear-gradient(0deg, rgba(4,31,52,.95) 0%, rgba(4,31,52,.6) 32%, rgba(4,31,52,0) 60%); }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 </style>
@@ -441,7 +459,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
         <line id="ck-s" class="hand s" x1="20" y1="23" x2="20" y2="5"/>
         <circle class="hub" cx="20" cy="20" r="1.7"/>
       </svg>
-      <div class="ck-text"><span class="ck-time"><span id="ck-hm">--:--</span><span class="ck-sec" id="ck-sec">:--</span> <span id="ck-ap"></span></span><span class="ck-sub"><span class="ck-dot" id="ck-dot"></span><span id="ck-sub">Pakistan time</span></span></div>
+      <div class="ck-text"><span class="ck-time"><span id="ck-hm">--:--</span><span class="ck-sec" id="ck-sec">:--</span> <span id="ck-ap"></span></span><span class="ck-sub"><span class="ck-dot" id="ck-dot"></span><span class="ck-date" id="ck-date"></span><span id="ck-sub">Pakistan time</span></span></div>
     </div>
     <div class="who" id="who"></div>
   </div>
@@ -1799,7 +1817,8 @@ async function exportMonth() {
     document.getElementById("ck-ap").textContent = h < 12 ? "am" : "pm";
     const code = h >= 8 && h < 14 ? "M" : h >= 14 && h < 20 ? "E" : "N", endH = code === "M" ? 14 : code === "E" ? 20 : 8;
     const left = ((endH * 60 - (h * 60 + m)) + 1440) % 1440 || 1440;
-    document.getElementById("ck-sub").textContent = DOW[t.getUTCDay()] + " " + t.getUTCDate() + " " + MON_SHORT[t.getUTCMonth()] + " · " + SHIFT[code].name + " shift · " + (left >= 60 ? Math.floor(left / 60) + "h " : "") + (left % 60) + "m left";
+    document.getElementById("ck-date").textContent = DOW[t.getUTCDay()] + " " + t.getUTCDate() + " " + MON_SHORT[t.getUTCMonth()] + " · ";
+    document.getElementById("ck-sub").textContent = SHIFT[code].name + " shift · " + (left >= 60 ? Math.floor(left / 60) + "h " : "") + (left % 60) + "m left";
     document.getElementById("clock").dataset.shift = code;
   }
   tick(); setInterval(tick, 1000);
