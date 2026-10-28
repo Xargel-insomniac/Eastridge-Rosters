@@ -46,6 +46,18 @@ await t("approved doctor reads the MSA number", as("amy").doc("settings/contact"
 await t("pending user can't read the MSA number", as("pat").doc("settings/contact").get(), false);
 await t("signed-out visitor can't read the MSA number", as(null).doc("settings/contact").get(), false);
 await t("doctor can't change the MSA number", as("amy").doc("settings/contact").set({ msaWhatsApp: "+920000000000" }), false);
+await t("doctor can't read the whole change log", as("amy").collection("requests").where("month", "in", ["2026-10", "2026-11"]).get(), false);
+await t("doctor reads requests sent to them", as("ben").collection("requests").where("status", "==", "pending").where("to", "==", "ben").get(), true);
+await t("doctor reads requests they sent", as("amy").collection("requests").where("status", "==", "pending").where("from", "==", "amy").get(), true);
+await t("doctor can't read other doctors' requests", as("ben").collection("requests").where("status", "==", "pending").where("from", "==", "amy").get(), false);
+await t("coordinator reads the whole change log", as("boss").collection("requests").where("month", "in", ["2026-10", "2026-11"]).get(), true);
+const EXT = (status, by) => ({ doctorId: "amy", month: "2026-11", from: { date: "2026-11-03", shift: "N" }, to: { date: "2026-11-04", shift: "M" }, hours: 18, key: "2026-11-03N>2026-11-04M", status, reason: "short-staffed", requestedBy: by, createdAt: 1 });
+await t("doctor asks for extended-duty approval", as("amy").doc("extended/2026-11_amy_2026-11-03N").set(EXT("pending", "amy")), true);
+await t("doctor can't approve their own extended duty", as("amy").doc("extended/2026-11_amy_2026-11-03N").set(EXT("approved", "amy")), false);
+await t("doctor reads their own extended-duty status", as("amy").collection("extended").where("doctorId", "==", "amy").get(), true);
+await t("doctor can't read colleagues' extended duties", as("ben").collection("extended").where("doctorId", "==", "amy").get(), false);
+await t("coordinator approves an extended duty", as("boss").doc("extended/2026-11_amy_2026-11-03N").set(EXT("approved", "boss")), true);
+await t("coordinator lists pending approvals", as("boss").collection("extended").where("status", "==", "pending").get(), true);
 await t("approved can't approve others", as("amy").doc("doctors/pat").update({ approved: true }), false);
 await t("approved can't read admins of others", as("amy").doc("admins/boss").get(), false);
 await t("admin reads own admin doc", as("boss").doc("admins/boss").get(), true);

@@ -233,11 +233,46 @@ button.chip { font: inherit; font-size: 0.8rem; font-weight: 600; }
 .note.ok { color: var(--ok); background: var(--ok-bg); }
 .empty { padding: 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--r); display: grid; gap: 10px; justify-items: center; }
 details > summary { cursor: pointer; font-weight: 600; }
+/* clock */
+.clock { display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px; background: rgba(4,31,52,.45); border: 1px solid rgba(255,255,255,.18); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #ffffff; margin-left: auto; }
+.dial { width: 42px; height: 42px; flex: none; }
+.dial .face { fill: rgba(255,255,255,.95); stroke: var(--brand-red); stroke-width: 1.6; }
+.dial .ticks line { stroke: #041f34; stroke-width: 1; stroke-linecap: round; }
+.dial .hand { stroke-linecap: round; transform-origin: 20px 20px; }
+.dial .hand.h { stroke: #041f34; stroke-width: 2.4; }
+.dial .hand.m { stroke: #041f34; stroke-width: 1.6; }
+.dial .hand.s { stroke: var(--brand-red); stroke-width: .9; transition: transform .25s cubic-bezier(.4,2.2,.6,1); }
+.dial .hub { fill: var(--brand-red); }
+.ck-text { display: grid; line-height: 1.15; }
+.ck-time { font-family: var(--f-display); font-weight: 700; font-size: 1.15rem; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.ck-sec { opacity: .7; font-size: .85em; }
+.ck-sub { font-size: .72rem; color: rgba(255,255,255,.82); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.ck-dot { width: 7px; height: 7px; border-radius: 50%; background: #f2b54a; box-shadow: 0 0 0 0 rgba(242,181,74,.7); animation: ck-pulse 2s infinite; }
+.clock[data-shift="E"] .ck-dot { background: #f38c72; } .clock[data-shift="N"] .ck-dot { background: #a2a5f6; }
+@keyframes ck-pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.5); } 70% { box-shadow: 0 0 0 7px rgba(255,255,255,0); } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
+@media (min-width: 641px) {
+  /* big screens: the clock sits in the photo's bottom-right corner, beside the headline */
+  .masthead:not(.compact) .clock { position: absolute; right: max(16px, calc((100vw - 1080px) / 2 + 16px)); bottom: 32px; padding: 10px 18px 10px 10px; gap: 14px; animation: rise .8s .3s cubic-bezier(.2,.7,.2,1) both; }
+  .masthead:not(.compact) .dial { width: 58px; height: 58px; }
+  .masthead:not(.compact) .ck-time { font-size: 1.6rem; }
+  .masthead:not(.compact) .ck-sub { font-size: .78rem; }
+}
+.masthead.compact .clock { background: transparent; border-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--ink); padding: 0; }
+.masthead.compact .dial { width: 32px; height: 32px; }
+.masthead.compact .ck-time { font-size: 1rem; }
+.masthead.compact .ck-sub { color: var(--muted); }
+/* master rota: department groups */
+.dgrp { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; width: 100%; }
+.dgrp + .dgrp { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--line); }
+.dg { width: 100%; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.bc .none { color: var(--muted); padding: 2px 4px; }
 .pop-back { position: fixed; inset: 0; z-index: 60; background: rgba(4, 18, 30, .55); animation: pop-fade .2s ease-out; }
 .pop { position: fixed; z-index: 61; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100% - 32px)); max-height: calc(100% - 48px); overflow: auto;
   background: var(--surface); color: var(--ink); border-radius: 18px; padding: 22px 20px 18px; box-shadow: 0 24px 60px rgba(0,0,0,.35); display: grid; gap: 12px; animation: pop-in .28s cubic-bezier(.2,.8,.2,1.1); }
 .pop h2 { font-size: 1.2rem; }
 .wa-icon { background: #25d366; box-shadow: 0 0 0 6px rgba(37,211,102,.18); }
+.ok-icon { background: var(--ok); box-shadow: 0 0 0 6px rgba(23,112,74,.18); }
+.chip.flag-ok::before { content: "✓"; display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--ok); color: var(--surface); font-size: 0.6rem; font-weight: 800; }
 .pop .btn.wa-go { background: #128c4b; border-color: #128c4b; color: #ffffff; text-decoration: none; }
 .pop-icon { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--brand-red); color: #ffffff; box-shadow: 0 0 0 6px rgba(229,38,31,.15); }
 .pop-list { display: grid; gap: 8px; }
@@ -350,6 +385,24 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   .cal { gap: 2px; }
   .cday { padding: 2px; }
 }
+/* Phones: each day becomes a card with Morning / Evening / Night stacked full width, so names aren't cut off. */
+@media (max-width: 640px) {
+  .boardwrap { overflow: visible; border: 0; background: transparent; }
+  .board { display: block; }
+  .board > .brow:first-child { display: none; }
+  .brow { display: block; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-bottom: 10px; overflow: hidden; }
+  .bd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 8px 12px; font-size: 0.85rem; }
+  .bd b { font-size: 1.15rem; }
+  .bd .hname { margin: 0; font-size: 0.72rem; }
+  .bc { display: block; border-left: 0; padding: 8px 12px; }
+  .bc::before { content: attr(data-label); display: block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
+  .bc.s-M::before { color: var(--m); } .bc.s-E::before { color: var(--e); } .bc.s-N::before { color: var(--n); }
+  .bc > .chip { margin: 0 4px 4px 0; }
+  .chip { white-space: normal; overflow: visible; font-size: 0.82rem; padding: 3px 9px; }
+  .chip small { display: inline; }
+  .clock { margin-left: 0; }
+  .masthead.compact .ck-sub { display: none; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -378,6 +431,17 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
     <div class="brand">
       <span class="logo-plate"><img class="logo" src="assets/eastridge-logo.png" alt="Eastridge Primecare, a project of FFH" width="502" height="207"></span>
       <span class="bar-title">Doctor's Duty Roster</span>
+    </div>
+    <div class="clock" id="clock" role="timer" aria-label="Time in Pakistan">
+      <svg class="dial" viewBox="0 0 40 40" aria-hidden="true">
+        <circle class="face" cx="20" cy="20" r="18.5"/>
+        <g class="ticks"></g>
+        <line id="ck-h" class="hand h" x1="20" y1="20" x2="20" y2="11"/>
+        <line id="ck-m" class="hand m" x1="20" y1="20" x2="20" y2="6.5"/>
+        <line id="ck-s" class="hand s" x1="20" y1="23" x2="20" y2="5"/>
+        <circle class="hub" cx="20" cy="20" r="1.7"/>
+      </svg>
+      <div class="ck-text"><span class="ck-time"><span id="ck-hm">--:--</span><span class="ck-sec" id="ck-sec">:--</span> <span id="ck-ap"></span></span><span class="ck-sub"><span class="ck-dot" id="ck-dot"></span><span id="ck-sub">Pakistan time</span></span></div>
     </div>
     <div class="who" id="who"></div>
   </div>
@@ -695,7 +759,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", pending: [], waPrompt: null, ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -751,6 +815,7 @@ function applyRosters() {
 function subscribeMonth() {
   if (!app.db || app.phase !== "app") return;
   if (unsubRosters) unsubRosters();
+  subscribeExtended();
   if (unsubPrevOwn) { unsubPrevOwn(); unsubPrevOwn = null; }
   if (unsubRequests && logMonth !== state.month) { unsubRequests(); unsubRequests = null; logMonth = null; state.requests = []; }
   const ms = rosterMonths(), prev = addMonths(state.month, -1);
@@ -769,12 +834,18 @@ function subscribeMonth() {
 }
 function subscribePending() {
   if (unsubPending) unsubPending();
-  let q = app.db.collection("requests").where("status", "==", "pending");
-  if (!app.canEdit) q = q.where("to", "==", app.uid);
-  unsubPending = q.limit(300).onSnapshot(snap => { if (app.sample) return; state.pending = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, onDbError);
+  // Coordinators see every waiting request; a doctor only sees requests sent to them or by them.
+  const got = {}, base = app.db.collection("requests").where("status", "==", "pending");
+  const listen = (q, k) => q.limit(300).onSnapshot(snap => {
+    if (app.sample) return;
+    got[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const all = {}; Object.values(got).flat().forEach(r => (all[r.id] = r)); state.pending = Object.values(all); render();
+  }, onDbError);
+  const subs = app.canEdit ? [listen(base, "all")] : [listen(base.where("to", "==", app.uid), "to"), listen(base.where("from", "==", app.uid), "from")];
+  unsubPending = () => subs.forEach(u => u());
 }
 function ensureLog() {
-  if (app.sample || !app.db || app.phase !== "app" || (unsubRequests && logMonth === state.month)) return;
+  if (app.sample || !app.canEdit || !app.db || app.phase !== "app" || (unsubRequests && logMonth === state.month)) return; // the change log is for coordinators only
   if (unsubRequests) unsubRequests();
   logMonth = state.month;
   unsubRequests = app.db.collection("requests").where("month", "in", [addMonths(state.month, -1), state.month]).limit(1000).onSnapshot(snap => {
@@ -783,6 +854,35 @@ function ensureLog() {
     render();
   }, onDbError);
 }
+/* Extended duties (more than 12 hours straight) need the coordinator's approval. One record per stretch, keyed by where it starts. */
+let unsubExt = null;
+const extKey = st => st.from.date + st.from.shift + ">" + st.to.date + st.to.shift;
+const extId = (uid, st) => st.from.date.slice(0, 7) + "_" + safeId(uid) + "_" + st.from.date + st.from.shift;
+function extStatus(uid, st) { const r = state.extended[extId(uid, st)]; return r && r.key === extKey(st) ? r.status : ""; }
+const needsApproval = (uid, shifts, month) => longStretches(shifts, month).filter(st => !["approved", "pending"].includes(extStatus(uid, st)));
+function newStretches(before, after, month) { const had = new Set(longStretches(before, month).map(extKey)); return longStretches(after, month).filter(st => !had.has(extKey(st))); }
+function subscribeExtended() {
+  if (unsubExt) unsubExt();
+  if (!app.db || app.sample) return;
+  const got = {}, col = app.db.collection("extended");
+  const listen = (q, k) => q.limit(500).onSnapshot(snap => {
+    got[k] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const all = {}; Object.values(got).flat().forEach(r => (all[r.id] = r)); state.extended = all; render();
+  }, () => {});
+  const subs = app.canEdit ? [listen(col.where("status", "==", "pending"), "p"), listen(col.where("month", "in", [addMonths(state.month, -1), state.month]), "m")]
+    : [listen(col.where("doctorId", "==", app.uid), "mine")];
+  unsubExt = () => subs.forEach(u => u());
+}
+async function recordExtended(uid, stretches, reason, approved) { // approved: true, false (ask for approval) or "rejected"
+  const status = approved === "rejected" ? "rejected" : approved ? "approved" : "pending";
+  for (const st of stretches) {
+    const doc = { doctorId: uid, month: st.from.date.slice(0, 7), from: st.from, to: st.to, hours: st.hours, key: extKey(st), status, reason: reason || "", requestedBy: app.uid, createdAt: Date.now() };
+    if (status !== "pending") Object.assign(doc, { decidedAt: Date.now(), decidedBy: app.uid });
+    if (app.sample) { state.extended[extId(uid, st)] = { id: extId(uid, st), ...doc }; continue; }
+    await dbCall(() => app.db.collection("extended").doc(extId(uid, st)).set(doc));
+  }
+}
+const extLabel = { pending: "Awaiting MSA approval", approved: "Approved by MSA", rejected: "Not approved by MSA" };
 const pendingList = () => app.sample ? state.requests.filter(r => r.status === "pending") : state.pending;
 async function dbCall(fn) {
   try { return await fn(); }
@@ -898,10 +998,11 @@ function audit(month) {
   return { stretches, gaps: cov.gaps, notUploadedDepts: cov.notUploaded, missing };
 }
 function flaggedSlots(id, month) {
-  const set = new Set();
+  const set = new Map(); // slot → approval status of the stretch it belongs to
   for (const st of longStretches(combined(id, month), month)) {
+    const stt = extStatus(id, st);
     const a = dayNum(st.from.date) * 24 + SHIFT[st.from.shift].start, b = dayNum(st.to.date) * 24 + SHIFT[st.to.shift].end;
-    dutyList(combined(id, month)).forEach(x => { const s = dayNum(x.date) * 24 + SHIFT[x.shift].start; if (s >= a && s < b) set.add(x.date + "|" + x.shift); });
+    dutyList(combined(id, month)).forEach(x => { const s = dayNum(x.date) * 24 + SHIFT[x.shift].start; if (s >= a && s < b) set.set(x.date + "|" + x.shift, stt); });
   }
   return set;
 }
@@ -913,8 +1014,8 @@ function render() {
   try { if (fid && typeof ae.selectionStart === "number") sel = [ae.selectionStart, ae.selectionEnd]; } catch (_) {}
   const inApp = app.sample || app.phase === "app";
   if (inApp && state.tab === "changes") ensureLog();
-  const wp = $("#wa-prompt"); if (wp) { const html = renderWaPrompt(); if (wp.innerHTML !== html) wp.innerHTML = html; }
-  renderSwapPopup(inApp && !state.waPrompt);
+  const wp = $("#wa-prompt"); if (wp) { const html = renderExtPrompt() || renderWaPrompt(); if (wp.dataset.html !== html) { wp.dataset.html = html; wp.innerHTML = html; } }
+  renderSwapPopup(inApp && !state.waPrompt && !state.extPrompt);
   const large = !inApp || state.tab === "board";
   $("#masthead").classList.toggle("compact", !large);
   $("#who").innerHTML = renderWho();
@@ -1061,14 +1162,21 @@ function renderBoard() {
       const on = ids.filter(id => deptOk(id) && hasDuty(docs[id], date, s.code) && (!state.mineOnly || id === app.uid))
         .sort((x, y) => docName(x).localeCompare(docName(y)));
       const gap = showGaps && !state.mineOnly && uploadedInScope && !ids.some(id => deptOk(id) && hasDuty(docs[id], date, s.code));
-      html += `<div class="bc${we}${gap ? " gap" : ""}" role="cell">${gap ? `<span class="gaptag">Uncovered</span>` : ""}${on.map(id => {
-        const mine = id === app.uid, fl = (seesAll() || mine) && flags[id] && flags[id].has(date + "|" + s.code);
+      const chip = id => {
+        const mine = id === app.uid, fst = (seesAll() || mine) && flags[id] ? flags[id].get(date + "|" + s.code) : undefined, fl = fst !== undefined && fst !== "approved", fok = fst === "approved";
         const ds = DESIG_SHORT[desigOf(id)] || "";
-        const dept = (ds ? ` <small>${esc(ds)}</small>` : "") + (deptSel === "all" && state.doctors[id] && state.doctors[id].dept ? ` <small>${esc(state.doctors[id].dept)}</small>` : "");
-        const title = esc(docName(id) + (desigOf(id) ? " (" + desigOf(id) + ")" : "") + " · " + fmtDuty({ date, shift: s.code }) + (fl ? " · part of a stretch over " + MAX_STRETCH + " h" : ""));
-        return mine && canAct() ? `<button class="chip c-${s.code} mine${fl ? " flag" : ""}" data-act="pick-duty" data-date="${date}" data-shift="${s.code}" title="${title}">${esc(docName(id))}${dept}</button>`
-          : `<span class="chip c-${s.code}${fl ? " flag" : ""}" title="${title}">${esc(docName(id))}${dept}</span>`;
-      }).join("")}</div>`;
+        const dept = ds ? ` <small>${esc(ds)}</small>` : "";
+        const title = esc(docName(id) + (desigOf(id) ? " (" + desigOf(id) + ")" : "") + " · " + fmtDuty({ date, shift: s.code }) + (fst !== undefined ? " · extended duty over " + MAX_STRETCH + " h: " + (extLabel[fst] || "not yet approved") : ""));
+        return mine && canAct() ? `<button class="chip c-${s.code} mine${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" data-act="pick-duty" data-date="${date}" data-shift="${s.code}" title="${title}">${esc(docName(id))}${dept}</button>`
+          : `<span class="chip c-${s.code}${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" title="${title}">${esc(docName(id))}${dept}</span>`;
+      };
+      // In the master rota, names are grouped under their department so the list stays readable.
+      let people = "";
+      if (deptSel === "all" && on.length) {
+        const groups = {}; on.forEach(id => ((groups[deptOfId(id) || "No department"] ||= []).push(id)));
+        people = Object.keys(groups).sort((a, b) => DEPARTMENTS.indexOf(a) - DEPARTMENTS.indexOf(b)).map(g => `<div class="dgrp"><span class="dg">${esc(g)}</span>${groups[g].map(chip).join("")}</div>`).join("");
+      } else people = on.map(chip).join("");
+      html += `<div class="bc s-${s.code}${we}${gap ? " gap" : ""}" role="cell" data-label="${s.name} · ${s.time}">${gap ? `<span class="gaptag">Uncovered</span>` : ""}${people || (gap ? "" : `<span class="none" aria-label="No one">–</span>`)}</div>`;
     }
     html += `</div>`;
   }
@@ -1112,7 +1220,7 @@ function renderMine() {
     ${locked ? `<div class="note">${esc(monthLabel(month))} is over and closed. Only a coordinator can change it now.</div>` : isClosed(month) && !app.sample ? `<div class="note">${esc(monthLabel(month))} is closed for doctors. As coordinator you can still correct it.</div>` : ""}
     ${datesOf(month).some(holidayOf) ? `<p class="muted small"><span class="hdot" aria-hidden="true"></span> Public holiday: hover or long-press the day to see which one.</p>` : ""}
     ${stale ? `<div class="note bad">This roster changed while you were editing (for example, a swap was accepted). Saving now would overwrite that change. <button class="btn ghost" data-act="discard" id="stale-reset">Start over from the latest</button></div>` : ""}
-    ${stretches.map(st => `<div class="note">Long stretch: ${esc(stretchText(st))}. Night ends at 08:00, so a Night followed by a Morning means no rest.</div>`).join("")}
+    ${stretches.map(st => { const stt = extStatus(id, st); return `<div class="note${stt === "approved" ? " ok" : stt === "rejected" ? " bad" : ""}"><b>Extended duty: ${esc(stretchText(st))}.</b> ${stt === "approved" ? "Approved by the MSA." : stt === "pending" ? "Waiting for MSA approval." : stt === "rejected" ? "Not approved by the MSA. Please change these duties so there's a break." : "Duties over " + MAX_STRETCH + " hours need MSA approval: you'll be asked for a reason when you save."}</div>`; }).join("")}
     <div class="cal" role="group" aria-label="Pick shifts for each day">
       ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => `<div class="dow">${d}</div>`).join("")}
       ${Array.from({ length: (dow(month + "-01") + 6) % 7 }, () => `<div class="cday blank"></div>`).join("")}
@@ -1239,6 +1347,10 @@ function waHref(toId, text) {
    (phones block windows opened later) and pointed at WhatsApp when the save succeeds; if it was blocked,
    a big "Send on WhatsApp" button appears instead. */
 function waWindow() { if (app.sample || app.offline) return null; try { return window.open("about:blank", "_blank"); } catch (_) { return null; } }
+function waGo(win, href) {
+  if (win && !win.closed) { try { win.location.href = href; return; } catch (_) {} }
+  state.waPrompt = { toId: null, href }; render();
+}
 function waSend(win, toId, text) {
   const href = waHref(toId, text);
   if (win && !win.closed) { try { win.location.href = href; return; } catch (_) {} }
@@ -1247,11 +1359,21 @@ function waSend(win, toId, text) {
 function waAbort(win) { try { if (win) win.close(); } catch (_) {} }
 const reqText = r => "Assalam o Alaikum " + docName(r.to) + ", I've sent you a duty " + (r.type === "swap" ? "swap" : "cover") + " request on the Eastridge duty roster: " + plainReq(r) + ". Please accept or decline it here:";
 const answerText = r => "Assalam o Alaikum " + docName(r.from) + ", I've " + r.status + " your request on the Eastridge duty roster: " + plainReq(r) + ".";
+function renderExtPrompt() {
+  const x = state.extPrompt; if (!x) return "";
+  return `<div class="pop-back" data-act="ext-cancel"></div><div class="pop" role="dialog" aria-modal="true" aria-labelledby="ext-title">
+    <div class="pop-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 5v5.4l3.7 2.2-1 1.7L11 13.5V7z"/></svg></div>
+    <h2 id="ext-title">This is an extended duty</h2>
+    <div class="pop-list">${x.stretches.map(st => `<div class="pop-item"><b>${st.hours} hours straight</b><p class="small">${esc(fmtDuty(st.from))} → ${esc(fmtDuty(st.to))}</p></div>`).join("")}</div>
+    <p class="small">Duties over ${MAX_STRETCH} hours need approval from the MSA. Your roster will be saved and the request sent${waNumber(state.contact && state.contact.msaWhatsApp) ? ", and WhatsApp will open so you can let the MSA office know" : ""}.</p>
+    <div class="field"><label for="ext-reason">Reason (optional)</label><textarea class="plain" id="ext-reason" data-bind="extPrompt.reason" maxlength="200" placeholder="e.g. colleague on leave, short-staffed that week">${esc(x.reason)}</textarea></div>
+    <div class="btns"><button class="btn primary" data-act="ext-confirm" id="ext-confirm">Save and ask for approval</button><button class="btn" data-act="ext-cancel" id="ext-cancel">Go back and change</button></div></div>`;
+}
 function renderWaPrompt() {
   const w = state.waPrompt; if (!w) return "";
   return `<div class="pop-back" data-act="wa-prompt-close"></div><div class="pop" role="dialog" aria-modal="true" aria-labelledby="wa-title">
     <div class="pop-icon wa-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2z"/></svg></div>
-    <h2 id="wa-title">Let ${esc(docName(w.toId))} know on WhatsApp</h2>
+    <h2 id="wa-title">${w.toId ? "Let " + esc(docName(w.toId)) + " know on WhatsApp" : "Let the MSA office know on WhatsApp"}</h2>
     <p class="small muted">The message is already written. Just tap Send in WhatsApp.</p>
     <div class="btns"><a class="btn primary wa-go" href="${esc(w.href)}" target="_blank" rel="noopener" id="wa-prompt-go">Send on WhatsApp</a><button class="btn" data-act="wa-prompt-close" id="wa-prompt-close">Not now</button></div></div>`;
 }
@@ -1267,16 +1389,17 @@ function previewWarnings(req) {
   if (plan.error) return { error: plan.error, warns: [] };
   const warns = [];
   const before = id => new Set(longStretches(combined(id, month), month).map(stretchText));
-  if (plan.A) longStretches(plan.A, month).forEach(st => { if (!before(req.from).has(stretchText(st))) warns.push(docName(req.from) + ": " + stretchText(st)); });
-  if (plan.B) longStretches(plan.B, month).forEach(st => { if (!before(req.to).has(stretchText(st))) warns.push(docName(req.to) + ": " + stretchText(st)); });
+  if (plan.A) longStretches(plan.A, month).forEach(st => { if (!before(req.from).has(stretchText(st))) warns.push(docName(req.from) + ": " + stretchText(st) + " (needs MSA approval; it will be requested)"); });
+  if (plan.B) longStretches(plan.B, month).forEach(st => { if (!before(req.to).has(stretchText(st))) warns.push(docName(req.to) + ": " + stretchText(st) + " (needs MSA approval; it will be requested)"); });
   return { warns };
 }
 function renderChanges() {
   const month = state.month, mine = me();
   const incoming = pendingForMe();
-  const outgoing = state.requests.filter(r => r.status === "pending" && r.from === app.uid);
-  const history = state.requests.filter(r => r.month === month && r.status !== "pending" && reqVisible(r));
-  const othersPending = state.requests.filter(r => r.status === "pending" && r.from !== app.uid && r.to !== app.uid && r.month === month && reqVisible(r));
+  const outgoing = pendingList().filter(r => r.from === app.uid);
+  const fullLog = app.canEdit || app.sample; // only coordinators see other people's changes
+  const history = fullLog ? state.requests.filter(r => r.month === month && r.status !== "pending") : [];
+  const othersPending = fullLog ? pendingList().filter(r => r.from !== app.uid && r.to !== app.uid && r.month === month) : [];
   let html = `<div class="grid2">`;
   html += `<section class="panel"><h2>Waiting for your answer</h2>${incoming.length ? `<div class="list">${incoming.map(r => {
     const pv = previewWarnings(r);
@@ -1289,7 +1412,7 @@ function renderChanges() {
   html += `</div>`;
   if (outgoing.length || othersPending.length) html += `<section class="panel"><h2>Sent and waiting</h2><div class="list">${[...outgoing, ...othersPending].map(r => `<div class="item"><div class="head"><span class="pill pending">Waiting for ${esc(docName(r.to))}</span><span class="muted small">${when(r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.note ? `<p class="small muted">“${esc(r.note)}”</p>` : ""}${r.from === app.uid ? `<div class="btns">${app.sample ? "" : waButton(r.to, reqText(r), "wa-req-" + r.id)}<button class="btn" data-act="cancel-req" data-id="${esc(r.id)}" id="can-${esc(r.id)}" ${app.busy ? "disabled" : ""}>Cancel request</button></div>` : ""}</div>`).join("")}</div></section>`;
   const answered = r => r.to === app.uid && r.from !== app.uid && (r.status === "accepted" || r.status === "declined");
-  html += `<section class="panel"><h2>Change log for ${esc(monthLabel(month))}</h2>${history.length ? `<div class="list">${history.map(r => `<div class="item"><div class="head"><span class="pill ${esc(r.status)}">${STATUS[r.status] || esc(r.status)}</span><span class="muted small">${when(r.decidedAt || r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.reason ? `<p class="small muted">${esc(r.reason)}</p>` : ""}${answered(r) && !app.sample ? `<div class="btns">${waButton(r.from, answerText(r), "wa-ans-" + r.id)}</div>` : ""}</div>`).join("")}</div>` : `<p class="muted">No changes this month yet. Uploads, edits, swaps, hand-overs and moves are all recorded here.</p>`}</section>`;
+  if (fullLog) html += `<section class="panel"><h2>Change log for ${esc(monthLabel(month))}</h2>${history.length ? `<div class="list">${history.map(r => `<div class="item"><div class="head"><span class="pill ${esc(r.status)}">${STATUS[r.status] || esc(r.status)}</span><span class="muted small">${when(r.decidedAt || r.createdAt)}</span></div><p>${describeReq(r)}</p>${r.reason ? `<p class="small muted">${esc(r.reason)}</p>` : ""}${answered(r) && !app.sample ? `<div class="btns">${waButton(r.from, answerText(r), "wa-ans-" + r.id)}</div>` : ""}</div>`).join("")}</div>` : `<p class="muted">No changes this month yet. Uploads, edits, swaps, hand-overs and moves are all recorded here.</p>`}</section>`;
   return html;
 }
 function renderRequestForm(month) {
@@ -1338,7 +1461,11 @@ function renderChecks() {
   const allClear = !a.stretches.length && !a.gaps.length && !a.missing.length && !a.notUploadedDepts.length;
   let html = allClear && sortedDoctors().length ? `<div class="banner"><p><b>All clear for ${esc(monthLabel(month))}.</b> Every doctor has uploaded, every shift in every department is covered, and nobody works more than ${MAX_STRETCH} hours without a break.</p></div>` : "";
   html += `<div class="grid2">`;
-  html += `<section class="panel"><h2>Over ${MAX_STRETCH} hours without a break</h2><p class="muted small">Back-to-back shifts are joined up. A Night (ends 08:00) followed by a Morning (starts 08:00) is 18 hours straight.</p>${a.stretches.length ? `<div class="list">${a.stretches.map(s => `<div class="item"><b>${esc(docName(s.id))}</b><p class="small">${esc(stretchText(s))}</p></div>`).join("")}</div>` : `<p class="note ok">No long stretches this month.</p>`}</section>`;
+  html += `<section class="panel"><h2>Extended duties (over ${MAX_STRETCH} hours)</h2><p class="muted small">Back-to-back shifts are joined up: a Night (ends 08:00) followed by a Morning is 18 hours straight. Doctors need your approval for these; approving or not opens WhatsApp to tell them.</p>${a.stretches.length ? `<div class="list">${a.stretches.sort((x, y) => (extStatus(y.id, y) === "pending") - (extStatus(x.id, x) === "pending")).map(s => { const stt = extStatus(s.id, s), rec = state.extended[extId(s.id, s)], key = esc(extKey(s));
+      const btn = (dec, label, cls) => `<button class="btn ${cls}" data-act="ext-decide" data-uid="${esc(s.id)}" data-key="${key}" data-decision="${dec}" data-month="${month}" ${app.busy ? "disabled" : ""}>${label}</button>`;
+      return `<div class="item"><div class="head"><b>${esc(docName(s.id))}</b><span class="pill ${stt === "approved" ? "done" : stt === "rejected" ? "declined" : "pending"}">${stt === "approved" ? "Approved" : stt === "rejected" ? "Not approved" : stt === "pending" ? "Awaiting approval" : "Not requested"}</span></div>
+        <p class="small">${esc(stretchText(s))}</p>${rec && rec.reason ? `<p class="small muted">Reason: “${esc(rec.reason)}”</p>` : ""}
+        <div class="btns">${stt !== "approved" ? btn("approved", "Approve", "primary") : ""}${stt !== "rejected" ? btn("rejected", stt === "approved" ? "Withdraw approval" : "Don't approve", "") : ""}</div></div>`; }).join("")}</div>` : `<p class="note ok">No long stretches this month.</p>`}</section>`;
   html += `<section class="panel"><h2>Uncovered shifts</h2><p class="muted small">Shifts with no doctor from that department on duty.</p>${Object.keys(byDept).length ? Object.entries(byDept).map(([dept, gs]) => `<details ${Object.keys(byDept).length === 1 ? "open" : ""}><summary>${esc(dept)}: ${gs.length} uncovered</summary><ul class="plain small" style="margin-top:6px">${gs.slice(0, 120).map(g => `<li>${esc(fmtDuty(g))}</li>`).join("")}${gs.length > 120 ? `<li>…and ${gs.length - 120} more</li>` : ""}</ul></details>`).join("") : `<p class="note ok">${a.notUploadedDepts.length === deptList().length ? "Nothing to check until rosters are uploaded." : "Every shift is covered."}</p>`}
     ${a.notUploadedDepts.length ? `<p class="small muted">Not checked yet because nobody in them has uploaded: ${a.notUploadedDepts.map(esc).join(", ")}.</p>` : ""}</section>`;
   html += `<section class="panel"><h2>Rosters not uploaded</h2>${a.missing.length ? `<ul class="plain">${a.missing.map(d => `<li>${esc(d.name)} <span class="muted small">· ${esc(d.dept || "No department")}${d.phone ? " · " + esc(d.phone) : ""}</span></li>`).join("")}</ul>` : `<p class="note ok">${sortedDoctors().length ? "Everyone has uploaded." : "No doctors have set up a profile yet."}</p>`}</section>`;
@@ -1405,15 +1532,21 @@ const actions = {
   discard() { delete state.drafts[draftKey(state.month, editTarget())]; render(); },
   "clear-month"() { const id = editTarget(), d = ensureDraft(state.month, id); d.shifts = {}; settleDraft(state.month, id); render(); toast("Month cleared on the calendar. Press Save to confirm."); },
   async "save-roster"() {
-    const id = editTarget(), month = state.month, k = draftKey(month, id), d = state.drafts[k];
+    const id = editTarget(), month = state.month, d = state.drafts[draftKey(month, id)];
     if (!d) return;
-    const before = rosterOf(month, id), first = !before, diff = diffShifts(before || {}, d.shifts);
-    const ok = await guarded(async () => {
-      await store.saveRoster(month, id, d.shifts);
-      if (diff.added || diff.removed || first) await store.addRequest({ type: "edit", status: "done", month, from: id, added: diff.added, removed: diff.removed, first, decidedAt: Date.now() });
-    }, first ? "Roster uploaded for " + monthLabel(month) + "." : "Roster saved.");
-    if (ok) { delete state.drafts[k]; render(); }
+    const need = needsApproval(id, { ...(rosterOf(addMonths(month, -1), id) || {}), ...onlyMonth(d.shifts, month) }, month);
+    // A doctor saving a duty of more than 12 hours is asked for a reason and it goes to the MSA for approval; coordinators approve their own entries.
+    if (need.length && !app.canEdit) { state.extPrompt = { id, month, stretches: need, reason: "" }; render(); setTimeout(() => { const t = $("#ext-reason"); if (t) t.focus(); }, 30); return; }
+    await saveRosterNow(id, month, need, "", app.canEdit, null);
   },
+  async "ext-confirm"() {
+    const x = state.extPrompt; if (!x) return;
+    const n = waNumber(state.contact && state.contact.msaWhatsApp), win = n ? waWindow() : null;
+    state.extPrompt = null;
+    const ok = await saveRosterNow(x.id, x.month, x.stretches, x.reason.trim(), false, win);
+    if (ok && n) waGo(win, "https://wa.me/" + n + "?text=" + encodeURIComponent("Assalam o Alaikum, this is " + docName(x.id) + (deptOfId(x.id) ? " (" + deptOfId(x.id) + ")" : "") + ". I'm requesting approval for an extended duty: " + x.stretches.map(stretchText).join("; ") + (x.reason.trim() ? ". Reason: " + x.reason.trim() : "") + ".\n\nPlease approve it on the roster: " + location.origin + location.pathname)); else waAbort(win);
+  },
+  "ext-cancel"() { state.extPrompt = null; render(); toast("Not saved. Change the duties so there's a break, or save again to ask for approval."); },
   async "read-paste"() { state.upload = { fileName: "Pasted rows", rows: parseCSV(state.pasteText), month: state.month }; state.upload = reparse(state.upload); render(); },
   "apply-upload"(b) {
     const u = state.upload, id = editTarget(); if (!u || !id) return;
@@ -1424,7 +1557,19 @@ const actions = {
     toast(u.entries.length + " duties placed on the calendar. Check them, then press Save.");
   },
   "drop-upload"() { state.upload = null; render(); },
+  async "ext-decide"(b) {
+    const uid = b.dataset.uid, key = b.dataset.key, approve = b.dataset.decision === "approved", month = b.dataset.month || state.month;
+    const rec = Object.values(state.extended).find(r => r.doctorId === uid && r.key === key);
+    const st = rec ? { from: rec.from, to: rec.to, hours: rec.hours } : longStretches(combined(uid, month), month).find(x => extKey(x) === key);
+    if (!st) { toast("That duty has changed since. Refresh the Checks tab."); return; }
+    const win = waWindow(), prev = state.extended[extId(uid, st)];
+    const ok = await guarded(() => recordExtended(uid, [st], (prev && prev.reason) || "", approve ? true : "rejected"), approve ? "Approved. " + docName(uid) + " will see it on their roster." : "Not approved. " + docName(uid) + " will be asked to change it.");
+    markSeen([extId(uid, st) + ":p"]);
+    if (ok && !app.sample) waSend(win, uid, "Assalam o Alaikum " + docName(uid) + ", your extended duty (" + stretchText(st) + ") has been " + (approve ? "approved by the MSA." : "NOT approved by the MSA. Please change these duties on the roster so there's a break.")); else waAbort(win);
+  },
   "popup-review"() { markSeen(pendingForMe().map(r => r.id)); state.tab = "changes"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); },
+  "ext-pop-later"() { const k = extAlerts().map(x => x.seen); markSeen(k); if (!app.canEdit) markLocalSeen(k); render(); },
+  "ext-pop-open"() { const items = extAlerts(); markSeen(items.map(x => x.seen)); if (!app.canEdit) markLocalSeen(items.map(x => x.seen)); state.tab = app.canEdit ? "checks" : "mine"; if (items[0]) state.month = items[0].r.month; subscribeMonth(); render(); window.scrollTo({ top: 0 }); },
   "popup-later"() { markSeen(pendingForMe().map(r => r.id)); render(); toast("You can answer it any time under Swaps & changes."); },
   async install() { if (!installEvent) return; installEvent.prompt(); try { await installEvent.userChoice; } catch (_) {} installEvent = null; render(); },
   "install-dismiss"() { try { localStorage.setItem("install-dismissed", "1"); } catch (_) {} render(); },
@@ -1444,6 +1589,7 @@ const actions = {
         if (!diff.added && !diff.removed) { done++; continue; }
         await store.saveRoster(month, id, after);
         await store.addRequest({ type: "edit", status: "done", month, from: id, added: diff.added, removed: diff.removed, first: !rosterOf(month, id), bulk: true, decidedAt: Date.now() });
+        await recordExtended(id, needsApproval(id, { ...(rosterOf(addMonths(month, -1), id) || {}), ...after }, month), "Entered by the MSA", true);
         delete state.drafts[draftKey(month, id)]; done++;
       }
     }, "Saved department rota for " + ids.length + " doctor" + (ids.length > 1 ? "s" : "") + ".");
@@ -1492,6 +1638,8 @@ const actions = {
         if (plan.error) throw { message: plan.error };
         await store.saveRoster(req.month, app.uid, plan.A);
         await store.addRequest({ ...req, status: "done", decidedAt: Date.now() });
+        const prevA = rosterOf(addMonths(req.month, -1), app.uid) || {};
+        await recordExtended(app.uid, newStretches({ ...prevA, ...A }, { ...prevA, ...plan.A }, req.month), "After moving a duty", app.canEdit);
       }, "Moved to " + fmtDuty(req.take) + ".");
     } else {
       const dup = [...pendingList(), ...state.requests].find(r => r.status === "pending" && r.from === app.uid && r.give.date === req.give.date && r.give.shift === req.give.shift);
@@ -1511,6 +1659,10 @@ const actions = {
       if (plan.error) { await store.updateRequest(r.id, { status: "failed", reason: plan.error, decidedAt: Date.now(), decidedBy: app.uid }); throw { message: plan.error + " The request was closed." }; }
       await store.saveRoster(r.month, r.to, plan.B);
       await store.saveRoster(r.month, r.from, plan.A);
+      for (const [uid, bef, aft, other] of [[r.from, A, plan.A, r.to], [r.to, B, plan.B, r.from]]) {
+        const prev = rosterOf(addMonths(r.month, -1), uid) || {};
+        await recordExtended(uid, newStretches({ ...prev, ...bef }, { ...prev, ...aft }, r.month), (r.type === "swap" ? "After swapping with " : "After covering for ") + docName(other), false);
+      }
       await store.updateRequest(r.id, { status: "accepted", decidedAt: Date.now(), decidedBy: app.uid });
     }, "Accepted. Both rosters are updated.");
     if (ok && !app.sample) waSend(win, r.from, answerText({ ...r, status: "accepted" })); else waAbort(win);
@@ -1524,16 +1676,31 @@ const actions = {
   "wa-prompt-close"() { state.waPrompt = null; render(); },
   async "cancel-req"(b) { const id = b.dataset.id; await guarded(() => store.updateRequest(id, { status: "cancelled", decidedAt: Date.now(), decidedBy: app.uid }), "Request cancelled."); },
 };
+async function saveRosterNow(id, month, need, reason, approved, win) {
+  const k = draftKey(month, id), d = state.drafts[k]; if (!d) { waAbort(win); return false; }
+  const before = rosterOf(month, id), first = !before, diff = diffShifts(before || {}, d.shifts);
+  const ok = await guarded(async () => {
+    await store.saveRoster(month, id, d.shifts);
+    if (diff.added || diff.removed || first) await store.addRequest({ type: "edit", status: "done", month, from: id, added: diff.added, removed: diff.removed, first, decidedAt: Date.now() });
+    if (need.length) await recordExtended(id, need, reason, approved);
+  }, need.length && !approved ? "Saved. Your extended duty has been sent to the MSA for approval." : first ? "Roster uploaded for " + monthLabel(month) + "." : "Roster saved.");
+  if (ok) { delete state.drafts[k]; render(); }
+  return ok;
+}
 function resetForm() { state.form = { type: state.form.type, give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" }; }
 function reparse(u) { return { ...u, month: state.month, ...parseRows(u.rows, state.month) }; }
 
-document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#popup") && $("#popup").innerHTML) actions["popup-later"](); });
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (state.extPrompt) return actions["ext-cancel"]();
+  if ($("#popup") && $("#popup").innerHTML) { actions["ext-pop-later"](); actions["popup-later"](); }
+});
 document.addEventListener("click", e => { if (e.target.closest("#wa-prompt-go")) setTimeout(() => { state.waPrompt = null; render(); }, 300); });
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
 });
-const LIVE_BINDS = new Set(["msaDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "form.note"]);
+const LIVE_BINDS = new Set(["extPrompt.reason", "msaDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "form.note"]);
 document.addEventListener("input", e => {
   const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;
   setBind(path, el.value);
@@ -1607,7 +1774,8 @@ async function exportMonth() {
   for (const id of ids) { const sh = onlyMonth(docs[id] || {}, month); byDoc.push([docName(id), desigOf(id), deptOf(id), ...dates.map(d => (sh[d] || []).join("+")), dutyList(sh).length, hoursOf(sh)]); }
   byDoc.push([], ["M = Morning 08:00–14:00 · E = Evening 14:00–20:00 · N = Night 20:00–08:00"]);
   const log = [[title + " · Change log"], [], ["When", "Status", "Change", "Note"]];
-  const logRows = app.sample || logMonth === month ? state.requests : (await app.db.collection("requests").where("month", "==", month).limit(1000).get()).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  // Only coordinators get the change log sheet, so only they fetch it.
+  const logRows = !full ? [] : app.sample || logMonth === month ? state.requests : (await app.db.collection("requests").where("month", "==", month).limit(1000).get()).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   logRows.filter(r => r.month === month && reqVisible(r)).slice().reverse().forEach(r => log.push([when(r.decidedAt || r.createdAt), STATUS[r.status] || r.status, plainReq(r), r.note || r.reason || ""]));
   const wb = XLSX.utils.book_new();
   const add = (rows, name, cols) => { const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = cols.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
@@ -1615,6 +1783,27 @@ async function exportMonth() {
   if (full) { add(byDoc, "By doctor", [26, 16, 24, ...dates.map(() => 6), 8, 8]); add(log, "Change log", [16, 14, 70, 30]); }
   XLSX.writeFile(wb, "Eastridge-Duty-Roster-" + month + ".xlsx");
 }
+
+/* ---------- live clock: Pakistan time, worked out on the device every second (no database reads) ---------- */
+(function clock() {
+  const ticks = document.querySelector("#clock .ticks");
+  if (ticks) ticks.innerHTML = Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6, r1 = i % 3 ? 15.6 : 14.2; return `<line x1="${20 + Math.sin(a) * r1}" y1="${20 - Math.cos(a) * r1}" x2="${20 + Math.sin(a) * 17}" y2="${20 - Math.cos(a) * 17}"/>`; }).join("");
+  const set = (id, deg) => { const el = document.getElementById(id); if (el) el.style.transform = "rotate(" + deg + "deg)"; };
+  function tick() {
+    const ms = Date.now() + 5 * 3600e3, t = new Date(ms), total = Math.floor(ms / 1000); // seconds keep counting up, so hands never spin backwards
+    const h = t.getUTCHours(), m = t.getUTCMinutes(), sec = t.getUTCSeconds();
+    set("ck-s", total * 6); set("ck-m", (total / 60) * 6); set("ck-h", (total / 3600) * 30);
+    const hm = document.getElementById("ck-hm"); if (!hm) return;
+    hm.textContent = ((h + 11) % 12 + 1) + ":" + pad(m);
+    document.getElementById("ck-sec").textContent = ":" + pad(sec);
+    document.getElementById("ck-ap").textContent = h < 12 ? "am" : "pm";
+    const code = h >= 8 && h < 14 ? "M" : h >= 14 && h < 20 ? "E" : "N", endH = code === "M" ? 14 : code === "E" ? 20 : 8;
+    const left = ((endH * 60 - (h * 60 + m)) + 1440) % 1440 || 1440;
+    document.getElementById("ck-sub").textContent = DOW[t.getUTCDay()] + " " + t.getUTCDate() + " " + MON_SHORT[t.getUTCMonth()] + " · " + SHIFT[code].name + " shift · " + (left >= 60 ? Math.floor(left / 60) + "h " : "") + (left % 60) + "m left";
+    document.getElementById("clock").dataset.shift = code;
+  }
+  tick(); setInterval(tick, 1000);
+})();
 
 /* ---------- swap request pop-up: shown once per request, on any page, so nobody misses it ---------- */
 let popupSeen;
@@ -1624,8 +1813,19 @@ function seenSet() {
 }
 function markSeen(ids) { const set = seenSet(); ids.forEach(id => set.add(id)); try { sessionStorage.setItem("swap-popup-seen", JSON.stringify([...set])); } catch (_) {} }
 let popupKey = "";
+function localSeen() { try { return new Set(JSON.parse(localStorage.getItem("ext-seen") || "[]")); } catch (_) { return new Set(); } }
+function markLocalSeen(keys) { const set = localSeen(); keys.forEach(k => set.add(k)); try { localStorage.setItem("ext-seen", JSON.stringify([...set].slice(-200))); } catch (_) {} }
+function extAlerts() {
+  if (app.sample) return [];
+  const recs = Object.values(state.extended);
+  if (app.canEdit) return recs.filter(r => r.status === "pending").map(r => ({ seen: r.id + ":p", r }));
+  const ls = localSeen();
+  return recs.filter(r => r.doctorId === app.uid && (r.status === "approved" || r.status === "rejected") && r.decidedBy !== app.uid && r.decidedAt && Date.now() - r.decidedAt < 14 * 864e5 && !ls.has(r.id + ":" + r.status + ":" + r.decidedAt)).map(r => ({ seen: r.id + ":" + r.status + ":" + r.decidedAt, r }));
+}
 function renderSwapPopup(inApp) {
   const el = $("#popup"); if (!el) return;
+  const ext = inApp ? extAlerts().filter(x => !seenSet().has(x.seen)) : [];
+  if (ext.length && !document.body.classList.contains("welcoming") && !state.profileOpen) return renderExtPopup(el, ext);
   const waiting = inApp ? pendingForMe() : [];
   if (state.tab === "changes") markSeen(waiting.map(r => r.id));
   const fresh = waiting.filter(r => !seenSet().has(r.id));
@@ -1644,6 +1844,23 @@ function renderSwapPopup(inApp) {
       <div class="btns"><button class="btn primary" data-act="popup-review" id="popup-review">Review now</button><button class="btn" data-act="popup-later" id="popup-later">Later</button></div>
     </div>`;
   setTimeout(() => { const b = $("#popup-review"); if (b) b.focus(); }, 30);
+}
+
+function renderExtPopup(el, items) {
+  const key = "ext|" + items.map(x => x.seen).join();
+  if (key === popupKey) return; popupKey = key;
+  const coord = app.canEdit, r0 = items[0].r;
+  const title = coord ? (items.length === 1 ? "Extended duty approval needed" : items.length + " extended duties need your approval")
+    : r0.status === "approved" ? "Your extended duty was approved" : "Your extended duty was not approved";
+  el.innerHTML = `<div class="pop-back" data-act="ext-pop-later"></div>
+    <div class="pop" role="alertdialog" aria-modal="true" aria-labelledby="pop-title">
+      <div class="pop-icon${!coord && r0.status === "approved" ? " ok-icon" : ""}" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 5v5.4l3.7 2.2-1 1.7L11 13.5V7z"/></svg></div>
+      <h2 id="pop-title">${title}</h2>
+      <div class="pop-list">${items.slice(0, 3).map(({ r }) => `<div class="pop-item">${coord ? `<b>${esc(docName(r.doctorId))}</b>` : ""}<p class="small">${r.hours} h straight: ${esc(fmtDuty(r.from))} → ${esc(fmtDuty(r.to))}</p>${r.reason ? `<p class="small muted">Reason: “${esc(r.reason)}”</p>` : ""}
+        ${coord ? `<div class="btns"><button class="btn primary" data-act="ext-decide" data-uid="${esc(r.doctorId)}" data-key="${esc(r.key)}" data-decision="approved" data-month="${esc(r.month)}">Approve</button><button class="btn" data-act="ext-decide" data-uid="${esc(r.doctorId)}" data-key="${esc(r.key)}" data-decision="rejected" data-month="${esc(r.month)}">Don't approve</button></div>` : ""}</div>`).join("")}${items.length > 3 ? `<p class="small muted">…and ${items.length - 3} more in the Checks tab</p>` : ""}</div>
+      ${!coord && r0.status === "rejected" ? `<p class="small">Please change these duties under My roster so there's a break.</p>` : ""}
+      <div class="btns">${coord ? `<button class="btn" data-act="ext-pop-open" id="ext-pop-open">Open Checks</button>` : r0.status === "rejected" ? `<button class="btn primary" data-act="ext-pop-open" id="ext-pop-open">Open My roster</button>` : ""}<button class="btn" data-act="ext-pop-later" id="ext-pop-later">${coord ? "Later" : "OK"}</button></div>
+    </div>`;
 }
 
 /* ---------- phone app (install prompt + offline) ---------- */
@@ -1831,8 +2048,8 @@ function startLive() {
   }, onDbError);
 }
 function stopLive() {
-  [unsubDoctors, unsubRosters, unsubRequests, unsubContact, unsubPending, unsubPrevOwn].forEach(u => u && u());
-  unsubDoctors = unsubRosters = unsubRequests = unsubContact = unsubPending = unsubPrevOwn = null; state.contact = null;
+  [unsubDoctors, unsubRosters, unsubRequests, unsubContact, unsubPending, unsubPrevOwn, unsubExt].forEach(u => u && u());
+  unsubDoctors = unsubRosters = unsubRequests = unsubContact = unsubPending = unsubPrevOwn = unsubExt = null; state.contact = null; state.extended = {};
   state.pending = []; logMonth = null; rosterSnap = {}; prevOwn = null;
   state.doctors = {}; state.rosters = {}; state.requests = []; state.drafts = {}; state.upload = null; state.editFor = null;
   app.allDoctors = {}; app.liveDoctors = {};

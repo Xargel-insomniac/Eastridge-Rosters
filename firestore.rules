@@ -42,6 +42,17 @@ service cloud.firestore {
       allow write: if isAdmin() && docId == 'contact';
     }
 
+    // Extended duties (over 12 hours): doctors ask, coordinators approve or not.
+    match /extended/{id} {
+      allow read: if isAdmin() || (isMember() && resource.data.doctorId == uid());
+      allow create, update: if isMember()
+        && request.resource.data.doctorId is string
+        && request.resource.data.key is string
+        && request.resource.data.status in ['pending', 'approved', 'rejected']
+        && (isAdmin() || (request.resource.data.status == 'pending' && request.resource.data.requestedBy == uid()));
+      allow delete: if isAdmin();
+    }
+
     match /admins/{userId} {
       allow get: if signedIn() && uid() == userId;
       allow list, write: if false;
@@ -79,9 +90,10 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Swap / hand-over requests and the change log.
+    // Swap / hand-over requests and the change log. Coordinators see everything;
+    // a doctor can only read requests they sent or received (the change log is for coordinators).
     match /requests/{reqId} {
-      allow read: if isMember();
+      allow read: if isAdmin() || (isMember() && (resource.data.from == uid() || resource.data.to == uid()));
       allow create: if isMember()
         && request.resource.data.by == uid()
         && request.resource.data.type in ['swap', 'cover', 'move', 'edit']

@@ -28,6 +28,9 @@ A website where doctors at Eastridge Primecare upload their monthly duty rosters
   - Every upload, edit, swap and move is kept in a change log.
 - **Hospital roster:** doctors open on their own department and can switch to any other department or *All departments (master rota)*. They see who is on which shift, but nothing that totals hours or coverage: no summary numbers, no Checks tab, no over-12-hour marks on colleagues, no "Uncovered" labels outside their own department, and their Excel download is only the day-by-day sheet. Coordinators (and MSA staff) see everything. Day-by-day board with Morning / Evening / Night columns, filterable by department, with Pakistan public holidays marked. Islamic holidays for 2027 are expected dates and may move a day with moon sighting.
 - **Download month as Excel:** one file per month with three sheets (*By day*, *By doctor* with M/E/N codes and hours, and the *Change log*). Use it as a backup and for printing.
+- **Extended duties (over 12 hours):** a doctor who saves a duty stretch longer than 12 hours (e.g. Night then Morning = 18 h) is asked for a reason and the request goes to the coordinator, with WhatsApp opening to the MSA office. Coordinators get a pop-up (and a list in the Checks tab) to *Approve* or *Don't approve*; WhatsApp then opens to tell the doctor, who also gets a pop-up. Stretches created by swaps or moves are sent for approval automatically; coordinators' own entries are approved automatically.
+- **Change log:** coordinators only. Doctors see just the requests they sent or received (enforced in `firestore.rules`).
+- **Live clock:** Pakistan time with the current shift and time left, worked out on the device (no database use).
 - **Swap request pop-up:** when a colleague sends you a swap or hand-over request, a pop-up appears on whatever page you're on (live, no refresh), with *Review now* and *Later*. Each request pops up once per visit, and again next time the site is opened if it's still unanswered.
 - **WhatsApp nudges:** after sending a swap or hand-over request, or accepting / declining one, WhatsApp opens by itself with a ready-written message to the colleague; the doctor just taps Send. If the phone blocks it, a *Send on WhatsApp* button appears instead, and the WhatsApp buttons in *Swaps & changes* stay available. Free; it uses the number in their profile and no extra Firebase usage.
 - **Announcement banner:** coordinators post a message from the Team tab (Notice, Important or Urgent, with an optional end date). It shows across the top of every page for everyone, including the sign-in page, and scrolls like a ticker when it's long. Doctors can hide Notice and Important banners; Urgent ones stay until removed.
@@ -115,7 +118,7 @@ Approved doctors can technically write any doctor's roster, because accepting a 
 | `docs/` | Screenshots used in this README. |
 | `firebase-config.js` | Your Firebase project settings. These values are not secret; access is controlled by the rules. |
 | `firestore.rules` | Database security rules. Paste into the Firebase console, or deploy with `npm run deploy:rules`. |
-| `tests/rules.test.mjs` | 48 automated checks of the security rules (`npm install && npm run test:rules`, needs Java). |
+| `tests/rules.test.mjs` | 59 automated checks of the security rules (`npm install && npm run test:rules`, needs Java). |
 
 Before `firebase-config.js` is filled in, the site shows a **Connect a database** screen with an example month you can explore. Nothing is saved there.
 
