@@ -500,9 +500,9 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   <div id="wa-prompt"></div>
 </main>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script>
 /* ===== LOGIC START ===== */
@@ -813,7 +813,32 @@ function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = fal
 
 /* ---------- storage (Firebase Firestore) ---------- */
 let unsubDoctors = null, unsubRosters = null, unsubRequests = null, unsubMe = null;
+/* Firebase's library can occasionally break itself ("INTERNAL ASSERTION FAILED"), and then nothing saves until a reload.
+   If that happens: keep the doctor's unsaved roster on the device, reload, put it back, and skip the offline copy on this
+   device for a week so it can't repeat. */
+const firestoreBroken = e => /INTERNAL ASSERTION FAILED/i.test(String((e && (e.message || e.reason || e)) || ""));
+function recoverFromGlitch() {
+  if (app.recovering) return; app.recovering = true;
+  try {
+    localStorage.setItem("fs-safe-mode", String(Date.now()));
+    if (app.uid && Object.keys(state.drafts).length) localStorage.setItem("draft-rescue", JSON.stringify({ uid: app.uid, drafts: state.drafts, at: Date.now() }));
+  } catch (_) {}
+  toast("Fixing a connection glitch. Reloading now; your unsaved changes are kept.");
+  setTimeout(() => location.reload(), 1800);
+}
+function restoreRescuedDrafts() {
+  try {
+    const r = JSON.parse(localStorage.getItem("draft-rescue") || "null"); if (!r) return;
+    localStorage.removeItem("draft-rescue");
+    if (r.uid !== app.uid || Date.now() - r.at > 864e5) return;
+    Object.assign(state.drafts, r.drafts);
+    setTimeout(() => toast("Your unsaved roster changes were kept. Check them and press Save."), 600);
+  } catch (_) {}
+}
+window.addEventListener("unhandledrejection", ev => { if (firestoreBroken(ev.reason)) recoverFromGlitch(); });
+window.addEventListener("error", ev => { if (firestoreBroken(ev.error || ev.message)) recoverFromGlitch(); });
 function onDbError(e) {
+  if (firestoreBroken(e)) return recoverFromGlitch();
   app.loading = false;
   if (e && e.code === "permission-denied") toast("You don't have access to the roster right now. If you were just approved or removed, reload the page.");
   else if (e && e.code === "unavailable") setTimeout(subscribeMonth, 3000);
@@ -926,6 +951,7 @@ async function guarded(fn, okMsg) {
   }
   catch (e) {
     const code = e && e.code;
+    if (firestoreBroken(e)) { recoverFromGlitch(); return false; }
     if (code === "slow-network") { app.offline = true; toast("No connection right now. Your change is kept on this device and will be sent automatically when you're back online."); }
     else if (code === "permission-denied") toast("You don't have permission to do that. Ask the roster coordinator to approve your account.");
     else if (code === "resource-exhausted") toast("The database's free daily limit is used up. Try again tomorrow, or ask the coordinator to upgrade the Firebase plan.");
@@ -2060,6 +2086,7 @@ async function readFile(file) {
 /* ---------- start ---------- */
 let unsubContact = null;
 function startLive() {
+  restoreRescuedDrafts();
   subscribeMonth();
   subscribePending();
   if (!unsubContact) unsubContact = app.db.collection("settings").doc("contact").onSnapshot(snap => { state.contact = snap.exists ? snap.data() : null; render(); }, () => {});
@@ -2119,7 +2146,10 @@ function init() {
     const emu = window.FIREBASE_EMULATOR; // local testing only
     if (emu) { app.auth.useEmulator("http://" + emu.host + ":" + emu.authPort); app.db.useEmulator(emu.host, emu.firestorePort); }
     // Keep a copy of the roster on the device: faster reopening, and it still shows without internet.
-    app.db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+    // One tab keeps the offline copy (syncing it across tabs is a known trigger of the glitch above);
+    // a device that hit the glitch in the last week runs without it.
+    let safeMode = false; try { safeMode = Date.now() - (+localStorage.getItem("fs-safe-mode") || 0) < 7 * 864e5; } catch (_) {}
+    if (!safeMode) app.db.enablePersistence().catch(() => {});
   }
   catch (e) { app.phase = "setup"; app.setupError = "The settings in firebase-config.js look wrong: " + e.message; render(); return; }
   render();

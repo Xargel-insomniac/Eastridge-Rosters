@@ -1,6 +1,6 @@
 // Eastridge Roster service worker: keeps the app's own files on the phone so it opens instantly and
 // still shows the last-loaded roster without Wi-Fi. Roster data itself is cached by Firestore, not here.
-const VERSION = "2026-10-26-1";
+const VERSION = "2026-10-28-1";
 const CACHE = "eastridge-" + VERSION;
 const CORE = [
   "/", "/firebase-config.js", "/manifest.webmanifest",
