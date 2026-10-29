@@ -251,6 +251,8 @@ details > summary { cursor: pointer; font-weight: 600; }
 .cs-slot { font-family: var(--f-mono); font-size: 0.72rem; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line); background: var(--sunk); }
 .cs-foot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .pill.cs-today { background: var(--accent-soft); color: var(--accent); }
+.chip small.xd { color: var(--accent); font-weight: 700; }
+.tg.on.xd { outline: 2px dashed var(--accent); outline-offset: -3px; }
 /* clock */
 .clock { display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px; background: rgba(4,31,52,.45); border: 1px solid rgba(255,255,255,.18); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #ffffff; margin-left: auto; }
 .dial { width: 42px; height: 42px; flex: none; }
@@ -716,16 +718,19 @@ function parseRows(rows, monthK) {
 function entriesToShifts(entries) { let s = {}; for (const e of entries) s = withDuty(s, e.date, e.shift); return s; }
 
 /* Per-department coverage for one month. */
-function coverageGaps(monthK, doctors, rosterMonth) {
+/* awayMonth: { doctorId: { "date|shift": department } } for duties worked in another department after a cross-department swap. */
+function coverageGaps(monthK, doctors, rosterMonth, awayMonth = {}) {
   const byDept = {};
   Object.values(doctors).forEach(d => { const k = d.dept || "No department"; (byDept[k] ||= []).push(d.uid); });
+  const covered = new Set(); // "dept|date|shift"
+  for (const id of Object.keys(rosterMonth)) {
+    const home = (doctors[id] && doctors[id].dept) || "No department", away = awayMonth[id] || {};
+    for (const x of dutyList(rosterMonth[id])) covered.add((away[x.date + "|" + x.shift] || home) + "|" + x.date + "|" + x.shift);
+  }
   const out = { gaps: [], notUploaded: [] };
   for (const dept of Object.keys(byDept).sort()) {
-    const ids = byDept[dept];
-    if (!ids.some(id => rosterMonth[id])) { out.notUploaded.push(dept); continue; }
-    for (const date of datesOf(monthK)) for (const c of CODES) {
-      if (!ids.some(id => hasDuty(rosterMonth[id], date, c))) out.gaps.push({ dept, date, shift: c });
-    }
+    if (!byDept[dept].some(id => rosterMonth[id])) { out.notUploaded.push(dept); continue; }
+    for (const date of datesOf(monthK)) for (const c of CODES) if (!covered.has(dept + "|" + date + "|" + c)) out.gaps.push({ dept, date, shift: c });
   }
   return out;
 }
@@ -836,7 +841,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", away: {}, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -855,6 +860,8 @@ const isClosed = month => month < currentMonthKey();
 /* Coordinators (and MSA staff off the roster) see every department and the summary numbers; doctors see only their own department. */
 const seesAll = () => app.sample || app.canEdit || !!(app.myDoc && app.myDoc.offRoster);
 const myDept = () => (app.myDoc && app.myDoc.dept) || "";
+/* The department a duty is worked in: the doctor's own, unless a cross-department swap moved it. */
+const dutyDept = (id, date, code) => ((state.away[date.slice(0, 7)] || {})[id] || {})[date + "|" + code] || deptOfId(id) || "No department";
 const deptOfId = id => (state.doctors[id] && state.doctors[id].dept) || (app.allDoctors && app.allDoctors[id] && app.allDoctors[id].dept) || "";
 const reqVisible = r => seesAll() || r.from === app.uid || r.to === app.uid || deptOfId(r.from) === myDept();
 const lockedForMe = month => isClosed(month) && !app.canEdit && !app.sample;
@@ -926,7 +933,9 @@ function subscribeMonth() {
     if (app.sample) return;
     noteConnection(snap.metadata.fromCache);
     const r = {};
-    snap.docs.forEach(d => { const x = d.data(); if (x && x.month && x.doctorId) (r[x.month] ||= {})[x.doctorId] = x.shifts || {}; });
+    const aw = {};
+    snap.docs.forEach(d => { const x = d.data(); if (x && x.month && x.doctorId) { (r[x.month] ||= {})[x.doctorId] = x.shifts || {}; if (x.away && Object.keys(x.away).length) (aw[x.month] ||= {})[x.doctorId] = x.away; } });
+    state.away = aw;
     rosterSnap = r; applyRosters(); app.loading = false; render();
   }, onDbError);
   if (!ms.includes(prev) && app.uid) unsubPrevOwn = app.db.collection("rosters").doc(prev + "_" + safeId(app.uid)).onSnapshot(snap => {
@@ -1023,15 +1032,19 @@ const store = {
   async setApproved(uid, approved) { await dbCall(() => app.db.collection("doctors").doc(uid).update({ approved, updatedAt: Date.now() })); },
   async setOffRoster(uid, off) { await dbCall(() => app.db.collection("doctors").doc(uid).update({ offRoster: off, updatedAt: Date.now() })); },
   async removeDoctor(uid) { await dbCall(() => app.db.collection("doctors").doc(uid).delete()); },
-  async getRoster(month, id) {
-    if (app.sample) return cloneShifts(rosterOf(month, id) || {});
+  async getRosterDoc(month, id) {
+    if (app.sample) return { shifts: cloneShifts(rosterOf(month, id) || {}), away: { ...((state.away[month] || {})[id] || {}) } };
     const s = await dbCall(() => app.db.collection("rosters").doc(month + "_" + safeId(id)).get());
-    return s.exists ? cloneShifts(s.data().shifts || {}) : {};
+    return s.exists ? { shifts: cloneShifts(s.data().shifts || {}), away: { ...(s.data().away || {}) } } : { shifts: {}, away: {} };
   },
-  async saveRoster(month, id, shifts) {
+  async getRoster(month, id) { return (await store.getRosterDoc(month, id)).shifts; },
+  async saveRoster(month, id, shifts, away) {
     shifts = onlyMonth(shifts, month);
-    if (app.sample) { (state.rosters[month] ||= {})[id] = shifts; return; }
-    await dbCall(() => app.db.collection("rosters").doc(month + "_" + safeId(id)).set({ month, doctorId: id, shifts, updatedAt: Date.now(), updatedBy: app.uid }));
+    // keep each remaining duty's department; drop entries for duties that were removed
+    const src = away || (state.away[month] || {})[id] || {}, kept = {};
+    for (const k in src) { const [d, c] = k.split("|"); if (hasDuty(shifts, d, c) && src[k] !== deptOfId(id)) kept[k] = src[k]; }
+    if (app.sample) { (state.rosters[month] ||= {})[id] = shifts; (state.away[month] ||= {})[id] = kept; return; }
+    await dbCall(() => app.db.collection("rosters").doc(month + "_" + safeId(id)).set({ month, doctorId: id, shifts, away: kept, updatedAt: Date.now(), updatedBy: app.uid }));
   },
   async addRequest(data) {
     data = { ...data, createdAt: Date.now(), by: app.uid };
@@ -1096,7 +1109,7 @@ function allRosterIds(month) { return [...new Set([...Object.keys(monthDocs(mont
 function audit(month) {
   const stretches = [];
   for (const id of Object.keys(monthDocs(month)).filter(id => !isOffRoster(id))) for (const st of longStretches(combined(id, month), month)) stretches.push({ id, ...st });
-  const cov = coverageGaps(month, state.doctors, monthDocs(month));
+  const cov = coverageGaps(month, state.doctors, monthDocs(month), state.away[month] || {});
   const missing = sortedDoctors().filter(d => !rosterOf(month, d.uid));
   return { stretches, gaps: cov.gaps, notUploadedDepts: cov.notUploaded, missing };
 }
@@ -1235,6 +1248,7 @@ function renderBoard() {
   // Doctors can browse every department's rota, but coverage gaps and the over-12-hour marks are only shown to them for their own department.
   const showGaps = seesAll() || deptSel === myDept();
   const deptOk = id => deptSel === "all" || ((state.doctors[id] && state.doctors[id].dept) || "No department") === deptSel;
+  const inDept = (id, date, code) => deptSel === "all" || dutyDept(id, date, code) === deptSel;
   const scopeIds = allRosterIds(month).filter(deptOk);
   const uploadedInScope = scopeIds.some(id => docs[id]);
   const flags = {}; ids.forEach(id => (flags[id] = flaggedSlots(id, month)));
@@ -1263,13 +1277,14 @@ function renderBoard() {
     const hol = holidayOf(date);
     html += `<div role="row" class="brow"><div class="bd${we}${date === todayKey ? " today" : ""}${hol ? " hol" : ""}" role="rowheader"${hol ? ` title="${esc(hol)}"` : ""}><b>${+d}</b><span class="muted">${DOW[dow(date)]}</span>${hol ? `<span class="hname"><span class="hdot" aria-hidden="true"></span>${esc(hol)}</span>` : ""}</div>`;
     for (const s of SHIFTS) {
-      const on = ids.filter(id => deptOk(id) && hasDuty(docs[id], date, s.code) && (!state.mineOnly || id === app.uid))
+      const on = ids.filter(id => hasDuty(docs[id], date, s.code) && inDept(id, date, s.code) && (!state.mineOnly || id === app.uid))
         .sort((x, y) => docName(x).localeCompare(docName(y)));
-      const gap = showGaps && !state.mineOnly && uploadedInScope && !ids.some(id => deptOk(id) && hasDuty(docs[id], date, s.code));
+      const gap = showGaps && !state.mineOnly && uploadedInScope && !ids.some(id => hasDuty(docs[id], date, s.code) && inDept(id, date, s.code));
       const chip = id => {
         const mine = id === app.uid, fst = (seesAll() || mine) && flags[id] ? flags[id].get(date + "|" + s.code) : undefined, fl = fst !== undefined && fst !== "approved", fok = fst === "approved";
         const ds = DESIG_SHORT[desigOf(id)] || "";
-        const dept = ds ? ` <small>${esc(ds)}</small>` : "";
+        const home = deptOfId(id), there = dutyDept(id, date, s.code);
+        const dept = (ds ? ` <small>${esc(ds)}</small>` : "") + (home && there !== home ? ` <small class="xd" title="Covering from ${esc(home)} after a swap">↔ ${esc(home)}</small>` : "");
         const title = esc(docName(id) + (desigOf(id) ? " (" + desigOf(id) + ")" : "") + " · " + fmtDuty({ date, shift: s.code }) + (fst !== undefined ? " · extended duty over " + MAX_STRETCH + " h: " + (extLabel[fst] || "not yet approved") : ""));
         return mine && canAct() ? `<button class="chip c-${s.code} mine${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" data-act="pick-duty" data-date="${date}" data-shift="${s.code}" title="${title}">${esc(docName(id))}${dept}</button>`
           : `<span class="chip c-${s.code}${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" title="${title}">${esc(docName(id))}${dept}</span>`;
@@ -1277,7 +1292,7 @@ function renderBoard() {
       // In the master rota, names are grouped under their department so the list stays readable.
       let people = "";
       if (deptSel === "all" && on.length) {
-        const groups = {}; on.forEach(id => ((groups[deptOfId(id) || "No department"] ||= []).push(id)));
+        const groups = {}; on.forEach(id => ((groups[dutyDept(id, date, s.code)] ||= []).push(id)));
         people = Object.keys(groups).sort((a, b) => DEPARTMENTS.indexOf(a) - DEPARTMENTS.indexOf(b)).map(g => `<div class="dgrp"><span class="dg">${esc(g)}</span>${groups[g].map(chip).join("")}</div>`).join("");
       } else people = on.map(chip).join("");
       html += `<div class="bc s-${s.code}${we}${gap ? " gap" : ""}" role="cell" data-label="${s.name} · ${s.time}">${gap ? `<span class="gaptag">Uncovered</span>` : ""}${people || (gap ? "" : `<span class="none" aria-label="No one">–</span>`)}</div>`;
@@ -1333,7 +1348,8 @@ function renderMine() {
         const hol = holidayOf(date);
         return `<div class="cday${we ? " we" : ""}${flagDays.has(date) ? " flag" : ""}${hol ? " hol" : ""}"${hol ? ` title="${esc(hol)}"` : ""}><span class="dn">${+date.slice(8)}${hol ? `<span class="hdot" aria-label="${esc(hol)}"></span>` : ""}</span>${SHIFTS.map(s => {
           const on = hasDuty(work, date, s.code);
-          return `<button class="tg ${s.code}${on ? " on" : ""}" data-act="toggle" data-date="${date}" data-shift="${s.code}" aria-pressed="${on}" aria-label="${s.name} on ${fmtDate(date)}" ${disabled}>${s.code}</button>`;
+          const xd = on && dutyDept(id, date, s.code) !== deptOfId(id) ? dutyDept(id, date, s.code) : "";
+          return `<button class="tg ${s.code}${on ? " on" : ""}${xd ? " xd" : ""}"${xd ? ` title="In ${esc(xd)} (swap)"` : ""} data-act="toggle" data-date="${date}" data-shift="${s.code}" aria-pressed="${on}" aria-label="${s.name} on ${fmtDate(date)}" ${disabled}>${s.code}</button>`;
         }).join("")}</div>`;
       }).join("")}
     </div>
@@ -1429,7 +1445,10 @@ function renderUpload(month) {
 
 function describeReq(r) {
   const f = esc(docName(r.from)), t = esc(docName(r.to));
-  if (r.type === "swap") return `${f} gives <b>${esc(fmtDuty(r.give))}</b> to ${t} and takes <b>${esc(fmtDuty(r.take))}</b>`;
+  const xd = r.giveDept && ((r.takeDept && r.takeDept !== r.giveDept) || (r.type === "cover" && deptOfId(r.to) && deptOfId(r.to) !== r.giveDept));
+  const tag = xd ? ` <span class="pill cs-today">${esc(r.giveDept)}${r.takeDept ? " ↔ " + esc(r.takeDept) : " ← " + esc(deptOfId(r.to))}</span>` : "";
+  if (r.type === "swap") return `${f} gives <b>${esc(fmtDuty(r.give))}</b> to ${t} and takes <b>${esc(fmtDuty(r.take))}</b>${tag}`;
+  if (r.type === "cover" && tag) return `${f} hands <b>${esc(fmtDuty(r.give))}</b> over to ${t}${tag}`;
   if (r.type === "cover") return `${f} hands <b>${esc(fmtDuty(r.give))}</b> over to ${t}`;
   if (r.type === "move") return `${f} moved <b>${esc(fmtDuty(r.give))}</b> to <b>${esc(fmtDuty(r.take))}</b>`;
   if (r.type === "edit") return `${f}'s roster was ${r.first ? "uploaded" : "edited"}${r.by && r.by !== r.from ? " by " + esc(docName(r.by)) + (r.bulk ? " (department file)" : "") : ""}: ${r.added} added, ${r.removed} removed`;
@@ -1522,7 +1541,7 @@ function renderChanges() {
 function renderRequestForm(month) {
   const f = state.form, my = dutyList(onlyMonth(rosterOf(month, app.uid) || {}, month));
   const giveOpts = my.map(x => { const v = x.date + "|" + x.shift; return `<option value="${v}" ${f.give === v ? "selected" : ""}>${esc(fmtDuty(x))}</option>`; }).join("");
-  const colleagues = sortedDoctors().filter(d => d.uid !== app.uid && (seesAll() || d.dept === myDept()));
+  const colleagues = sortedDoctors().filter(d => d.uid !== app.uid);
   const theirs = f.colleague ? dutyList(onlyMonth(rosterOf(month, f.colleague) || {}, month)) : [];
   const req = buildReq();
   const pv = req ? previewWarnings(req) : null;
@@ -1530,10 +1549,15 @@ function renderRequestForm(month) {
   if (!my.length) body = `<p class="muted">You have no duties in ${esc(monthLabel(month))} to change. Upload your roster under My roster first.</p>`;
   else {
     body = `<div class="field"><label for="rq-give">Your duty</label><select id="rq-give" data-bind="form.give"><option value="">Choose one of your duties</option>${giveOpts}</select></div>`;
-    if (f.type !== "move") body += `<div class="field"><label for="rq-col">Colleague</label><select id="rq-col" data-bind="form.colleague"><option value="">Choose a colleague</option>${colleagues.map(d => `<option value="${esc(d.uid)}" ${f.colleague === d.uid ? "selected" : ""}>${esc(d.name)}${d.designation ? " · " + esc(d.designation) : ""} · ${esc(d.dept || "No department")}</option>`).join("")}</select></div>`;
+    if (f.type !== "move") body += `<div class="field"><label for="rq-col">Colleague</label><select id="rq-col" data-bind="form.colleague"><option value="">Choose a colleague</option>${(() => { const own = myDept(), g = {}; colleagues.forEach(d => (g[d.dept || "No department"] ||= []).push(d));
+      return Object.keys(g).sort((a, b) => (b === own) - (a === own) || DEPARTMENTS.indexOf(a) - DEPARTMENTS.indexOf(b)).map(k => `<optgroup label="${esc(k)}${k === own ? " (yours)" : ""}">${g[k].map(d => `<option value="${esc(d.uid)}" ${f.colleague === d.uid ? "selected" : ""}>${esc(d.name)}${d.designation ? " · " + esc(d.designation) : ""}</option>`).join("")}</optgroup>`).join(""); })()}</select></div>`;
     if (f.type === "swap" && f.colleague) body += theirs.length ? `<div class="field"><label for="rq-take">Their duty you'll take</label><select id="rq-take" data-bind="form.take"><option value="">Choose their duty</option>${theirs.map(x => { const v = x.date + "|" + x.shift; return `<option value="${v}" ${f.take === v ? "selected" : ""}>${esc(fmtDuty(x))}</option>`; }).join("")}</select></div>` : `<p class="muted small">${esc(docName(f.colleague))} has no duties in ${esc(monthLabel(month))} to swap with. Try “Hand over” instead.</p>`;
     if (f.type === "move") body += `<div class="row"><div class="field"><label for="rq-date">New date</label><input type="date" id="rq-date" data-bind="form.moveDate" value="${esc(f.moveDate)}" min="${month}-01" max="${month}-${pad(daysIn(month))}"></div><div class="field"><label for="rq-shift">New shift</label><select id="rq-shift" data-bind="form.moveShift">${SHIFTS.map(s => `<option value="${s.code}" ${f.moveShift === s.code ? "selected" : ""}>${s.name} (${s.time})</option>`).join("")}</select></div></div>`;
     if (f.type !== "move") body += `<div class="field"><label for="rq-note">Note for your colleague (optional)</label><input type="text" id="rq-note" data-bind="form.note" value="${esc(f.note)}" maxlength="140" placeholder="e.g. exam that day"></div>`;
+    if (req && req.type !== "move") {
+      const gd = dutyDept(app.uid, req.give.date, req.give.shift), cd = deptOfId(req.to), td = req.take ? dutyDept(req.to, req.take.date, req.take.shift) : "";
+      if (gd !== cd || (td && td !== deptOfId(app.uid))) body += `<div class="note ok">Cross-department ${req.type === "swap" ? "swap" : "cover"}: ${req.type === "swap" ? `you'll work <b>${esc(fmtDuty(req.take))}</b> in <b>${esc(td)}</b>, and ` : ""}${esc(docName(req.to))} (${esc(cd)}) will work <b>${esc(fmtDuty(req.give))}</b> in <b>${esc(gd)}</b>. Each duty stays with its department's roster.</div>`;
+    }
     if (pv && pv.error) body += `<div class="note bad">${esc(pv.error)}</div>`;
     if (pv) body += pv.warns.map(w => `<div class="note">Heads up: ${esc(w)}</div>`).join("");
     const label = f.type === "swap" ? "Send swap request" : f.type === "cover" ? "Ask them to cover" : "Move my duty";
@@ -1745,10 +1769,10 @@ const actions = {
     const pv = previewWarnings(req); if (pv.error) { toast(pv.error); return; }
     if (req.type === "move") {
       await guarded(async () => {
-        const A = await store.getRoster(req.month, app.uid);
+        const docA = await store.getRosterDoc(req.month, app.uid), A = docA.shifts;
         const plan = planChange(req, A, {}, { from: docName(app.uid) });
         if (plan.error) throw { message: plan.error };
-        await store.saveRoster(req.month, app.uid, plan.A);
+        await store.saveRoster(req.month, app.uid, plan.A, awayAfter(req, docA, null).A);
         await store.addRequest({ ...req, status: "done", decidedAt: Date.now() });
         const prevA = rosterOf(addMonths(req.month, -1), app.uid) || {};
         await recordExtended(app.uid, newStretches({ ...prevA, ...A }, { ...prevA, ...plan.A }, req.month), "After moving a duty", app.canEdit);
@@ -1757,6 +1781,7 @@ const actions = {
       const dup = [...pendingList(), ...state.requests].find(r => r.status === "pending" && r.from === app.uid && r.give.date === req.give.date && r.give.shift === req.give.shift);
       if (dup) { toast("You already have a waiting request for this duty. Cancel it first to send a new one."); return; }
       const win = waWindow();
+      req.giveDept = dutyDept(app.uid, req.give.date, req.give.shift); if (req.take) req.takeDept = dutyDept(req.to, req.take.date, req.take.shift);
       const ok = await guarded(() => store.addRequest({ ...req, status: "pending" }), "Request sent. Tap Send in WhatsApp to let " + docName(req.to) + " know.");
       if (ok && !app.sample) waSend(win, req.to, reqText(req)); else waAbort(win);
     }
@@ -1766,11 +1791,11 @@ const actions = {
     const r = [...pendingList(), ...state.requests].find(x => x.id === b.dataset.id); if (!r || r.to !== app.uid) return;
     const win = waWindow();
     const ok = await guarded(async () => {
-      const A = await store.getRoster(r.month, r.from), B = await store.getRoster(r.month, r.to);
+      const docA = await store.getRosterDoc(r.month, r.from), docB = await store.getRosterDoc(r.month, r.to), A = docA.shifts, B = docB.shifts, aw = awayAfter(r, docA, docB);
       const plan = planChange(r, A, B, { from: docName(r.from), to: docName(r.to) });
       if (plan.error) { await store.updateRequest(r.id, { status: "failed", reason: plan.error, decidedAt: Date.now(), decidedBy: app.uid }); throw { message: plan.error + " The request was closed." }; }
-      await store.saveRoster(r.month, r.to, plan.B);
-      await store.saveRoster(r.month, r.from, plan.A);
+      await store.saveRoster(r.month, r.to, plan.B, aw.B);
+      await store.saveRoster(r.month, r.from, plan.A, aw.A);
       for (const [uid, bef, aft, other] of [[r.from, A, plan.A, r.to], [r.to, B, plan.B, r.from]]) {
         const prev = rosterOf(addMonths(r.month, -1), uid) || {};
         await recordExtended(uid, newStretches({ ...prev, ...bef }, { ...prev, ...aft }, r.month), (r.type === "swap" ? "After swapping with " : "After covering for ") + docName(other), false);
@@ -1798,6 +1823,16 @@ async function saveRosterNow(id, month, need, reason, approved, win) {
   }, need.length && !approved ? "Saved. Your extended duty has been sent to the MSA for approval." : first ? "Roster uploaded for " + monthLabel(month) + "." : "Roster saved.");
   if (ok) { delete state.drafts[k]; render(); }
   return ok;
+}
+function awayAfter(req, docA, docB) {
+  const slot = x => x.date + "|" + x.shift, deptAt = (doc, uid, x) => doc.away[slot(x)] || deptOfId(uid) || "No department";
+  const g = req.give, t = req.take, giveDept = deptAt(docA, req.from, g);
+  const A = { ...docA.away }; delete A[slot(g)];
+  if (req.type === "move") { A[slot(t)] = giveDept; return { A }; }
+  const B = { ...docB.away };
+  if (req.type === "swap") { delete B[slot(t)]; A[slot(t)] = deptAt(docB, req.to, t); }
+  B[slot(g)] = giveDept;
+  return { A, B };
 }
 function resetForm() { state.form = { type: state.form.type, give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" }; }
 function reparse(u) { return { ...u, month: state.month, ...parseRows(u.rows, state.month) }; }
@@ -1881,9 +1916,11 @@ async function exportMonth() {
   const ids = allRosterIds(month).filter(id => (docs[id] || state.doctors[id]) && (view === "all" || deptOfId(id) === view)).sort((a, b) => docName(a).localeCompare(docName(b)));
   const deptOf = id => (state.doctors[id] && state.doctors[id].dept) || (app.allDoctors && app.allDoctors[id] && app.allDoctors[id].dept) || "";
   const withDept = id => docName(id) + (deptOf(id) ? " (" + deptOf(id) + ")" : "");
+  const dutyLabel = (id, date, code) => { const d = dutyDept(id, date, code), h = deptOf(id); return docName(id) + " (" + d + (h && d !== h ? ", from " + h : "") + ")"; };
+  const allIds = allRosterIds(month).filter(id => docs[id]).sort((a, b) => docName(a).localeCompare(docName(b)));
   const title = "Eastridge Primecare · Doctor's Duty Roster · " + monthLabel(month);
   const byDay = [[title], ["Downloaded " + when(Date.now())], [], ["Date", "Day", "Public holiday", ...SHIFTS.map(s => s.name + " (" + s.time.replace(/\s/g, "") + ")")]];
-  for (const date of dates) byDay.push([fmtDate(date).replace(/^\w+ /, ""), DOW[dow(date)], holidayOf(date), ...SHIFTS.map(s => ids.filter(id => hasDuty(docs[id], date, s.code)).map(withDept).join(", ") || (full && ids.length ? "UNCOVERED" : ""))]);
+  for (const date of dates) byDay.push([fmtDate(date).replace(/^\w+ /, ""), DOW[dow(date)], holidayOf(date), ...SHIFTS.map(s => allIds.filter(id => hasDuty(docs[id], date, s.code) && (view === "all" || dutyDept(id, date, s.code) === view)).map(id => dutyLabel(id, date, s.code)).join(", ") || (full && allIds.length ? "UNCOVERED" : ""))]);
   const byDoc = [[title], [], ["Doctor", "Designation", "Department", ...dates.map(d => +d.slice(8) + " " + DOW[dow(d)].slice(0, 2)), "Duties", "Hours"]];
   for (const id of ids) { const sh = onlyMonth(docs[id] || {}, month); byDoc.push([docName(id), desigOf(id), deptOf(id), ...dates.map(d => (sh[d] || []).join("+")), dutyList(sh).length, hoursOf(sh)]); }
   byDoc.push([], ["M = Morning 08:00–14:00 · E = Evening 14:00–20:00 · N = Night 20:00–08:00"]);
@@ -2020,7 +2057,7 @@ function shiftNow() {
 function onDutyIds(slot, dept) {
   const roster = state.rosters[slot.date.slice(0, 7)];
   if (!roster) return null; // that month isn't loaded
-  return Object.keys(state.doctors).filter(id => (dept === "*" || (state.doctors[id].dept || "No department") === dept) && hasDuty(roster[id], slot.date, slot.shift))
+  return Object.keys(state.doctors).filter(id => hasDuty(roster[id], slot.date, slot.shift) && (dept === "*" || dutyDept(id, slot.date, slot.shift) === dept))
     .sort((a, b) => docName(a).localeCompare(docName(b)));
 }
 function contactLinks(id) {
