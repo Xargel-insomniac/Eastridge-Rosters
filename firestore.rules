@@ -42,6 +42,20 @@ service cloud.firestore {
       allow write: if isAdmin() && docId == 'contact';
     }
 
+    // Station cover: a doctor on duty says whether they're covering an empty station. One answer per doctor per gap.
+    match /cover/{id} {
+      allow read: if isMember();
+      allow create, update: if isMember()
+        && request.resource.data.uid == uid()
+        && request.resource.data.answer in ['yes', 'no']
+        && request.resource.data.month is string
+        && request.resource.data.date is string
+        && request.resource.data.shift in ['M', 'E', 'N']
+        && request.resource.data.dept is string
+        && (resource == null || resource.data.uid == uid());
+      allow delete: if isAdmin();
+    }
+
     // Extended duties (over 12 hours): doctors ask, coordinators approve or not.
     match /extended/{id} {
       allow read: if isAdmin() || (isMember() && resource.data.doctorId == uid());

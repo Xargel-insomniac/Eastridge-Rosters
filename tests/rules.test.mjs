@@ -58,6 +58,15 @@ await t("doctor reads their own extended-duty status", as("amy").collection("ext
 await t("doctor can't read colleagues' extended duties", as("ben").collection("extended").where("doctorId", "==", "amy").get(), false);
 await t("coordinator approves an extended duty", as("boss").doc("extended/2026-11_amy_2026-11-03N").set(EXT("approved", "boss")), true);
 await t("coordinator lists pending approvals", as("boss").collection("extended").where("status", "==", "pending").get(), true);
+const COV = (uid, answer) => ({ month: "2026-11", date: "2026-11-03", shift: "N", dept: "ICU / HDU", uid, fromDept: "ER", answer, at: 1 });
+await t("doctor says they're covering an empty station", as("amy").doc("cover/2026-11-03_N_ICU-HDU_amy").set(COV("amy", "yes")), true);
+await t("doctor changes their own cover answer", as("amy").doc("cover/2026-11-03_N_ICU-HDU_amy").set(COV("amy", "no")), true);
+await t("doctor can't answer for a colleague", as("ben").doc("cover/2026-11-03_N_ICU-HDU_ben").set(COV("amy", "yes")), false);
+await t("doctor can't overwrite a colleague's answer", as("ben").doc("cover/2026-11-03_N_ICU-HDU_amy").set(COV("ben", "yes")), false);
+await t("cover answer must be yes or no", as("amy").doc("cover/x").set(COV("amy", "maybe")), false);
+await t("pending doctor can't answer", as("pat").doc("cover/y").set(COV("pat", "yes")), false);
+await t("doctors read cover answers", as("ben").collection("cover").where("month", "in", ["2026-11"]).get(), true);
+await t("doctor can't delete cover answers", as("amy").doc("cover/2026-11-03_N_ICU-HDU_amy").delete(), false);
 await t("approved can't approve others", as("amy").doc("doctors/pat").update({ approved: true }), false);
 await t("approved can't read admins of others", as("amy").doc("admins/boss").get(), false);
 await t("admin reads own admin doc", as("boss").doc("admins/boss").get(), true);

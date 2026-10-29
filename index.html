@@ -250,6 +250,9 @@ details > summary { cursor: pointer; font-weight: 600; }
 .cs-slots { display: flex; flex-wrap: wrap; gap: 4px; }
 .cs-slot { font-family: var(--f-mono); font-size: 0.72rem; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line); background: var(--sunk); }
 .cs-foot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.covtag { color: var(--warn); font-weight: 700; font-size: 0.78rem; padding: 2px 4px; }
+.bc.covered { background: var(--warn-bg); }
+.cg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 10px; }
 .pill.cs-today { background: var(--accent-soft); color: var(--accent); }
 .chip small.xd { color: var(--accent); font-weight: 700; }
 .tg.on.xd { outline: 2px dashed var(--accent); outline-offset: -3px; }
@@ -841,7 +844,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", away: {}, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, msaDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -925,6 +928,7 @@ function subscribeMonth() {
   if (!app.db || app.phase !== "app") return;
   if (unsubRosters) unsubRosters();
   subscribeExtended();
+  subscribeCover();
   if (unsubPrevOwn) { unsubPrevOwn(); unsubPrevOwn = null; }
   if (unsubRequests && logMonth !== state.month) { unsubRequests(); unsubRequests = null; logMonth = null; state.requests = []; }
   const ms = rosterMonths(), prev = addMonths(state.month, -1);
@@ -972,6 +976,48 @@ const extId = (uid, st) => st.from.date.slice(0, 7) + "_" + safeId(uid) + "_" + 
 function extStatus(uid, st) { const r = state.extended[extId(uid, st)]; return r && r.key === extKey(st) ? r.status : ""; }
 const needsApproval = (uid, shifts, month) => longStretches(shifts, month).filter(st => !["approved", "pending"].includes(extStatus(uid, st)));
 function newStretches(before, after, month) { const had = new Set(longStretches(before, month).map(extKey)); return longStretches(after, month).filter(st => !had.has(extKey(st))); }
+/* Station cover: when a station (department) has nobody on a shift, MOs on duty in another station of the same cover group
+   are asked whether they're covering it. One answer per doctor per gap, in cover/. */
+const DEFAULT_COVER_GROUPS = { "ER": "ER & wards", "IPD-1 / Gynae": "ER & wards", "IPD-1 / NICU (Paediatrics)": "ER & wards", "IPD-2 (Medicine) / Dialysis": "ER & wards", "OT / IPD-4 (Surgery)": "ER & wards" };
+const coverGroupOf = dept => (((state.contact && state.contact.coverGroups) || DEFAULT_COVER_GROUPS)[dept]) || dept;
+const gapKey = g => g.date + "|" + g.shift + "|" + g.dept;
+const coverId = (g, uid) => g.date + "_" + g.shift + "_" + String(g.dept).replace(/[^A-Za-z0-9]+/g, "-") + "_" + safeId(uid);
+function coverAnswers(g) { const k = gapKey(g); return Object.values(state.cover).filter(c => c.date + "|" + c.shift + "|" + c.dept === k); }
+const coveredBy = g => { const y = coverAnswers(g).find(c => c.answer === "yes"); return y ? y.uid : null; };
+let unsubCover = null;
+function subscribeCover() {
+  if (unsubCover) unsubCover();
+  if (!app.db || app.sample) return;
+  const ms = [...new Set([currentMonthKey(), state.month])];
+  unsubCover = app.db.collection("cover").where("month", "in", ms).limit(1000).onSnapshot(snap => { const c = {}; snap.docs.forEach(d => (c[d.id] = { id: d.id, ...d.data() })); state.cover = c; render(); }, () => {});
+}
+/* The empty stations this doctor should be asked about: their own duty, another station in the same cover group, nobody covering yet. */
+function coverPrompts() {
+  if (app.sample || !app.uid || !state.doctors[app.uid]) return [];
+  const out = [], cur = currentMonthKey();
+  for (const m of [...new Set([cur, state.month])].filter(m => m >= cur && state.rosters[m])) {
+    const docs = monthDocs(m), mine = docs[app.uid]; if (!mine) continue;
+    for (const g of coverageGaps(m, state.doctors, docs, state.away[m] || {}).gaps) {
+      if (g.date < todayKey || !hasDuty(mine, g.date, g.shift)) continue;
+      const myD = dutyDept(app.uid, g.date, g.shift); if (myD === g.dept || coverGroupOf(myD) !== coverGroupOf(g.dept)) continue;
+      const answers = coverAnswers(g); if (answers.some(c => c.answer === "yes" || c.uid === app.uid)) continue;
+      if (desigOf(app.uid) !== "MO") { // MOs are asked first; others only if no MO in the group is on that shift
+        const mo = Object.keys(docs).some(id => id !== app.uid && desigOf(id) === "MO" && hasDuty(docs[id], g.date, g.shift) && dutyDept(id, g.date, g.shift) !== g.dept && coverGroupOf(dutyDept(id, g.date, g.shift)) === coverGroupOf(g.dept) && !answers.some(c => c.uid === id && c.answer === "no"));
+        if (mo) continue;
+      }
+      out.push({ ...g, month: m, myDept: myD, seen: "cov:" + gapKey(g) });
+    }
+  }
+  return out.sort((a, b) => (a.date + CODES.indexOf(a.shift)).localeCompare(b.date + CODES.indexOf(b.shift)));
+}
+/* For the coordinator: stations a doctor said they can't cover and nobody has said yes. */
+function coverRefusals() {
+  if (!app.canEdit || app.sample) return [];
+  const byGap = {};
+  Object.values(state.cover).forEach(c => { if (c.date >= todayKey) (byGap[c.date + "|" + c.shift + "|" + c.dept] ||= []).push(c); });
+  return Object.values(byGap).filter(list => list.some(c => c.answer === "no") && !list.some(c => c.answer === "yes"))
+    .map(list => ({ g: { date: list[0].date, shift: list[0].shift, dept: list[0].dept }, no: list.filter(c => c.answer === "no").map(c => c.uid), seen: "covno:" + list[0].date + "|" + list[0].shift + "|" + list[0].dept + "|" + list.filter(c => c.answer === "no").length }));
+}
 function subscribeExtended() {
   if (unsubExt) unsubExt();
   if (!app.db || app.sample) return;
@@ -1200,6 +1246,7 @@ function renderTeam() {
     ${renderAnnForm()}
     ${renderMsaForm()}
     ${renderOpdForm()}
+    ${renderCoverGroups()}
     <section class="panel"><h2>Waiting for approval</h2>${pend.length ? `<div class="list">${pend.map(d => row(d, `<button class="btn primary" data-act="approve" data-id="${esc(d.uid)}" id="ap-${esc(d.uid)}" ${dis}>Approve</button><button class="btn danger" data-act="reject-doc" data-id="${esc(d.uid)}" id="rj-${esc(d.uid)}" ${dis}>Reject</button>`)).join("")}</div>` : `<p class="muted">No one is waiting. New sign-ups appear here.</p>`}
       <p class="muted small">Only approve people you recognise. Approved doctors see the full roster and can change duties.</p></section>
     <section class="panel"><h2>On the duty roster (${ok.length})</h2>${ok.length ? `<div class="list">${ok.map(d => row(d, d.uid === app.uid ? `<button class="btn" data-act="roster-off" data-id="${esc(d.uid)}" id="off-${esc(d.uid)}" ${dis}>I don't do duties: take me off</button>` :
@@ -1256,7 +1303,7 @@ function renderBoard() {
   let html = renderOnDuty() + `<section class="panel">
     ${app.canEdit || app.sample ? `<div class="stats">
       <div class="stat okc"><b>${uploaded}<span class="muted" style="font-size:.9rem"> / ${doctors.length}</span></b><span>rosters uploaded</span></div>
-      <button class="statlink stat ${a.gaps.length ? "bad" : ""}" data-act="tab" data-tab="checks" id="st-gaps"><b>${a.gaps.length}</b><span>uncovered shifts</span></button>
+      <button class="statlink stat ${a.gaps.filter(g => !coveredBy(g)).length ? "bad" : ""}" data-act="tab" data-tab="checks" id="st-gaps"><b>${a.gaps.filter(g => !coveredBy(g)).length}</b><span>uncovered shifts</span></button>
       <button class="statlink stat ${a.stretches.length ? "warn" : ""}" data-act="tab" data-tab="checks" id="st-str"><b>${a.stretches.length}</b><span>over ${MAX_STRETCH} h without a break</span></button>
       <button class="statlink stat" data-act="tab" data-tab="changes" id="st-req"><b>${pendingList().filter(r => r.month === month).length}</b><span>swaps waiting</span></button>
     </div>` : ""}
@@ -1295,7 +1342,8 @@ function renderBoard() {
         const groups = {}; on.forEach(id => ((groups[dutyDept(id, date, s.code)] ||= []).push(id)));
         people = Object.keys(groups).sort((a, b) => DEPARTMENTS.indexOf(a) - DEPARTMENTS.indexOf(b)).map(g => `<div class="dgrp"><span class="dg">${esc(g)}</span>${groups[g].map(chip).join("")}</div>`).join("");
       } else people = on.map(chip).join("");
-      html += `<div class="bc s-${s.code}${we}${gap ? " gap" : ""}" role="cell" data-label="${s.name} · ${s.time}">${gap ? `<span class="gaptag">Uncovered</span>` : ""}${people || (gap ? "" : `<span class="none" aria-label="No one">–</span>`)}</div>`;
+      const cby = gap && deptSel !== "all" ? coveredBy({ date, shift: s.code, dept: deptSel }) : null;
+      html += `<div class="bc s-${s.code}${we}${gap && !cby ? " gap" : ""}${cby ? " covered" : ""}" role="cell" data-label="${s.name} · ${s.time}">${cby ? `<span class="covtag">Covered by ${esc(docName(cby))} (${esc(dutyDept(cby, date, s.code))})</span>` : gap ? `<span class="gaptag">Uncovered</span>` : ""}${people || (gap ? "" : `<span class="none" aria-label="No one">–</span>`)}</div>`;
     }
     html += `</div>`;
   }
@@ -1594,7 +1642,7 @@ function renderChecks() {
       return `<div class="item"><div class="head"><b>${esc(docName(s.id))}</b><span class="pill ${stt === "approved" ? "done" : stt === "rejected" ? "declined" : "pending"}">${stt === "approved" ? "Approved" : stt === "rejected" ? "Not approved" : stt === "pending" ? "Awaiting approval" : "Not requested"}</span></div>
         <p class="small">${esc(stretchText(s))}</p>${rec && rec.reason ? `<p class="small muted">Reason: “${esc(rec.reason)}”</p>` : ""}
         <div class="btns">${stt !== "approved" ? btn("approved", "Approve", "primary") : ""}${stt !== "rejected" ? btn("rejected", stt === "approved" ? "Withdraw approval" : "Don't approve", "") : ""}</div></div>`; }).join("")}</div>` : `<p class="note ok">No long stretches this month.</p>`}</section>`;
-  html += `<section class="panel"><h2>Uncovered shifts</h2><p class="muted small">Shifts with no doctor from that department on duty.</p>${Object.keys(byDept).length ? Object.entries(byDept).map(([dept, gs]) => `<details ${Object.keys(byDept).length === 1 ? "open" : ""}><summary>${esc(dept)}: ${gs.length} uncovered</summary><ul class="plain small" style="margin-top:6px">${gs.slice(0, 120).map(g => `<li>${esc(fmtDuty(g))}</li>`).join("")}${gs.length > 120 ? `<li>…and ${gs.length - 120} more</li>` : ""}</ul></details>`).join("") : `<p class="note ok">${a.notUploadedDepts.length === deptList().length ? "Nothing to check until rosters are uploaded." : "Every shift is covered."}</p>`}
+  html += `<section class="panel"><h2>Uncovered shifts</h2><p class="muted small">Shifts with no doctor from that department on duty.</p>${Object.keys(byDept).length ? Object.entries(byDept).map(([dept, gs]) => `<details ${Object.keys(byDept).length === 1 ? "open" : ""}><summary>${esc(dept)}: ${gs.length} uncovered</summary><ul class="plain small" style="margin-top:6px">${gs.slice(0, 120).map(g => `<li>${(() => { const c = coveredBy(g), no = coverAnswers(g).filter(x => x.answer === "no"); return c ? `<span class="pill done">Covered by ${esc(docName(c))}</span> ` : no.length ? `<span class="pill declined">${no.map(x => esc(docName(x.uid))).join(", ")} can't cover</span> ` : ""; })()}${esc(fmtDuty(g))}</li>`).join("")}${gs.length > 120 ? `<li>…and ${gs.length - 120} more</li>` : ""}</ul></details>`).join("") : `<p class="note ok">${a.notUploadedDepts.length === deptList().length ? "Nothing to check until rosters are uploaded." : "Every shift is covered."}</p>`}
     ${a.notUploadedDepts.length ? `<p class="small muted">Not checked yet because nobody in them has uploaded: ${a.notUploadedDepts.map(esc).join(", ")}.</p>` : ""}</section>`;
   html += `<section class="panel"><h2>Rosters not uploaded</h2>${a.missing.length ? `<ul class="plain">${a.missing.map(d => `<li>${esc(d.name)} <span class="muted small">· ${esc(d.dept || "No department")}${d.phone ? " · " + esc(d.phone) : ""}</span></li>`).join("")}</ul>` : `<p class="note ok">${sortedDoctors().length ? "Everyone has uploaded." : "No doctors have set up a profile yet."}</p>`}</section>`;
   return html + `</div>`;
@@ -1685,6 +1733,12 @@ const actions = {
     toast(u.entries.length + " duties placed on the calendar. Check them, then press Save.");
   },
   "drop-upload"() { state.upload = null; render(); },
+  async "cg-save"() {
+    const v = state.cgDraft; if (!v) return;
+    const clean = {}; for (const k in v) if (v[k] && v[k] !== k) clean[k] = v[k];
+    const ok = await guarded(() => dbCall(() => app.db.collection("settings").doc("contact").set({ coverGroups: clean, updatedAt: Date.now(), updatedBy: app.uid }, { merge: true })), "Cover groups saved.");
+    if (ok) state.cgDraft = null;
+  },
   "cs-mode"(b) { state.csMode = b.dataset.mode; render(); },
   "opd-drop"() { state.opdUpload = null; render(); },
   async "opd-save"() {
@@ -1704,6 +1758,15 @@ const actions = {
     if (ok && !app.sample) waSend(win, uid, "Assalam o Alaikum " + docName(uid) + ", your extended duty (" + stretchText(st) + ") has been " + (approve ? "approved by the MSA." : "NOT approved by the MSA. Please change these duties on the roster so there's a break.")); else waAbort(win);
   },
   "popup-review"() { markSeen(pendingForMe().map(r => r.id)); state.tab = "changes"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); },
+  "cover-later"() { markSeen([...coverPrompts().map(x => x.seen), ...coverRefusals().map(x => x.seen)]); render(); },
+  "cover-open"() { markSeen(coverRefusals().map(x => x.seen)); state.tab = "board"; state.dept = "all"; render(); window.scrollTo({ top: 0 }); },
+  async "cover-answer"(b) {
+    const [date, shift, ...rest] = b.dataset.key.split("|"), g = { date, shift, dept: rest.join("|") }, yes = b.dataset.answer === "yes";
+    const n = !yes ? waNumber(state.contact && state.contact.msaWhatsApp) : "", win = n ? waWindow() : null;
+    const doc = { month: b.dataset.month, date, shift, dept: g.dept, uid: app.uid, fromDept: dutyDept(app.uid, date, shift), answer: yes ? "yes" : "no", at: Date.now() };
+    const ok = await guarded(() => dbCall(() => app.db.collection("cover").doc(coverId(g, app.uid)).set(doc)), yes ? "Thanks. " + g.dept + " shows as covered by you on " + fmtDuty(g) + "." : "Noted. The MSA office has been told " + g.dept + " needs cover.");
+    if (ok && n) waGo(win, "https://wa.me/" + n + "?text=" + encodeURIComponent("Assalam o Alaikum, this is " + docName(app.uid) + " (" + doc.fromDept + "). " + g.dept + " has no doctor on " + fmtDuty(g) + " and I can't cover it alongside " + doc.fromDept + ". Please arrange cover.\n\n" + location.origin + location.pathname)); else waAbort(win);
+  },
   "ext-pop-later"() { const k = extAlerts().map(x => x.seen); markSeen(k); if (!app.canEdit) markLocalSeen(k); render(); },
   "ext-pop-open"() { const items = extAlerts(); markSeen(items.map(x => x.seen)); if (!app.canEdit) markLocalSeen(items.map(x => x.seen)); state.tab = app.canEdit ? "checks" : "mine"; if (items[0]) state.month = items[0].r.month; subscribeMonth(); render(); window.scrollTo({ top: 0 }); },
   "popup-later"() { markSeen(pendingForMe().map(r => r.id)); render(); toast("You can answer it any time under Swaps & changes."); },
@@ -1858,6 +1921,7 @@ document.addEventListener("input", e => {
 document.addEventListener("change", async e => {
   const el = e.target;
   if (el.id === "file-in") { if (el.files && el.files[0]) await readFile(el.files[0]); return; }
+  if (el.dataset && el.dataset.actCg) { state.cgDraft = { ...((state.contact && state.contact.coverGroups) || DEFAULT_COVER_GROUPS), ...(state.cgDraft || {}), [el.dataset.dept]: el.value }; render(); return; }
   if (el.id === "opd-file") { if (el.files && el.files[0]) await readOpdFile(el.files[0]); return; }
   if (el.id === "dept-file") { if (el.files && el.files[0]) await readDeptFile(el.files[0]); return; }
   const path = el.dataset && el.dataset.bind; if (!path) return;
@@ -1978,6 +2042,8 @@ function renderSwapPopup(inApp) {
   const el = $("#popup"); if (!el) return;
   const ext = inApp ? extAlerts().filter(x => !seenSet().has(x.seen)) : [];
   if (ext.length && !document.body.classList.contains("welcoming") && !state.profileOpen) return renderExtPopup(el, ext);
+  const cov = inApp ? coverPrompts().filter(x => !seenSet().has(x.seen)) : [], refused = inApp ? coverRefusals().filter(x => !seenSet().has(x.seen)) : [];
+  if ((cov.length || refused.length) && !document.body.classList.contains("welcoming") && !state.profileOpen) return renderCoverPopup(el, cov, refused);
   const waiting = inApp ? pendingForMe() : [];
   if (state.tab === "changes") markSeen(waiting.map(r => r.id));
   const fresh = waiting.filter(r => !seenSet().has(r.id));
@@ -1998,6 +2064,21 @@ function renderSwapPopup(inApp) {
   setTimeout(() => { const b = $("#popup-review"); if (b) b.focus(); }, 30);
 }
 
+function renderCoverPopup(el, cov, refused) {
+  const key = "cov|" + cov.map(x => x.seen).join() + "|" + refused.map(x => x.seen).join();
+  if (key === popupKey) return; popupKey = key;
+  const asking = cov.length > 0;
+  el.innerHTML = `<div class="pop-back" data-act="cover-later"></div>
+    <div class="pop" role="alertdialog" aria-modal="true" aria-labelledby="pop-title">
+      <div class="pop-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2 2 7v2h20V7zM4 11v7h3v-7zm6.5 0v7h3v-7zM17 11v7h3v-7zM2 20v2h20v-2z"/></svg></div>
+      <h2 id="pop-title">${asking ? (cov.length === 1 ? "A station has no doctor on your shift" : cov.length + " stations have no doctor on your shifts") : "Station not covered"}</h2>
+      <div class="pop-list">${asking ? cov.slice(0, 4).map(x => `<div class="pop-item"><p><b>${esc(x.dept)}</b> has no doctor on <b>${esc(fmtDuty(x))}</b>.</p><p class="small muted">You're on duty in ${esc(x.myDept)} then. Are you covering ${esc(x.dept)} as well?</p>
+        <div class="btns"><button class="btn primary" data-act="cover-answer" data-key="${esc(gapKey(x))}" data-month="${esc(x.month)}" data-answer="yes">Yes, I'm covering it</button><button class="btn" data-act="cover-answer" data-key="${esc(gapKey(x))}" data-month="${esc(x.month)}" data-answer="no">No, I can't</button></div></div>`).join("")
+        : refused.slice(0, 4).map(x => `<div class="pop-item"><p><b>${esc(x.g.dept)}</b> on <b>${esc(fmtDuty(x.g))}</b> has no doctor.</p><p class="small muted">${x.no.map(id => esc(docName(id))).join(", ")} can't cover it. Nobody has said yes yet.</p></div>`).join("")}
+        ${(asking ? cov : refused).length > 4 ? `<p class="small muted">…and ${(asking ? cov : refused).length - 4} more</p>` : ""}</div>
+      <div class="btns">${asking ? "" : `<button class="btn primary" data-act="cover-open" id="cover-open">Open the roster</button>`}<button class="btn" data-act="cover-later" id="cover-later">${asking ? "Answer later" : "OK"}</button></div>
+    </div>`;
+}
 function renderExtPopup(el, items) {
   const key = "ext|" + items.map(x => x.seen).join();
   if (key === popupKey) return; popupKey = key;
@@ -2065,8 +2146,10 @@ function contactLinks(id) {
   if (!n || id === app.uid) return "";
   return `<a class="icon-link wa" href="https://wa.me/${n}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(docName(id))}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm4.5 12.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg></a><a class="icon-link" href="tel:+${n}" aria-label="Call ${esc(docName(id))}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.2 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .6 3.6 1 1 0 0 1-.3 1z"/></svg></a>`;
 }
-function dutyPeople(ids) {
+function dutyPeople(ids, slot, dept) {
   if (ids === null) return `<span class="muted small">Next month's roster opens on the 1st</span>`;
+  const cby = !ids.length && slot ? coveredBy({ ...slot, dept }) : null;
+  if (cby) return `<span class="duty-person"><span>${esc(docName(cby))} <small>covering from ${esc(dutyDept(cby, slot.date, slot.shift))}</small></span>${contactLinks(cby)}</span>`;
   if (!ids.length) return `<span class="gaptag">No one rostered</span>`;
   return ids.map(id => `<span class="duty-person"><span>${esc(docName(id))}${id === app.uid ? " (you)" : ""}${DESIG_SHORT[desigOf(id)] ? ` <small>${esc(DESIG_SHORT[desigOf(id)])}</small>` : ""}</span>${contactLinks(id)}</span>`).join("");
 }
@@ -2078,12 +2161,12 @@ function renderOnDuty() {
   const own = seesAll() ? "" : myDept();
   const depts = deptList().filter(d => d !== "MSA").sort((a, b) => (b === own) - (a === own));
   if (!depts.length) return "";
-  const nextCell = d => !own || d === own ? `<span class="od-label">Next · ${nxt.name}</span>${dutyPeople(onDutyIds(now.next, d))}` : `<span class="muted small od-dash" aria-label="Not shown for other departments">–</span>`;
+  const nextCell = d => !own || d === own ? `<span class="od-label">Next · ${nxt.name}</span>${dutyPeople(onDutyIds(now.next, d), now.next, d)}` : `<span class="muted small od-dash" aria-label="Not shown for other departments">–</span>`;
   return `<section class="panel onduty" aria-label="On duty now">
     <div class="bar"><h2>On duty now</h2><span class="keyitem sh-${cur.code}"><b>${cur.name}</b><span class="mono">until ${now.ends}</span></span></div>
     <div class="od-grid">
       <div class="od-h">Department</div><div class="od-h">Now · ${cur.name}</div><div class="od-h">Next · ${nxt.name} from ${nxt.time.slice(0, 5)}</div>
-      ${depts.map(d => `<div class="od-dept${d === own ? " od-own" : ""}">${esc(d)}${d === own ? ` <span class="pill done">Yours</span>` : ""}</div><div class="od-now"><span class="od-label">Now</span>${dutyPeople(onDutyIds(now.cur, d))}</div><div class="od-next${own && d !== own ? " od-other" : ""}">${nextCell(d)}</div>`).join("")}
+      ${depts.map(d => `<div class="od-dept${d === own ? " od-own" : ""}">${esc(d)}${d === own ? ` <span class="pill done">Yours</span>` : ""}</div><div class="od-now"><span class="od-label">Now</span>${dutyPeople(onDutyIds(now.cur, d), now.cur, d)}</div><div class="od-next${own && d !== own ? " od-other" : ""}">${nextCell(d)}</div>`).join("")}
     </div>
   </section>`;
 }
@@ -2150,6 +2233,16 @@ function renderConsultants() {
     <div class="seg" role="group" aria-label="Show">${[["all", "Everyone"], ["today", "In OPD today"], ["now", "In clinic now"]].map(([k, l]) => `<button data-act="cs-mode" data-mode="${k}" aria-pressed="${state.csMode === k}" id="cs-${k}">${l}</button>`).join("")}</div>
   </section>
   ${shown.length ? Object.keys(groups).sort().map(g => `<section class="panel cs-group"><h3>${esc(g)} <span class="muted small">(${groups[g].length})</span></h3><div class="cs-grid">${groups[g].map(card).join("")}</div></section>`).join("") : `<div class="empty"><p>No consultants match. ${state.csMode !== "all" ? "Try “Everyone”." : ""}</p></div>`}`;
+}
+function renderCoverGroups() {
+  const cur = (state.contact && state.contact.coverGroups) || DEFAULT_COVER_GROUPS, d = state.cgDraft || cur;
+  const groups = [...new Set(["ER & wards", ...Object.values(cur)])];
+  const depts = DEPARTMENTS.filter(x => x !== "MSA");
+  return `<section class="panel" style="grid-column:1/-1"><h2>Station cover groups</h2>
+    <p class="muted small">When a station has nobody on a shift, the MOs on duty in another station of the <b>same group</b> are asked if they're covering it. Stations set to “Own station only” are never covered from elsewhere.</p>
+    <div class="cg-grid">${depts.map(x => `<label class="field"><span class="lab">${esc(x)}</span><select data-dept="${esc(x)}" data-act-cg="1">${[...groups.map(g => `<option value="${esc(g)}" ${(d[x] || x) === g ? "selected" : ""}>${esc(g)}</option>`), `<option value="${esc(x)}" ${!d[x] || d[x] === x ? "selected" : ""}>Own station only</option>`].join("")}</select></label>`).join("")}</div>
+    <div class="btns"><button class="btn primary" data-act="cg-save" id="cg-save" ${app.busy || !state.cgDraft ? "disabled" : ""}>Save groups</button></div>
+  </section>`;
 }
 function renderOpdForm() {
   const u = state.opdUpload, cur = (state.contact && state.contact.consultants) || [];
@@ -2259,7 +2352,7 @@ function startLive() {
   }, onDbError);
 }
 function stopLive() {
-  [unsubDoctors, unsubRosters, unsubRequests, unsubContact, unsubPending, unsubPrevOwn, unsubExt].forEach(u => u && u());
+  [unsubDoctors, unsubRosters, unsubRequests, unsubContact, unsubPending, unsubPrevOwn, unsubExt, unsubCover].forEach(u => u && u()); unsubCover = null; state.cover = {};
   unsubDoctors = unsubRosters = unsubRequests = unsubContact = unsubPending = unsubPrevOwn = unsubExt = null; state.contact = null; state.extended = {};
   state.pending = []; logMonth = null; rosterSnap = {}; prevOwn = null;
   state.doctors = {}; state.rosters = {}; state.requests = []; state.drafts = {}; state.upload = null; state.editFor = null;
