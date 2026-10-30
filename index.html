@@ -100,7 +100,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .masthead:not(.compact) .who .btn.ghost { color: #ffffff; }
 .masthead:not(.compact) .who .btn.ghost:hover { border-color: rgba(255,255,255,.4); }
 .masthead:not(.compact) .who .pill.done { background: var(--brand-red); color: #ffffff; }
-.hero-copy { align-self: end; padding-block: 8px 32px; display: grid; gap: 8px; max-width: 1080px; animation: rise .8s .15s cubic-bezier(.2,.7,.2,1) both; }
+.hero-copy { align-self: end; padding-block: 8px 32px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; max-width: 1080px; animation: rise .8s .15s cubic-bezier(.2,.7,.2,1) both; }
 .hero-copy > * { max-width: 40rem; }
 .hero-copy .eyebrow { color: rgba(255,255,255,.82); }
 .hero-copy .eyebrow::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-red); margin-right: 8px; vertical-align: 1px; }
@@ -369,14 +369,17 @@ body.welcoming { overflow: hidden; }
 table.mini { border-collapse: collapse; width: 100%; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 table.mini th, table.mini td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 table.mini th { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-/* announcement strip: scrolls like a ticker when the text is longer than the screen */
-#announce { --ann-bg: var(--brand-navy); --ann-ink: #ffffff; --ann-tag: var(--brand-red); background: var(--ann-bg); color: var(--ann-ink); position: relative; z-index: 9; }
-#announce.important { --ann-bg: #f6b73c; --ann-ink: #2a1a00; --ann-tag: #2a1a00; }
-#announce.urgent { --ann-bg: var(--brand-red); --ann-ink: #ffffff; --ann-tag: #ffffff; }
-.ann-inner { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding-block: 9px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-.ann-tag { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; padding: 3px 9px; border-radius: 999px; border: 1.5px solid var(--ann-tag); color: var(--ann-tag); }
-#announce.urgent .ann-tag { background: rgba(255,255,255,.16); }
-.ann-view { flex: 1; min-width: 0; overflow: hidden; font-weight: 600; font-size: 0.92rem; }
+/* Announcement: a slim glass line above "Medical staff" on the photo; on other tabs it sits quietly above the content. Long text scrolls like a ticker. */
+#announce { --ann-dot: #9fc3e8; min-width: 0; display: flex; align-items: center; gap: 10px; max-width: 40rem; padding: 5px 5px 5px 12px; border-radius: 999px; background: rgba(4,31,52,.42); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: rgba(255,255,255,.94); margin-bottom: 6px; }
+#announce[hidden] { display: none; }
+#announce.important { --ann-dot: #f6b73c; }
+#announce.urgent { --ann-dot: #ff5a52; border-color: rgba(255,90,82,.55); }
+.ann-tag { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--ann-dot); }
+.ann-tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ann-dot); }
+#announce.urgent .ann-tag::before { animation: ann-pulse 1.8s ease-out infinite; }
+@keyframes ann-pulse { 0% { box-shadow: 0 0 0 0 rgba(255,90,82,.6); } 70% { box-shadow: 0 0 0 7px rgba(255,90,82,0); } 100% { box-shadow: 0 0 0 0 rgba(255,90,82,0); } }
+.ann-view { flex: 1; min-width: 0; overflow: hidden; font-weight: 500; font-size: 0.86rem; padding-block: 3px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 16px), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 16px), transparent 100%); }
+.ann-view:not(.scroll) { -webkit-mask-image: none; mask-image: none; }
 .ann-track { display: inline-flex; white-space: nowrap; }
 .ann-track > span { padding-right: 64px; }
 .ann-view.scroll .ann-track { animation: ticker var(--ann-dur, 20s) linear infinite; }
@@ -384,9 +387,12 @@ table.mini th { font-size: 0.75rem; color: var(--muted); text-transform: upperca
 .ann-view:not(.scroll) .ann-track > span + span { display: none; }
 .ann-view a { color: inherit; text-decoration: underline; }
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-@media (prefers-reduced-motion: reduce) { .ann-view.scroll .ann-track { white-space: normal; } .ann-view.scroll .ann-track > span + span { display: none; } }
-.ann-x { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 0; background: transparent; color: inherit; font-size: 1.2rem; line-height: 1; cursor: pointer; }
-.ann-x:hover { background: rgba(255,255,255,.18); }
+@media (prefers-reduced-motion: reduce) { .ann-view.scroll .ann-track { white-space: normal; } .ann-view.scroll .ann-track > span + span { display: none; } #announce.urgent .ann-tag::before { animation: none; } }
+.ann-x { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 0; background: transparent; color: inherit; opacity: .65; font-size: 1.05rem; line-height: 1; cursor: pointer; }
+.ann-x:hover { opacity: 1; background: rgba(255,255,255,.14); }
+#ann-slot #announce { max-width: none; margin: 0 0 14px; border-radius: 12px; background: var(--surface); border-color: var(--line); color: var(--ink); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: 0 1px 2px rgba(4,31,52,.05); }
+#ann-slot #announce { --ann-dot: #3a7bd5; } #ann-slot #announce.important { --ann-dot: #c98300; } #ann-slot #announce.urgent { --ann-dot: var(--brand-red); border-color: rgba(229,38,31,.4); }
+#ann-slot .ann-x:hover { background: var(--line); }
 textarea.plain { font-family: var(--f-body); font-size: 0.95rem; min-height: 72px; }
 .hdot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-red); vertical-align: middle; margin: 0 4px 2px; flex: none; }
 .hname { display: flex; align-items: center; font-size: 0.68rem; line-height: 1.25; color: var(--brand-red); font-weight: 600; margin-top: 2px; }
@@ -443,10 +449,10 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   .masthead:not(.compact) .photo-wrap { height: 250px; bottom: auto; }
   .masthead:not(.compact)::before { bottom: auto; height: 250px; background: linear-gradient(180deg, rgba(4,31,52,.55) 0%, rgba(4,31,52,0) 32%), linear-gradient(0deg, var(--brand-navy) 0%, rgba(4,31,52,0) 34%); }
   .masthead:not(.compact) .mast-top { display: contents; }
-  .masthead:not(.compact) .brand { order: 1; height: 236px; align-items: flex-start; margin: 14px 0 0 max(16px, env(safe-area-inset-left, 0px)); }
-  .masthead:not(.compact) .logo { height: 42px; }
+  .masthead:not(.compact) .brand { order: 1; height: 232px; align-items: flex-start; margin: 18px 0 0 max(16px, env(safe-area-inset-left, 0px)); }
+  .masthead:not(.compact) .logo { height: 48px; }
   .masthead:not(.compact) .logo-plate { padding: 7px 10px; border-radius: 10px; }
-  .masthead:not(.compact) .clock { order: 2; align-self: flex-start; margin: 14px max(16px, env(safe-area-inset-right, 0px)) 0 auto; padding: 5px 12px 5px 5px; gap: 8px; }
+  .masthead:not(.compact) .clock { order: 2; align-self: flex-start; margin: 20px max(16px, env(safe-area-inset-right, 0px)) 0 auto; padding: 5px 12px 5px 5px; gap: 8px; }
   .masthead:not(.compact) .dial { width: 36px; height: 36px; }
   .masthead:not(.compact) .ck-time { font-size: 1rem; }
   .masthead:not(.compact) .ck-date, .masthead:not(.compact) .ck-sub { font-size: .66rem; }
@@ -479,7 +485,6 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   // Decide before the page paints, so the roster never flashes underneath the welcome screen.
   try { if (sessionStorage.getItem("welcomed") !== "1" && !matchMedia("(prefers-reduced-motion: reduce)").matches) { document.getElementById("welcome").hidden = false; document.body.classList.add("welcoming"); } } catch (e) {}
 </script>
-<div id="announce" role="region" aria-label="Announcement" hidden></div>
 <header class="masthead" id="masthead">
   <div class="photo-wrap"><img class="photo" src="assets/hospital.webp" srcset="assets/hospital-900.webp 900w, assets/hospital.webp 1803w" sizes="100vw" alt="" fetchpriority="high"></div>
   <div class="mast-inner mast-top">
@@ -500,7 +505,8 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
     </div>
     <div class="who" id="who"></div>
   </div>
-  <div class="mast-inner hero-copy">
+  <div class="mast-inner hero-copy" id="hero-copy">
+    <div id="announce" role="region" aria-label="Announcement" hidden></div>
     <span class="eyebrow">Eastridge Primecare · Medical staff</span>
     <h1>Doctor's Duty Roster</h1>
     <p>Upload your month, swap or hand over duties, and see who's on for every shift across the hospital.</p>
@@ -508,6 +514,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 </header>
 
 <main class="wrap">
+  <div id="ann-slot"></div>
 
   <div class="key" aria-label="Shift times">
     <span class="keyitem sh-M"><b>Morning</b><span class="mono">08:00 – 14:00</span></span>
@@ -1192,6 +1199,7 @@ function render() {
   renderSwapPopup(inApp && !state.waPrompt && !state.extPrompt && !state.icsPrompt);
   const large = !inApp || state.tab === "board";
   $("#masthead").classList.toggle("compact", !large);
+  { const ann = $("#announce"), home = large ? $("#hero-copy") : $("#ann-slot"); if (ann.parentNode !== home) { home.insertBefore(ann, home.firstChild); annMeasure(); } }
   $("#who").innerHTML = renderWho();
   $("#banner").innerHTML = renderBanner();
   $("#bar").hidden = !inApp;
@@ -2228,14 +2236,18 @@ function updateAnnouncement() {
   if (!show) { el.hidden = true; el.innerHTML = ""; return; }
   const level = ANN_LEVELS[a.level] ? a.level : "info";
   el.className = level; el.hidden = false;
-  el.innerHTML = `<div class="ann-inner"><span class="ann-tag"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 10v4a1 1 0 0 0 1 1h2l5 4V5L6 9H4a1 1 0 0 0-1 1zm13.5 2A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>${ANN_LEVELS[level]}</span>
+  el.innerHTML = `<span class="ann-tag">${ANN_LEVELS[level]}</span>
     <div class="ann-view" tabindex="0"><div class="ann-track"><span>${linkify(a.text)}</span><span aria-hidden="true">${linkify(a.text)}</span></div></div>
-    ${level === "urgent" ? "" : `<button class="ann-x" data-act="ann-dismiss" aria-label="Hide this announcement" id="ann-x">×</button>`}</div>`;
-  const view = el.querySelector(".ann-view"), first = el.querySelector(".ann-track > span");
+    ${level === "urgent" ? "" : `<button class="ann-x" data-act="ann-dismiss" aria-label="Hide this announcement" id="ann-x">×</button>`}`;
+  annMeasure();
+}
+/* Scroll the text only when it doesn't fit (re-checked when the strip moves between the photo and the page). */
+function annMeasure() {
   requestAnimationFrame(() => {
+    const view = document.querySelector("#announce .ann-view"), first = document.querySelector("#announce .ann-track > span"); if (!view || !first) return;
     const scroll = first.scrollWidth > view.clientWidth + 4;
     view.classList.toggle("scroll", scroll);
-    if (scroll) view.style.setProperty("--ann-dur", Math.max(12, Math.round(first.scrollWidth / 60)) + "s");
+    if (scroll) view.style.setProperty("--ann-dur", Math.max(12, Math.round(first.scrollWidth / 55)) + "s");
   });
 }
 function subscribeAnnouncement() {
