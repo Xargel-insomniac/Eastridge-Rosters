@@ -357,6 +357,13 @@ details > summary { cursor: pointer; font-weight: 600; }
 .wl-sub::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--brand-red); margin-right: 8px; vertical-align: 1px; }
 .wl-skip { position: absolute; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); left: 0; right: 0; font-size: 0.75rem; color: rgba(255,255,255,.45); opacity: 0; animation: wl-rise .5s 1.6s forwards; }
 @keyframes wl-rise { to { opacity: 1; transform: none; } }
+.wl-quote { margin: 18px 0 0; max-width: 36ch; opacity: 0; transform: translateY(10px); animation: wl-rise .7s 1.55s cubic-bezier(.2,.7,.2,1) forwards; }
+.wl-quote blockquote { margin: 0; font-size: clamp(1rem, 3.8vw, 1.2rem); line-height: 1.45; font-style: italic; color: rgba(255,255,255,.92); text-wrap: balance; }
+.wl-quote blockquote::before { content: "“"; } .wl-quote blockquote::after { content: "”"; }
+.wl-quote figcaption { margin-top: 8px; font-size: 0.8rem; color: rgba(255,255,255,.6); }
+.wl-quote figcaption:empty { display: none; }
+#welcome.has-quote .wl-stage { width: min(46vmin, 300px); }
+@media (max-height: 640px) { #welcome.has-quote .wl-stage { width: min(34vmin, 220px); } #welcome.has-quote .wl-hello { font-size: 1.35rem; } }
 body.welcoming .masthead .photo, body.welcoming .hero-copy { animation-play-state: paused; }
 body.welcoming { overflow: hidden; }
 table.mini { border-collapse: collapse; width: 100%; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
@@ -465,7 +472,8 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   </div>
   <p class="wl-hello" id="wl-hello">Welcome to Eastridge Primecare</p>
   <p class="wl-sub">Doctor's Duty Roster</p>
-  <span class="wl-skip">Tap anywhere to skip</span>
+  <figure class="wl-quote" id="wl-quote" hidden><blockquote id="wl-q"></blockquote><figcaption id="wl-by"></figcaption></figure>
+  <span class="wl-skip">Tap anywhere to continue</span>
 </div>
 <script>
   // Decide before the page paints, so the roster never flashes underneath the welcome screen.
@@ -2445,11 +2453,56 @@ function decidePhase() {
   }
   render();
 }
-/* Welcome effect: shown once per browser session, skipped for people who prefer reduced motion. */
+/* A short quote on the welcome screen. Every quote is shown once before any repeats (the order is kept on this device). */
+const QUOTES = [
+  ["Whoever saves one life, it is as if he had saved all of mankind.", "Qur'an 5:32"],
+  ["Indeed, with hardship comes ease.", "Qur'an 94:6"],
+  ["Allah does not burden a soul beyond what it can bear.", "Qur'an 2:286"],
+  ["Allah has not sent down a disease without sending down its cure.", "Hadith, Sahih al-Bukhari"],
+  ["Whoever relieves a believer of a hardship of this world, Allah will relieve him of a hardship on the Day of Resurrection.", "Hadith, Sahih Muslim"],
+  ["The strong person is not the one who overpowers others, but the one who controls himself when angry.", "Hadith, Sahih al-Bukhari"],
+  ["The deeds most loved by Allah are those done regularly, even if they are small.", "Hadith, Sahih al-Bukhari"],
+  ["Your smile for your brother is charity.", "Hadith, Jami' at-Tirmidhi"],
+  ["The merciful are shown mercy by the Most Merciful.", "Hadith, Jami' at-Tirmidhi"],
+  ["No religion is higher than humanity.", "Abdul Sattar Edhi"],
+  ["Raise your selfhood so high that before every decree, God Himself asks you: tell me, what is it you wish?", "Allama Iqbal"],
+  ["Unity, faith, discipline.", "Quaid-e-Azam Muhammad Ali Jinnah"],
+  ["The good physician treats the disease; the great physician treats the patient who has the disease.", "Sir William Osler"],
+  ["Listen to your patient; he is telling you the diagnosis.", "Sir William Osler"],
+  ["Medicine is a science of uncertainty and an art of probability.", "Sir William Osler"],
+  ["The best preparation for tomorrow is to do today's work superbly well.", "Sir William Osler"],
+  ["The practice of medicine is an art, not a trade; a calling, not a business; a calling in which your heart will be exercised equally with your head.", "Sir William Osler"],
+  ["Wherever the art of medicine is loved, there is also a love of humanity.", "Attributed to Hippocrates"],
+  ["Life is short, the art long, opportunity fleeting, experiment treacherous, judgement difficult.", "Hippocrates"],
+  ["Cure sometimes, relieve often, comfort always.", "Traditional medical saying"],
+  ["I attribute my success to this: I never gave or took any excuse.", "Florence Nightingale"],
+  ["Wherever there is a human being, there is an opportunity for a kindness.", "Seneca"],
+  ["No one is useless in this world who lightens the burdens of another.", "Charles Dickens"],
+  ["It always seems impossible until it's done.", "Nelson Mandela"],
+  ["Do what you can, with what you have, where you are.", "Theodore Roosevelt"],
+  ["Every shift you show up for, someone gets to go home.", ""],
+  ["Tonight is somebody's worst night. Your calm is part of their treatment.", ""],
+  ["Leave the next doctor the handover you'd want to receive.", ""],
+  ["Drink some water. Eat something. Your patients need you well too.", ""],
+  ["Small things done carefully, all night long: that's what saves lives.", ""],
+];
+function nextQuote() {
+  let deck = null;
+  try { deck = JSON.parse(localStorage.getItem("quote-deck") || "null"); } catch (_) {}
+  if (!Array.isArray(deck) || !deck.length || deck.some(i => !QUOTES[i])) { deck = QUOTES.map((_, i) => i); for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; } }
+  const i = deck.pop();
+  try { localStorage.setItem("quote-deck", JSON.stringify(deck)); } catch (_) {}
+  return QUOTES[i];
+}
+/* Welcome effect: shown once per browser session, skipped for people who prefer reduced motion.
+   With a quote, the screen stays long enough to read it: about a third of a second per word, between 3 and 7 seconds after it appears. */
 function startWelcome() {
   const el = $("#welcome");
   if (!el || el.hidden) return;
   try { sessionStorage.setItem("welcomed", "1"); } catch (_) {}
+  const [q, by] = nextQuote(), words = q.split(/\s+/).length, stay = 1550 + Math.min(7000, Math.max(3000, 1200 + words * 330));
+  $("#wl-q").textContent = q; $("#wl-by").textContent = by ? "— " + by : ""; $("#wl-quote").hidden = false; el.classList.add("has-quote");
+  el.style.animationDelay = (stay + 2000) + "ms"; // the CSS safety net that hides the screen if scripts stall
   const greet = setTimeout(() => {
     const n = app.myDoc && app.myDoc.name;
     if (n) $("#wl-hello").textContent = "Welcome back, " + n;
@@ -2460,7 +2513,7 @@ function startWelcome() {
     el.classList.add("lift"); document.body.classList.remove("welcoming");
     setTimeout(() => { el.hidden = true; render(); }, 850);
   };
-  const auto = setTimeout(finish, 2700);
+  const auto = setTimeout(finish, stay);
   el.addEventListener("click", finish);
   document.addEventListener("keydown", e => { if (e.key === "Escape" || e.key === "Enter" || e.key === " ") finish(); }, { once: true });
 }
