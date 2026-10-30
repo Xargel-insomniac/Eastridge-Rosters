@@ -252,6 +252,8 @@ details > summary { cursor: pointer; font-weight: 600; }
 .cs-foot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .covtag { color: var(--warn); font-weight: 700; font-size: 0.78rem; padding: 2px 4px; }
 .bc.covered { background: var(--warn-bg); }
+.ics-steps { margin: 6px 0 10px; padding-left: 22px; text-align: left; }
+.ics-steps li { margin: 3px 0; }
 .feedback { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin: 22px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .cg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 10px; }
 .pill.cs-today { background: var(--accent-soft); color: var(--accent); }
@@ -846,7 +848,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, msaDraft: null, fbDraft: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -1178,8 +1180,8 @@ function render() {
   try { if (fid && typeof ae.selectionStart === "number") sel = [ae.selectionStart, ae.selectionEnd]; } catch (_) {}
   const inApp = app.sample || app.phase === "app";
   if (inApp && state.tab === "changes") ensureLog();
-  const wp = $("#wa-prompt"); if (wp) { const html = renderExtPrompt() || renderWaPrompt(); if (wp.dataset.html !== html) { wp.dataset.html = html; wp.innerHTML = html; } }
-  renderSwapPopup(inApp && !state.waPrompt && !state.extPrompt);
+  const wp = $("#wa-prompt"); if (wp) { const html = renderExtPrompt() || renderIcsPrompt() || renderWaPrompt(); if (wp.dataset.html !== html) { wp.dataset.html = html; wp.innerHTML = html; } }
+  renderSwapPopup(inApp && !state.waPrompt && !state.extPrompt && !state.icsPrompt);
   const large = !inApp || state.tab === "board";
   $("#masthead").classList.toggle("compact", !large);
   $("#who").innerHTML = renderWho();
@@ -1544,6 +1546,16 @@ function renderExtPrompt() {
     <div class="field"><label for="ext-reason">Reason (optional)</label><textarea class="plain" id="ext-reason" data-bind="extPrompt.reason" maxlength="200" placeholder="e.g. colleague on leave, short-staffed that week">${esc(x.reason)}</textarea></div>
     <div class="btns"><button class="btn primary" data-act="ext-confirm" id="ext-confirm">Save and ask for approval</button><button class="btn" data-act="ext-cancel" id="ext-cancel">Go back and change</button></div></div>`;
 }
+function renderIcsPrompt() {
+  const w = state.icsPrompt; if (!w) return "";
+  return `<div class="pop-back" data-act="ics-cancel"></div><div class="pop" role="alertdialog" aria-modal="true" aria-labelledby="ics-title">
+    <div class="pop-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24"><path fill="currentColor" d="M7 2v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2zm-2 8h14v10H5z"/></svg></div>
+    <h2 id="ics-title">Your calendar won't update by itself</h2>
+    <p class="small">This is a copy of your duties as they are <b>today</b>. If you later swap, hand over or move a duty:</p>
+    <ol class="small ics-steps"><li><b>Delete</b> the old duty from your phone calendar.</li><li><b>Download again</b> here to add the new one.</li></ol>
+    <p class="small muted">On the day, the roster on this site is always the final word.</p>
+    <div class="btns"><button class="btn primary" data-act="ics" data-month="${esc(w.month)}" data-id="${esc(w.id)}" id="ics-ok">I understand, download</button><button class="btn" data-act="ics-cancel" id="ics-cancel">Cancel</button></div></div>`;
+}
 function renderWaPrompt() {
   const w = state.waPrompt; if (!w) return "";
   return `<div class="pop-back" data-act="wa-prompt-close"></div><div class="pop" role="dialog" aria-modal="true" aria-labelledby="wa-title">
@@ -1769,6 +1781,7 @@ const actions = {
     const n = !yes ? waNumber(state.contact && state.contact.msaWhatsApp) : "", win = n ? waWindow() : null;
     const doc = { month: b.dataset.month, date, shift, dept: g.dept, uid: app.uid, fromDept: dutyDept(app.uid, date, shift), answer: yes ? "yes" : "no", at: Date.now() };
     const ok = await guarded(() => dbCall(() => app.db.collection("cover").doc(coverId(g, app.uid)).set(doc)), yes ? "Thanks. " + g.dept + " shows as covered by you on " + fmtDuty(g) + "." : "Noted. The MSA office has been told " + g.dept + " needs cover.");
+    if (ok) { state.cover[coverId(g, app.uid)] = { id: coverId(g, app.uid), ...doc }; render(); } // close the pop-up now; the live update confirms it
     if (ok && n) waGo(win, "https://wa.me/" + n + "?text=" + encodeURIComponent("Assalam o Alaikum, this is " + docName(app.uid) + " (" + doc.fromDept + "). " + g.dept + " has no doctor on " + fmtDuty(g) + " and I can't cover it alongside " + doc.fromDept + ". Please arrange cover.\n\n" + location.origin + location.pathname)); else waAbort(win);
   },
   "ext-pop-later"() { const k = extAlerts().map(x => x.seen); markSeen(k); if (!app.canEdit) markLocalSeen(k); render(); },
@@ -1805,7 +1818,10 @@ const actions = {
     if (v && !waNumber(v)) { toast("That doesn't look like a WhatsApp number. Use the format +92 336 6033073."); return; }
     await guarded(async () => { await dbCall(() => app.db.collection("settings").doc("contact").set({ msaWhatsApp: v, updatedAt: Date.now(), updatedBy: app.uid }, { merge: true })); state.msaDraft = null; }, v ? "Saved. Doctors now see “Send my rota to the MSA”." : "Number removed.");
   },
+  "ics-ask"(b) { state.icsPrompt = { month: b.dataset.month, id: b.dataset.id }; render(); },
+  "ics-cancel"() { state.icsPrompt = null; render(); },
   ics(b) {
+    state.icsPrompt = null; render();
     const m = b.dataset.month, id = b.dataset.id, d = state.doctors[id] || {};
     const url = URL.createObjectURL(new Blob([icsFor(m, id)], { type: "text/calendar;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = "Eastridge-duties-" + m + (id === app.uid ? "" : "-" + String(d.name || "doctor").replace(/[^A-Za-z0-9]+/g, "-")) + ".ics";
@@ -2309,7 +2325,7 @@ function icsFor(month, id) {
   for (const x of dutyList(onlyMonth(rosterOf(month, id) || {}, month))) {
     const s = SHIFT[x.shift], dept = dutyDept(id, x.date, x.shift);
     lines.push("BEGIN:VEVENT", "UID:" + x.date + "-" + x.shift + "-" + safeId(id) + "@eastridge-rosters", "DTSTAMP:" + stamp, "DTSTART:" + pkt(x.date, s.start), "DTEND:" + pkt(x.date, s.end),
-      "SUMMARY:" + tx(s.name + " duty · " + dept), "LOCATION:" + tx("Eastridge Primecare, " + dept), "DESCRIPTION:" + tx(s.name + " shift " + s.time + (x.shift === "N" ? " (next day)" : "") + ". From the Eastridge duty roster."),
+      "SUMMARY:" + tx(s.name + " duty · " + dept), "LOCATION:" + tx("Eastridge Primecare, " + dept), "DESCRIPTION:" + tx(s.name + " shift " + s.time + (x.shift === "N" ? " (next day)" : "") + ". From the Eastridge duty roster. Swaps made after you downloaded this don't update here: check the roster site for the latest."),
       "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + tx(s.name + " duty in 1 hour"), "TRIGGER:-PT1H", "END:VALARM", "END:VEVENT");
   }
   lines.push("END:VCALENDAR");
@@ -2321,7 +2337,7 @@ function renderCalendar(month, id) {
   const own = id === app.uid;
   return `<section class="panel"><h2>Add ${own ? "my" : "these"} duties to ${own ? "my" : "a"} phone calendar</h2>
     <p class="muted small">Downloads the ${n} saved dut${n === 1 ? "y" : "ies"} for ${esc(monthLabel(month))} with a reminder an hour before each shift.</p>
-    <div class="btns"><button class="btn" data-act="ics" data-month="${esc(month)}" data-id="${esc(id)}" id="ics-dl"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 2v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2zm-2 8h14v10H5zm6 2v3H8v2h3v3h2v-3h3v-2h-3v-3z"/></svg>Download for my calendar</button></div>
+    <div class="btns"><button class="btn" data-act="ics-ask" data-month="${esc(month)}" data-id="${esc(id)}" id="ics-dl"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 2v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2zm-2 8h14v10H5zm6 2v3H8v2h3v3h2v-3h3v-2h-3v-3z"/></svg>Download for my calendar</button></div>
     <details class="small"><summary>How to add it</summary>
       <p><b>iPhone:</b> tap the button, then <b>Add all</b>.</p>
       <p><b>Android:</b> tap the downloaded file and choose your Calendar app. If Google Calendar won't open it, go to <b>calendar.google.com</b> on a computer → Settings → <b>Import</b> and pick the file.</p>
