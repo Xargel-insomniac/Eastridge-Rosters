@@ -278,13 +278,31 @@ details > summary { cursor: pointer; font-weight: 600; }
 .ck-sub { font-size: .72rem; color: rgba(255,255,255,.82); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .ck-dot { width: 7px; height: 7px; border-radius: 50%; background: #f2b54a; box-shadow: 0 0 0 0 rgba(242,181,74,.7); animation: ck-pulse 2s infinite; }
 .clock[data-shift="E"] .ck-dot { background: #f38c72; } .clock[data-shift="N"] .ck-dot { background: #a2a5f6; }
+/* Day timeline along the bottom of the photo (big header only) */
+.dayline { display: none; }
+.masthead:not(.compact) .dayline { display: block; position: absolute; z-index: 1; color: #ffffff; pointer-events: none; animation: rise .8s .35s cubic-bezier(.2,.7,.2,1) both; }
+.dl-labels { position: relative; height: 15px; margin-bottom: 6px; font-size: .7rem; font-weight: 600; color: rgba(255,255,255,.62); text-shadow: 0 1px 6px rgba(0,0,0,.5); white-space: nowrap; }
+.dl-labels span { position: absolute; top: 0; }
+.dl-labels [data-s="M"] { left: 0; } .dl-labels [data-s="E"] { left: 25%; } .dl-labels [data-s="N"] { left: 50%; }
+.dl-labels .dl-left { right: 0; color: #ffffff; font-weight: 700; }
+.dayline[data-shift="M"] .dl-labels [data-s="M"], .dayline[data-shift="E"] .dl-labels [data-s="E"], .dayline[data-shift="N"] .dl-labels [data-s="N"] { color: #ffffff; font-weight: 700; }
+.dl-track { position: relative; display: grid; grid-template-columns: 6fr 6fr 12fr; gap: 3px; height: 6px; }
+.dl-track i { border-radius: 3px; opacity: .4; }
+.dl-track [data-s="M"] { background: #f2b54a; } .dl-track [data-s="E"] { background: #f38c72; } .dl-track [data-s="N"] { background: #a2a5f6; }
+.dayline[data-shift="M"] .dl-track [data-s="M"], .dayline[data-shift="E"] .dl-track [data-s="E"], .dayline[data-shift="N"] .dl-track [data-s="N"] { opacity: 1; }
+.dl-now { position: absolute; top: -5px; width: 3px; height: 16px; margin-left: -1.5px; border-radius: 2px; background: #ffffff; box-shadow: 0 0 0 2px rgba(4,31,52,.55); transition: left 1s linear; }
+/* with the timeline showing the shift, the big clock keeps just the time and date */
+.masthead:not(.compact) .ck-sub { display: none; }
+.masthead:not(.compact) .ck-date { grid-column: 1 / -1; }
+.masthead:not(.compact) .ck-date::after { content: none; }
 @keyframes ck-pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.5); } 70% { box-shadow: 0 0 0 7px rgba(255,255,255,0); } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
 @media (min-width: 641px) {
   /* big screens: the clock sits in the photo's bottom-right corner, beside the headline */
-  .masthead:not(.compact) .clock { position: absolute; right: max(16px, calc((100vw - 1080px) / 2 + 16px)); bottom: 32px; padding: 10px 18px 10px 10px; gap: 14px; animation: rise .8s .3s cubic-bezier(.2,.7,.2,1) both; }
+  .masthead:not(.compact) .clock { position: absolute; right: max(16px, calc((100vw - 1080px) / 2 + 16px)); bottom: 76px; padding: 10px 18px 10px 10px; gap: 14px; animation: rise .8s .3s cubic-bezier(.2,.7,.2,1) both; }
   .masthead:not(.compact) .dial { width: 58px; height: 58px; }
   .masthead:not(.compact) .ck-time { font-size: 1.6rem; }
-  .masthead:not(.compact) .ck-sub { font-size: .78rem; }
+  .masthead:not(.compact) .ck-date { font-size: .82rem; }
+  .masthead:not(.compact) .dayline { right: max(16px, calc((100vw - 1080px) / 2 + 16px)); bottom: 30px; width: min(420px, 40vw); }
 }
 .masthead.compact .clock { background: transparent; border-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--ink); padding: 0; }
 .masthead.compact .dial { width: 32px; height: 32px; }
@@ -458,6 +476,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   .masthead:not(.compact) .ck-date, .masthead:not(.compact) .ck-sub { font-size: .66rem; }
   .masthead:not(.compact) .ck-date { grid-column: 1 / -1; }
   .masthead:not(.compact) .ck-date::after { content: none; }
+  .masthead:not(.compact) .dayline { top: 208px; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); }
   .masthead:not(.compact) .hero-copy { order: 3; flex: 0 0 100%; padding-block: 4px 14px; gap: 6px; }
   .masthead:not(.compact) .hero-copy h1 { font-size: 1.9rem; }
   .masthead:not(.compact) .hero-copy p { font-size: .95rem; }
@@ -504,6 +523,10 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
       <div class="ck-text"><span class="ck-time"><span id="ck-hm">--:--</span><span class="ck-sec" id="ck-sec">:--</span> <span id="ck-ap"></span></span><span class="ck-date" id="ck-date"></span><span class="ck-sub"><span class="ck-dot" id="ck-dot"></span><span id="ck-sub">Pakistan time</span></span></div>
     </div>
     <div class="who" id="who"></div>
+  </div>
+  <div class="dayline" id="dayline" aria-label="Today's shifts">
+    <div class="dl-labels"><span data-s="M">Morning</span><span data-s="E">Evening</span><span data-s="N">Night</span><span class="dl-left" id="dl-left"></span></div>
+    <div class="dl-track"><i data-s="M"></i><i data-s="E"></i><i data-s="N"></i><span class="dl-now" id="dl-now"></span></div>
   </div>
   <div class="mast-inner hero-copy" id="hero-copy">
     <div id="announce" role="region" aria-label="Announcement" hidden></div>
@@ -2065,6 +2088,9 @@ async function exportMonth() {
     document.getElementById("ck-date").textContent = DOW[t.getUTCDay()] + " " + t.getUTCDate() + " " + MON_SHORT[t.getUTCMonth()];
     document.getElementById("ck-sub").textContent = SHIFT[code].name + " shift · " + (left >= 60 ? Math.floor(left / 60) + "h " : "") + (left % 60) + "m left";
     document.getElementById("clock").dataset.shift = code;
+    // Day timeline under the photo: Morning 08–14, Evening 14–20, Night 20–08, with a marker at now.
+    const dl = document.getElementById("dayline");
+    if (dl) { dl.dataset.shift = code; document.getElementById("dl-now").style.left = (((h * 60 + m - 480 + 1440) % 1440) / 14.4) + "%"; document.getElementById("dl-left").textContent = (left >= 60 ? Math.floor(left / 60) + "h " : "") + (left % 60) + "m left"; }
   }
   tick(); setInterval(tick, 1000);
 })();
