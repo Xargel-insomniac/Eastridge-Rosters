@@ -295,6 +295,23 @@ details > summary { cursor: pointer; font-weight: 600; }
 .masthead:not(.compact) .ck-sub { display: none; }
 .masthead:not(.compact) .ck-date { grid-column: 1 / -1; }
 .masthead:not(.compact) .ck-date::after { content: none; }
+/* Halloween (31 October only): dusk-orange sky, moon, bats, orange accents */
+.hw-fx { display: none; }
+:root.halloween .masthead:not(.compact) .hw-fx { display: block; position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+  background: radial-gradient(70% 60% at 72% 8%, rgba(255,128,32,.38), rgba(255,128,32,0) 70%), linear-gradient(180deg, rgba(58,16,72,.5) 0%, rgba(58,16,72,0) 55%); }
+.hw-moon { position: absolute; top: 26px; left: 62%; width: 64px; height: 64px; border-radius: 50%; background: radial-gradient(circle at 38% 35%, #fff4d6, #ffc46b 55%, #f08a24); box-shadow: 0 0 40px 12px rgba(255,150,50,.45); opacity: .9; }
+.hw-bat { position: absolute; width: 38px; fill: #160a1f; opacity: .85; animation: hw-fly 14s linear infinite; }
+.hw-bat.b1 { top: 18%; animation-delay: -2s; } .hw-bat.b2 { top: 34%; width: 26px; animation-duration: 18s; animation-delay: -9s; } .hw-bat.b3 { top: 10%; width: 20px; animation-duration: 22s; animation-delay: -15s; }
+@keyframes hw-fly { 0% { left: -60px; transform: translateY(0) scaleY(1); } 25% { transform: translateY(-14px) scaleY(.6); } 50% { transform: translateY(6px) scaleY(1); } 75% { transform: translateY(-10px) scaleY(.6); } 100% { left: calc(100% + 60px); transform: translateY(0) scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .hw-bat { animation: none; left: 30%; } .hw-bat.b2 { left: 48%; } .hw-bat.b3 { left: 80%; } }
+:root.halloween .hero-copy .eyebrow::after { content: " · Happy Halloween 🎃"; color: #ffb366; }
+:root.halloween .hero-copy .eyebrow::before { background: #ff8a1f; }
+:root.halloween { --accent: #c2560a; --accent-ink: #ffffff; }
+@media (prefers-color-scheme: dark) { :root.halloween:not([data-theme="light"]) { --accent: #ff9a4d; --accent-ink: #1d0d00; } }
+:root.halloween[data-theme="dark"] { --accent: #ff9a4d; --accent-ink: #1d0d00; }
+:root.halloween .wl-line { stroke: #ff8a1f; } :root.halloween .wl-glow { stroke: rgba(255,138,31,.4); }
+:root.halloween #welcome { background: radial-gradient(120% 90% at 50% 40%, #3a1648 0%, #1a0b26 55%, #07030c 100%); }
+:root.halloween .wl-sub::before { background: #ff8a1f; }
 @keyframes ck-pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.5); } 70% { box-shadow: 0 0 0 7px rgba(255,255,255,0); } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
 @media (min-width: 641px) {
   /* big screens: the clock sits in the photo's bottom-right corner, beside the headline */
@@ -476,6 +493,9 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   .masthead:not(.compact) .ck-date, .masthead:not(.compact) .ck-sub { font-size: .66rem; }
   .masthead:not(.compact) .ck-date { grid-column: 1 / -1; }
   .masthead:not(.compact) .ck-date::after { content: none; }
+  :root.halloween .masthead:not(.compact) .hw-fx { bottom: auto; height: 250px; }
+  .hw-moon { top: 22px; left: calc(50% - 30px); width: 36px; height: 36px; }
+  :root.halloween .hero-copy .eyebrow::after { content: " · 🎃"; }
   .masthead:not(.compact) .dayline { top: 208px; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); }
   .masthead:not(.compact) .hero-copy { order: 3; flex: 0 0 100%; padding-block: 4px 14px; gap: 6px; }
   .masthead:not(.compact) .hero-copy h1 { font-size: 1.9rem; }
@@ -487,6 +507,10 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 </head>
 <body>
 
+<script>
+  // Halloween look: only on 31 October in Pakistan time, then it switches itself off.
+  try { const t = new Date(Date.now() + 5 * 3600e3); if (t.getUTCMonth() === 9 && t.getUTCDate() === 31) document.documentElement.classList.add("halloween"); } catch (e) {}
+</script>
 <div id="welcome" hidden aria-hidden="true">
   <div class="wl-stage">
     <svg class="wl-arc" viewBox="0 0 200 200" aria-hidden="true">
@@ -502,9 +526,15 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 </div>
 <script>
   // Decide before the page paints, so the roster never flashes underneath the welcome screen.
+  if (document.documentElement.classList.contains("halloween")) document.querySelector("#welcome .wl-sub").textContent = "Happy Halloween 🎃";
   try { if (sessionStorage.getItem("welcomed") !== "1" && !matchMedia("(prefers-reduced-motion: reduce)").matches) { document.getElementById("welcome").hidden = false; document.body.classList.add("welcoming"); } } catch (e) {}
 </script>
 <header class="masthead" id="masthead">
+  <div class="hw-fx" aria-hidden="true"><span class="hw-moon"></span>
+    <svg class="hw-bat b1" viewBox="0 0 64 32"><path d="M32 10c-2-4-4-5-4-5l-1 4c-5-6-14-6-20-2 4 1 7 4 7 8-5-2-10-1-14 3 8 0 14 3 18 8 1-4 5-6 9-5 2 0 4 2 5 4 1-2 3-4 5-4 4-1 8 1 9 5 4-5 10-8 18-8-4-4-9-5-14-3 0-4 3-7 7-8-6-4-15-4-20 2l-1-4s-2 1-4 5z"/></svg>
+    <svg class="hw-bat b2" viewBox="0 0 64 32"><path d="M32 10c-2-4-4-5-4-5l-1 4c-5-6-14-6-20-2 4 1 7 4 7 8-5-2-10-1-14 3 8 0 14 3 18 8 1-4 5-6 9-5 2 0 4 2 5 4 1-2 3-4 5-4 4-1 8 1 9 5 4-5 10-8 18-8-4-4-9-5-14-3 0-4 3-7 7-8-6-4-15-4-20 2l-1-4s-2 1-4 5z"/></svg>
+    <svg class="hw-bat b3" viewBox="0 0 64 32"><path d="M32 10c-2-4-4-5-4-5l-1 4c-5-6-14-6-20-2 4 1 7 4 7 8-5-2-10-1-14 3 8 0 14 3 18 8 1-4 5-6 9-5 2 0 4 2 5 4 1-2 3-4 5-4 4-1 8 1 9 5 4-5 10-8 18-8-4-4-9-5-14-3 0-4 3-7 7-8-6-4-15-4-20 2l-1-4s-2 1-4 5z"/></svg>
+  </div>
   <div class="photo-wrap"><img class="photo" src="assets/hospital.webp" srcset="assets/hospital-900.webp 900w, assets/hospital.webp 1803w" sizes="100vw" alt="" fetchpriority="high"></div>
   <div class="mast-inner mast-top">
     <div class="brand">
