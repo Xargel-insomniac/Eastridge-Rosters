@@ -259,6 +259,8 @@ details > summary { cursor: pointer; font-weight: 600; }
 @keyframes duck-bob { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-2px) rotate(-3deg); } }
 @keyframes duck-wobble { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
 @media (prefers-reduced-motion: reduce) { .fb-duck, .fb-duck:hover { animation: none; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .fb-duck { filter: drop-shadow(0 0 1px rgba(255,255,255,.7)); } }
+:root[data-theme="dark"] .fb-duck { filter: drop-shadow(0 0 1px rgba(255,255,255,.7)); }
 .feedback { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin: 22px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .cg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 10px; }
 .pill.cs-today { background: var(--accent-soft); color: var(--accent); }
@@ -2510,7 +2512,7 @@ function renderFeedback() {
   const n = feedbackNumber(); if (!n || app.sample) return "";
   const d = app.myDoc || {};
   const text = "Assalam o Alaikum, a suggestion for the Eastridge roster app from " + (d.name || "a colleague") + (d.dept ? " (" + d.dept + ")" : "") + ":\n\n";
-  const duck = `<svg class="fb-duck" width="40" height="40" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="58" rx="17" ry="3" fill="rgba(4,31,52,.12)"/><ellipse cx="32" cy="44" rx="19" ry="14" fill="#ffd23f"/><circle cx="32" cy="25" r="16" fill="#ffd23f"/><path d="M22 44c4 4 16 4 20 0" fill="none" stroke="#f2b200" stroke-width="2" stroke-linecap="round"/><ellipse cx="26" cy="23" rx="2.6" ry="3.2" fill="#1d1d1d"/><ellipse cx="38" cy="23" rx="2.6" ry="3.2" fill="#1d1d1d"/><circle cx="26.9" cy="21.8" r=".9" fill="#fff"/><circle cx="38.9" cy="21.8" r=".9" fill="#fff"/><ellipse cx="32" cy="31" rx="8" ry="4.2" fill="#ff9a3c"/><path d="M25 31h14" stroke="#e07a1f" stroke-width="1.2" stroke-linecap="round"/><circle cx="21" cy="30" r="2.6" fill="#ffb3a7" opacity=".7"/><circle cx="43" cy="30" r="2.6" fill="#ffb3a7" opacity=".7"/><path d="M48 9c0-3 5-3 5 0 0 2-2.5 2.5-2.5 4.5M50.5 16.5v.2" fill="none" stroke="#6a7a8a" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+  const duck = `<img class="fb-duck" src="assets/feedback-duck.png" width="48" height="48" alt="">`;
   return `<div class="feedback"><span class="muted small">Something not working, or an idea to make this better?</span>${duck}
     <a class="btn wa" href="https://wa.me/${n}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener" id="fb-send"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2z"/></svg>Send feedback</a></div>`;
 }
