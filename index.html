@@ -286,6 +286,7 @@ details > summary { cursor: pointer; font-weight: 600; }
 .ck-dot { width: 7px; height: 7px; border-radius: 50%; background: #f2b54a; box-shadow: 0 0 0 0 rgba(242,181,74,.7); animation: ck-pulse 2s infinite; }
 .clock[data-shift="E"] .ck-dot { background: #f38c72; } .clock[data-shift="N"] .ck-dot { background: #a2a5f6; }
 /* Time of day: the dusk photo fades in around sunrise and sunset, the night photo after dark (each downloaded only when needed) */
+.ph-fade { display: none; }
 .masthead .photo.ph-dusk { opacity: var(--dusk, 0); transition: opacity 2s; }
 .masthead .photo.ph-night { opacity: var(--night, 0); transition: opacity 2s; }
 .masthead.compact .photo.ph-dusk, .masthead.compact .photo.ph-night { opacity: 0; }
@@ -488,7 +489,12 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   .masthead:not(.compact) .photo-wrap::after { opacity: var(--night, 0); background: linear-gradient(180deg, #02061a 0%, #0a1024 60%, var(--brand-navy) 90%); }
   .masthead:not(.compact) .photo { z-index: 1; }
   .masthead:not(.compact) .wx, .masthead:not(.compact) .wx-fog { bottom: auto; height: 250px; }
-  .masthead:not(.compact) .photo { top: auto; bottom: 40px; left: -5%; width: 110%; max-width: none; height: auto; aspect-ratio: 1803 / 618; transform-origin: 50% 100%; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 84%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 84%, transparent 100%); }
+  /* drawn 1:1 with no animation or mask, so phones keep the photo as crisp as a laptop */
+  .masthead:not(.compact) .photo { top: auto; bottom: 40px; left: -5%; width: 110%; max-width: none; height: auto; aspect-ratio: 1803 / 618; animation: none; transform: none; }
+  /* soft edges above and below the photo, as an overlay in the sky's colour for the time of day */
+  .masthead:not(.compact) .ph-fade { display: block; position: absolute; z-index: 2; left: 0; right: 0; top: calc(210px - 37.8vw); height: 8vw; pointer-events: none;
+    background: linear-gradient(180deg, color-mix(in srgb, color-mix(in srgb, #6ba0b8, #967891 calc(var(--dusk, 0) * 100%)), #050a1e calc(var(--night, 0) * 100%)) 0%, transparent 100%); }
+  .masthead:not(.compact) .ph-fade.b { top: calc(210px - 7vw); height: 7vw; background: linear-gradient(180deg, transparent 0%, #0c2a40 100%); }
   .masthead:not(.compact)::before { bottom: auto; height: 250px; background: linear-gradient(180deg, rgba(4,31,52,.55) 0%, rgba(4,31,52,0) 32%), linear-gradient(0deg, var(--brand-navy) 0%, rgba(4,31,52,.35) 12%, rgba(4,31,52,0) 24%); }
   .masthead:not(.compact) .mast-top { display: contents; }
   .masthead:not(.compact) .brand { order: 1; height: 236px; align-items: flex-start; margin: 14px 0 0 max(16px, env(safe-area-inset-left, 0px)); }
@@ -529,7 +535,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   try { if (sessionStorage.getItem("welcomed") !== "1" && !matchMedia("(prefers-reduced-motion: reduce)").matches) { document.getElementById("welcome").hidden = false; document.body.classList.add("welcoming"); } } catch (e) {}
 </script>
 <header class="masthead" id="masthead">
-  <div class="photo-wrap"><img class="photo" src="assets/hospital.webp" srcset="assets/hospital-900.webp 900w, assets/hospital.webp 1803w" sizes="(max-width: 640px) 220vw, 100vw" alt="" fetchpriority="high"><img class="photo ph-dusk" id="ph-dusk" data-srcset="assets/hospital-dusk-900.webp 900w, assets/hospital-dusk.webp 1803w" sizes="(max-width: 640px) 220vw, 100vw" alt=""><img class="photo ph-night" id="ph-night" data-srcset="assets/hospital-night-900.webp 900w, assets/hospital-night.webp 1803w" sizes="(max-width: 640px) 220vw, 100vw" alt=""></div>
+  <div class="photo-wrap"><img class="photo" src="assets/hospital.webp" srcset="assets/hospital-900.webp 900w, assets/hospital.webp 1803w" sizes="(max-width: 640px) 220vw, 100vw" alt="" fetchpriority="high"><img class="photo ph-dusk" id="ph-dusk" data-srcset="assets/hospital-dusk-900.webp 900w, assets/hospital-dusk.webp 1803w" sizes="(max-width: 640px) 220vw, 100vw" alt=""><img class="photo ph-night" id="ph-night" data-srcset="assets/hospital-night-900.webp 900w, assets/hospital-night.webp 1803w" sizes="(max-width: 640px) 220vw, 100vw" alt=""><i class="ph-fade" aria-hidden="true"></i><i class="ph-fade b" aria-hidden="true"></i></div>
   <canvas class="wx" id="wx" aria-hidden="true"></canvas><div class="wx-fog" aria-hidden="true"></div>
   <div class="mast-inner mast-top">
     <div class="brand">
