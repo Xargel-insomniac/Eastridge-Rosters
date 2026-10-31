@@ -487,8 +487,12 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   .masthead.compact .ck-sub { display: none; }
   /* Photo on top (logo and clock over it, building left clear), everything written stacked below on navy. */
   .masthead:not(.compact) { display: flex; flex-wrap: wrap; align-content: flex-start; min-height: 0; padding-bottom: 18px; }
-  .masthead:not(.compact) .photo-wrap { height: 250px; bottom: auto; }
-  .masthead:not(.compact)::before { bottom: auto; height: 250px; background: linear-gradient(180deg, rgba(4,31,52,.55) 0%, rgba(4,31,52,0) 32%), linear-gradient(0deg, var(--brand-navy) 0%, rgba(4,31,52,0) 34%); }
+  .masthead:not(.compact) .photo-wrap { height: 250px; bottom: auto; background: linear-gradient(180deg, #4d84a6 0%, #8abccb 52%, #22465c 76%, var(--brand-navy) 90%); }
+  /* zoomed out: the whole building across the width, with matching sky above it (day or night) */
+  .masthead:not(.compact) .photo-wrap::before { content: ""; position: absolute; inset: 0; opacity: var(--night, 0); transition: opacity 1.2s;
+    background: radial-gradient(1px 1px at 12% 22%, #fff, transparent), radial-gradient(1px 1px at 31% 48%, #fff, transparent), radial-gradient(1.2px 1.2px at 58% 16%, #fff, transparent), radial-gradient(1px 1px at 77% 40%, #fff, transparent), radial-gradient(1px 1px at 88% 12%, #fff, transparent), radial-gradient(1px 1px at 44% 34%, rgba(255,255,255,.7), transparent), radial-gradient(1px 1px at 6% 52%, rgba(255,255,255,.7), transparent), linear-gradient(180deg, #040a1c 0%, #0e1730 60%, var(--brand-navy) 88%); }
+  .masthead:not(.compact) .photo { top: auto; bottom: 40px; left: -5%; width: 110%; max-width: none; height: auto; aspect-ratio: 1803 / 618; transform-origin: 50% 100%; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 84%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 84%, transparent 100%); }
+  .masthead:not(.compact)::before { bottom: auto; height: 250px; background: linear-gradient(180deg, rgba(4,31,52,.55) 0%, rgba(4,31,52,0) 32%), linear-gradient(0deg, var(--brand-navy) 0%, rgba(4,31,52,.35) 12%, rgba(4,31,52,0) 24%); }
   .masthead:not(.compact) .mast-top { display: contents; }
   .masthead:not(.compact) .brand { order: 1; height: 236px; align-items: flex-start; margin: 14px 0 0 max(16px, env(safe-area-inset-left, 0px)); }
   .masthead:not(.compact) .logo { height: 42px; }
