@@ -278,12 +278,6 @@ details > summary { cursor: pointer; font-weight: 600; }
 .ck-sub { font-size: .72rem; color: rgba(255,255,255,.82); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .ck-dot { width: 7px; height: 7px; border-radius: 50%; background: #f2b54a; box-shadow: 0 0 0 0 rgba(242,181,74,.7); animation: ck-pulse 2s infinite; }
 .clock[data-shift="E"] .ck-dot { background: #f38c72; } .clock[data-shift="N"] .ck-dot { background: #a2a5f6; }
-/* Day and night: the night photo (lights on) fades in around sunset and out around sunrise; the moon shows tonight's phase */
-.masthead .photo.night { opacity: var(--night, 0); transition: opacity 1.2s; }
-.masthead.compact .photo.night { opacity: 0; }
-.sky-moon { display: none; }
-.masthead:not(.compact) .sky-moon { display: block; position: absolute; z-index: -1; top: 30px; right: 24%; width: 52px; height: 52px; opacity: var(--night, 0); filter: drop-shadow(0 0 14px rgba(255,248,220,.55)); pointer-events: none; transition: opacity 1.2s; }
-:root.halloween .sky-moon { display: none !important; }
 /* Day timeline along the bottom of the photo (big header only) */
 .dayline { display: none; }
 .masthead:not(.compact) .dayline { display: block; position: absolute; z-index: 1; color: #ffffff; pointer-events: none; animation: rise .8s .35s cubic-bezier(.2,.7,.2,1) both; }
@@ -488,9 +482,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   /* Photo on top (logo and clock over it, building left clear), everything written stacked below on navy. */
   .masthead:not(.compact) { display: flex; flex-wrap: wrap; align-content: flex-start; min-height: 0; padding-bottom: 18px; }
   .masthead:not(.compact) .photo-wrap { height: 250px; bottom: auto; background: linear-gradient(180deg, #4d84a6 0%, #8abccb 52%, #22465c 76%, var(--brand-navy) 90%); }
-  /* zoomed out: the whole building across the width, with matching sky above it (day or night) */
-  .masthead:not(.compact) .photo-wrap::before { content: ""; position: absolute; inset: 0; opacity: var(--night, 0); transition: opacity 1.2s;
-    background: radial-gradient(1px 1px at 12% 22%, #fff, transparent), radial-gradient(1px 1px at 31% 48%, #fff, transparent), radial-gradient(1.2px 1.2px at 58% 16%, #fff, transparent), radial-gradient(1px 1px at 77% 40%, #fff, transparent), radial-gradient(1px 1px at 88% 12%, #fff, transparent), radial-gradient(1px 1px at 44% 34%, rgba(255,255,255,.7), transparent), radial-gradient(1px 1px at 6% 52%, rgba(255,255,255,.7), transparent), linear-gradient(180deg, #040a1c 0%, #0e1730 60%, var(--brand-navy) 88%); }
+  /* zoomed out: the whole building across the width, with matching sky above it */
   .masthead:not(.compact) .photo { top: auto; bottom: 40px; left: -5%; width: 110%; max-width: none; height: auto; aspect-ratio: 1803 / 618; transform-origin: 50% 100%; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 84%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 84%, transparent 100%); }
   .masthead:not(.compact)::before { bottom: auto; height: 250px; background: linear-gradient(180deg, rgba(4,31,52,.55) 0%, rgba(4,31,52,0) 32%), linear-gradient(0deg, var(--brand-navy) 0%, rgba(4,31,52,.35) 12%, rgba(4,31,52,0) 24%); }
   .masthead:not(.compact) .mast-top { display: contents; }
@@ -504,7 +496,6 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   .masthead:not(.compact) .ck-date { grid-column: 1 / -1; }
   .masthead:not(.compact) .ck-date::after { content: none; }
   :root.halloween .masthead:not(.compact) .hw-fx { bottom: auto; height: 250px; }
-  .masthead:not(.compact) .sky-moon { top: 24px; right: auto; left: calc(50% - 26px); width: 34px; height: 34px; }
   .hw-moon { top: 22px; left: calc(50% - 30px); width: 36px; height: 36px; }
   :root.halloween .hero-copy .eyebrow::after { content: " · 🎃"; }
   .masthead:not(.compact) .dayline { top: 208px; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); }
@@ -546,8 +537,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
     <svg class="hw-bat b2" viewBox="0 0 64 32"><path d="M32 10c-2-4-4-5-4-5l-1 4c-5-6-14-6-20-2 4 1 7 4 7 8-5-2-10-1-14 3 8 0 14 3 18 8 1-4 5-6 9-5 2 0 4 2 5 4 1-2 3-4 5-4 4-1 8 1 9 5 4-5 10-8 18-8-4-4-9-5-14-3 0-4 3-7 7-8-6-4-15-4-20 2l-1-4s-2 1-4 5z"/></svg>
     <svg class="hw-bat b3" viewBox="0 0 64 32"><path d="M32 10c-2-4-4-5-4-5l-1 4c-5-6-14-6-20-2 4 1 7 4 7 8-5-2-10-1-14 3 8 0 14 3 18 8 1-4 5-6 9-5 2 0 4 2 5 4 1-2 3-4 5-4 4-1 8 1 9 5 4-5 10-8 18-8-4-4-9-5-14-3 0-4 3-7 7-8-6-4-15-4-20 2l-1-4s-2 1-4 5z"/></svg>
   </div>
-  <div class="photo-wrap"><img class="photo" src="assets/hospital.webp" srcset="assets/hospital-900.webp 900w, assets/hospital.webp 1803w" sizes="100vw" alt="" fetchpriority="high"><img class="photo night" id="photo-night" data-srcset="assets/hospital-night-900.webp 900w, assets/hospital-night.webp 1803w" sizes="100vw" alt=""></div>
-  <svg class="sky-moon" id="sky-moon" viewBox="-1.2 -1.2 2.4 2.4" aria-hidden="true"><defs><radialGradient id="moon-g" cx="-.25" cy="-.3" r="1.3" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fffdf4"/><stop offset=".7" stop-color="#ebe6d4"/><stop offset="1" stop-color="#cfc8b0"/></radialGradient></defs><circle r="1" fill="rgba(200,210,235,.12)"/><path id="moon-lit" fill="url(#moon-g)" d=""/></svg>
+  <div class="photo-wrap"><img class="photo" src="assets/hospital.webp" srcset="assets/hospital-900.webp 900w, assets/hospital.webp 1803w" sizes="100vw" alt="" fetchpriority="high"></div>
   <div class="mast-inner mast-top">
     <div class="brand">
       <span class="logo-plate"><img class="logo" src="assets/eastridge-logo.png" alt="Eastridge Primecare, a project of FFH" width="502" height="207"></span>
@@ -2130,26 +2120,9 @@ async function exportMonth() {
     document.getElementById("ck-date").textContent = DOW[t.getUTCDay()] + " " + t.getUTCDate() + " " + MON_SHORT[t.getUTCMonth()];
     document.getElementById("ck-sub").textContent = SHIFT[code].name + " shift · " + (left >= 60 ? Math.floor(left / 60) + "h " : "") + (left % 60) + "m left";
     document.getElementById("clock").dataset.shift = code;
-    if (sec === 0 || !skyDone) sky(t, h * 60 + m);
     // Day timeline under the photo: Morning 08–14, Evening 14–20, Night 20–08, with a marker at now.
     const dl = document.getElementById("dayline");
     if (dl) { dl.dataset.shift = code; document.getElementById("dl-now").style.left = (((h * 60 + m - 480 + 1440) % 1440) / 14.4) + "%"; document.getElementById("dl-left").textContent = (left >= 60 ? Math.floor(left / 60) + "h " : "") + (left % 60) + "m left"; }
-  }
-  // Approximate sunrise and sunset in Pakistan (Islamabad) for each month, in minutes after midnight.
-  const SUN = [[425, 1045], [410, 1075], [380, 1100], [340, 1125], [310, 1150], [300, 1165], [310, 1165], [330, 1140], [355, 1105], [375, 1065], [400, 1030], [420, 1025]];
-  let skyDone = false;
-  function sky(t, mins) {
-    skyDone = true;
-    const [rise, set] = SUN[t.getUTCMonth()];
-    const n = mins >= set + 40 || mins <= rise - 40 ? 1 : mins > set - 20 && mins < set + 40 ? (mins - (set - 20)) / 60 : mins > rise - 40 && mins < rise + 20 ? ((rise + 20) - mins) / 60 : 0;
-    const mh = document.getElementById("masthead"); if (!mh) return;
-    mh.style.setProperty("--night", n.toFixed(3)); mh.classList.toggle("is-night", n > 0.5);
-    const img = document.getElementById("photo-night");
-    if (n > 0 && img && !img.srcset) img.srcset = img.dataset.srcset; // only download the night photo when it's needed
-    // Moon phase: days since a known new moon (6 Jan 2000, 18:14 UTC), lit side on the right while waxing.
-    const age = ((Date.now() - Date.UTC(2000, 0, 6, 18, 14)) / 864e5) % 29.530588853, k = Math.cos(2 * Math.PI * age / 29.530588853), rx = Math.abs(k).toFixed(3);
-    const lit = document.getElementById("moon-lit");
-    if (lit) lit.setAttribute("d", age < 14.765 ? `M0,-1 A1,1 0 0 1 0,1 A${rx},1 0 0 ${k > 0 ? 0 : 1} 0,-1Z` : `M0,-1 A1,1 0 0 0 0,1 A${rx},1 0 0 ${k > 0 ? 1 : 0} 0,-1Z`);
   }
   tick(); setInterval(tick, 1000);
 })();
