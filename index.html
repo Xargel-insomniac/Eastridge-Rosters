@@ -1334,57 +1334,98 @@ function renderAuth() {
   </form>`;
 }
 /* ---------- expected staff: who should be on the app, and who hasn't registered yet ---------- */
-const nameWords = n => String(n || "").toLowerCase().replace(/\b(dr|dr\.|doctor)\b\.?/g, " ").replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
-/* Accounts that could be this person: first name matches a word in their name (and a trailing initial matches a later word);
-   when the rota gives a department, the account's department must match too. A linked account always wins. */
-function staffMatches(e) {
-  const all = app.allDoctors || {};
-  if (e.uid) return all[e.uid] ? [all[e.uid]] : [];
-  const [first, ...rest] = nameWords(e.name); if (!first) return [];
-  const initial = rest.length === 1 && rest[0].length === 1 ? rest[0] : null;
-  const linked = new Set((state.staff || []).map(x => x.uid).filter(Boolean));
-  return Object.values(all).filter(d => {
-    if (linked.has(d.uid)) return false;
-    const w = nameWords(d.name), i = w.indexOf(first); if (i < 0) return false;
-    if (initial && !w.slice(i + 1).some(x => x[0] === initial)) return false;
-    if (rest.length && !initial && !rest.every(r => w.includes(r))) return false;
-    return !e.dept || !d.dept || d.dept === e.dept;
-  });
-}
+const NAME_SKIP = new Set(["dr", "doctor", "muhammad", "mohammad", "muhammed", "syed", "syeda", "sheikh", "shaikh", "mir", "khawaja", "ul", "un", "ur", "ud", "al"]);
+const nameWords = n => String(n || "").toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(w => w && !NAME_SKIP.has(w));
+const sameWord = (a, b) => a === b || (a.length > 3 && b.length > 3 && (a.startsWith(b) || b.startsWith(a))); // Hammad/Hamad, Qurat/Quratulain…
+const sharedWords = (a, b) => a.filter(x => b.some(y => sameWord(x, y))).length;
+/* Match each name on the list to an account. Shared name words count (titles like Dr, Muhammad, Syed are ignored);
+   a match needs two shared words, or one when either name has only one. An account that fits several names is only a
+   "possible" for each of them, and a linked account always wins. */
 function staffStatus() {
-  return (state.staff || []).map(e => { const m = staffMatches(e); return { e, m, state: m.length === 1 ? "ok" : m.length ? "maybe" : "missing" }; });
+  const list = state.staff || [], all = app.allDoctors || {}, linked = new Set(list.map(x => x.uid).filter(Boolean));
+  const fits = list.map(e => {
+    if (e.uid) return all[e.uid] ? [all[e.uid]] : [];
+    const w = nameWords(e.name);
+    return Object.values(all).filter(d => { if (linked.has(d.uid)) return false; const dw = nameWords(d.name), k = sharedWords(w, dw); return k > 0 && k >= Math.min(2, w.length, dw.length); });
+  });
+  const used = {}; fits.forEach((m, i) => { if (!list[i].uid) m.forEach(d => (used[d.uid] = (used[d.uid] || 0) + 1)); });
+  return list.map((e, i) => { const m = fits[i]; const sure = e.uid ? m.length === 1 : m.length === 1 && used[m[0].uid] === 1; return { e, m, state: sure ? "ok" : m.length ? "maybe" : "missing" }; });
 }
 const STAFF_INVITE = () => "Assalam o Alaikum! Eastridge Primecare's duty roster is now on an app. Please register so your duties, swaps and cover requests reach you:\n\n1. Open " + location.origin + location.pathname + "\n2. Tap Create account (or Continue with Google)\n3. Add your full name, WhatsApp number, department and designation\n\nThe MSA office will approve you. Thank you!";
 function renderStaff() {
   if (state.staff === null) return `<section class="panel" style="grid-column:1/-1"><h2>Expected staff</h2><p class="muted">Loading…</p></section>`;
   const st = staffStatus(), ok = st.filter(x => x.state === "ok").length, dis = app.busy ? "disabled" : "";
-  const by = key => { const m = new Map(); st.forEach(x => { const k = x.e[key] || "Not given"; const v = m.get(k) || [0, 0]; v[1]++; if (x.state === "ok") v[0]++; m.set(k, v); }); return [...m]; };
+  const by = key => { const m = new Map(); st.forEach(x => { const k = x.e[key] || (key === "specialty" ? "" : "Not given"); if (!k) return; const v = m.get(k) || [0, 0]; v[1]++; if (x.state === "ok") v[0]++; m.set(k, v); }); return [...m]; };
+  const ORDER = ["Senior Registrar", "Registrar", "SMO", "MO"], plural = { "Senior Registrar": "Senior Registrars", Registrar: "Registrars", SMO: "Senior Medical Officers", MO: "Medical Officers" };
   const shown = st.filter(x => state.staffShow === "all" || x.state !== "ok");
-  const groups = new Map(); shown.forEach(x => { const k = x.e.dept || "No department"; (groups.get(k) || groups.set(k, []).get(k)).push(x); });
+  const groups = new Map(); [...shown].sort((a, b) => (ORDER.indexOf(a.e.designation) + 1 || 9) - (ORDER.indexOf(b.e.designation) + 1 || 9)).forEach(x => { const k = plural[x.e.designation] || x.e.designation || "Other"; (groups.get(k) || groups.set(k, []).get(k)).push(x); });
   const docOpts = cur => `<option value="">Link to an account…</option>${Object.values(app.allDoctors || {}).sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(d => `<option value="${esc(d.uid)}" ${cur === d.uid ? "selected" : ""}>${esc(d.name || "No name")} · ${esc(d.dept || "")}</option>`).join("")}`;
   const row = x => { const e = x.e, i = state.staff.indexOf(e);
     const status = x.state === "ok" ? `<span class="pill done">✓ ${esc(x.m[0].name)}${x.m[0].approved === true ? "" : " · waiting for your approval"}</span>`
       : x.state === "maybe" ? `<span class="pill warn">${x.m.length} possible: ${x.m.map(d => esc(d.name)).join(", ")}</span>` : `<span class="pill declined">Not registered</span>`;
-    return `<div class="staff-row"><div><b>${esc(e.name)}</b> <span class="muted small">${esc(e.designation || "")}</span><div>${status}</div></div>
+    return `<div class="staff-row"><div><b>${esc(e.name)}</b> <span class="muted small">${esc([e.specialty || (e.dept ? e.dept : ""), e.empId ? "ID " + e.empId : ""].filter(Boolean).join(" · "))}</span>${e.remarks ? `<div class="muted small">${esc(e.remarks)}</div>` : ""}<div>${status}</div></div>
       <div class="btns">${x.state !== "ok" ? `<a class="btn wa" href="https://wa.me/${waNumber(e.phone) || ""}?text=${encodeURIComponent(STAFF_INVITE())}" target="_blank" rel="noopener">Invite</a>` : ""}
         <select class="staff-link" data-staff-link="${i}" aria-label="Link ${esc(e.name)} to an account">${docOpts(e.uid)}</select>
         <button class="btn ghost" data-act="staff-del" data-i="${i}" ${dis} aria-label="Remove ${esc(e.name)} from the list">✕</button></div></div>`; };
   return `<section class="panel" style="grid-column:1/-1" id="staff-panel"><h2>Expected staff · ${ok} of ${st.length} registered</h2>
     ${st.length ? `<div class="staff-sum">${by("designation").map(([k, v]) => `<span class="pill">${esc(k)}: <b>${v[0]}/${v[1]}</b></span>`).join("")}</div>
-      <div class="staff-sum">${by("dept").map(([k, v]) => `<span class="pill">${esc(k)}: <b>${v[0]}/${v[1]}</b></span>`).join("")}</div>
+      <div class="staff-sum">${by("specialty").map(([k, v]) => `<span class="pill">${esc(k)}: <b>${v[0]}/${v[1]}</b></span>`).join("")}</div>
       <div class="btns"><label class="check"><input type="checkbox" data-act="staff-show" ${state.staffShow === "all" ? "checked" : ""}> Show registered too</label>
         <button class="btn wa" data-act="staff-copy" id="staff-copy">Copy reminder for the WhatsApp group</button>
         <a class="btn" href="https://wa.me/?text=${encodeURIComponent(STAFF_INVITE())}" target="_blank" rel="noopener">Send invite message</a></div>
       ${shown.length ? [...groups].map(([g, xs]) => `<h3 class="staff-h">${esc(g)} <span class="muted small">(${xs.length})</span></h3><div class="staff-list">${xs.map(row).join("")}</div>`).join("") : `<p class="note ok">Everyone on the list has registered. 🎉</p>`}`
     : `<p class="muted">Add the doctors who should be on the app. The list then shows who hasn't registered yet, with an invite button for each.</p>
-      <div class="btns"><button class="btn primary" data-act="staff-load" id="staff-load" ${dis}>Load the October 2026 master rota (75 doctors, no consultants)</button></div>`}
+      <div class="btns"><label class="btn primary" for="staff-file">Upload the doctors list (Word .docx)</label></div>`}
+    <input type="file" id="staff-file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
     <details id="staff-add-box" ${state.staffAdd ? "open" : ""}><summary>Add names</summary>
       <p class="muted small">One per line: <b>Name, Department, Designation, WhatsApp number</b> (only the name is needed). Department and designation should match the app's, e.g. <i>Ahmed, IPD-2 (Medicine) / Dialysis, Senior Registrar, 0300 1234567</i>.</p>
       <textarea class="plain" id="staff-paste" data-bind="staffPaste" rows="4" placeholder="Ahmed, IPD-2 (Medicine) / Dialysis, Senior Registrar"></textarea>
-      <div class="btns"><button class="btn" data-act="staff-add" id="staff-add" ${dis}>Add to the list</button>${st.length ? `<button class="btn danger" data-act="staff-clear" id="staff-clear" ${dis}>Clear the whole list</button>` : ""}</div>
+      <div class="btns"><button class="btn" data-act="staff-add" id="staff-add" ${dis}>Add to the list</button>${st.length ? `<label class="btn" for="staff-file">Replace with a new doctors list (.docx)</label><button class="btn danger" data-act="staff-clear" id="staff-clear" ${dis}>Clear the whole list</button>` : ""}</div>
     </details>
-    <p class="muted small">Only coordinators see this list. Names are matched to accounts by first name and department; if a match is wrong or missing, pick the right account in "Link to an account".</p>
+    <p class="muted small">The Word file is read on this device; only the names, designations, specialties, employee IDs and remarks are saved, to a part of the database only coordinators can read. Only coordinators see this list. Names are matched to accounts by the words in the name (Dr, Muhammad, Syed and similar are ignored); if a match is wrong or missing, pick the right account in "Link to an account".</p>
   </section>`;
+}
+/* Reads the hospital's "Doctors List" Word file: a heading per designation ("1. Senior Registrars" …), then a table
+   with specialty rows ("Cardiology (1)") and doctor rows (#, Employee ID, Name, Remarks). */
+const STAFF_DEPT = { "Cardiology": "IPD-2 (Medicine) / Dialysis", "General Medicine": "IPD-2 (Medicine) / Dialysis", "Neurology": "IPD-2 (Medicine) / Dialysis", "Emergency Medicine": "ER",
+  "General Surgery": "OT / IPD-4 (Surgery)", "Orthopaedic": "OT / IPD-4 (Surgery)", "Orthopaedics": "OT / IPD-4 (Surgery)", "Plastic Surgery": "OT / IPD-4 (Surgery)", "Urology": "OT / IPD-4 (Surgery)",
+  "Surgery & Allied": "OT / IPD-4 (Surgery)", "Paediatric Surgery": "OT / IPD-4 (Surgery)", "Gynae": "IPD-1 / Gynae", "Paeds": "IPD-1 / NICU (Paediatrics)", "Radiology": "Radiology", "Anaesthesia": "Anaesthesia", "Anesthesia": "Anaesthesia", "Anaesthesiology": "Anaesthesia", "Anesthesiology": "Anaesthesia",
+  "Paediatrics": "IPD-1 / NICU (Paediatrics)", "Pediatrics": "IPD-1 / NICU (Paediatrics)", "Peds": "IPD-1 / NICU (Paediatrics)", "Gynaecology": "IPD-1 / Gynae", "Obs & Gynae": "IPD-1 / Gynae", "Medicine": "IPD-2 (Medicine) / Dialysis", "Surgery": "OT / IPD-4 (Surgery)", "ICU": "ICU / HDU", "ICU / HDU": "ICU / HDU", "ER": "ER", "Emergency": "ER" };
+const STAFF_FROM_REMARKS = [[/paeds\s+surg/i, "Paediatric Surgery"], [/ortho/i, "Orthopaedics"], [/gyn/i, "Gynae"], [/anesth|anaesth/i, "Anaesthesia"], [/urology/i, "Urology"], [/gen\s*surg|mrcs|\bsurg\b/i, "General Surgery"], [/nephro/i, "General Medicine"], [/gen\s*med|mrcp|\bmed\b/i, "General Medicine"], [/paeds/i, "Paeds"]];
+const SPEC_SAME = { "Anesthesia": "Anaesthesia", "Anesthesiology": "Anaesthesia", "Anaesthesiology": "Anaesthesia", "Orthopaedic": "Orthopaedics", "Orthopedics": "Orthopaedics", "Pediatrics": "Paeds", "Paediatrics": "Paeds", "Gynaecology": "Gynae" };
+const titleName = n => n.trim().split(/\s+/).map(w => /^(ul|un|ur|ud)$/i.test(w) ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+async function readStaffDocx(file) {
+  try {
+    const list = await parseStaffDocx(new Uint8Array(await file.arrayBuffer()));
+    const n = d => list.filter(x => x.designation === d).length, summary = `${list.length} doctors: ${n("Senior Registrar")} Senior Registrars, ${n("Registrar")} Registrars, ${n("SMO")} SMOs, ${n("MO")} MOs`;
+    if ((state.staff || []).length && !confirm("Replace the current list (" + state.staff.length + ") with " + summary + "? Names you added or linked by hand will need doing again.")) return;
+    await saveStaff(list, "Loaded " + summary + ".");
+  } catch (e) { toast("Couldn't read the file: " + (e.message || e)); }
+}
+async function parseStaffDocx(bytes) {
+  const XLSX = await loadXLSX(), cfb = XLSX.CFB.read(bytes, { type: "array" });
+  const i = cfb.FullPaths.findIndex(p => /word\/document\.xml$/.test(p)); if (i < 0) throw new Error("this doesn't look like a Word (.docx) file");
+  const doc = new DOMParser().parseFromString(new TextDecoder().decode(cfb.FileIndex[i].content), "application/xml");
+  const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main", text = el => [...el.getElementsByTagNameNS(W, "t")].map(t => t.textContent).join(" ").replace(/\s+/g, " ").trim();
+  const body = doc.getElementsByTagNameNS(W, "body")[0], list = []; let desig = "";
+  for (const node of [...body.children]) {
+    if (node.localName === "p") { const t = text(node), m = t.match(/^\d+\.\s*(Senior Registrars?|Registrars?|Senior Medical Officers?|Medical Officers?)\b/i);
+      if (m) desig = { "senior registrar": "Senior Registrar", registrar: "Registrar", "senior medical officer": "SMO", "medical officer": "MO" }[m[1].toLowerCase().replace(/s$/, "")]; continue; }
+    if (node.localName !== "tbl" || !desig) continue;
+    let spec = "";
+    for (const tr of [...node.getElementsByTagNameNS(W, "tr")]) {
+      const cells = [...tr.getElementsByTagNameNS(W, "tc")].map(text);
+      if (!cells.length || cells[0] === "#") continue;
+      if (!/^\d+$/.test(cells[0])) { spec = cells[0].replace(/\s*\(\d+\)\s*$/, "").trim(); spec = SPEC_SAME[spec] || spec; continue; }
+      const [, emp = "", name = "", remarks = ""] = cells; if (!name) continue;
+      const sp = desig === "SMO" || desig === "MO" ? ((STAFF_FROM_REMARKS.find(([re]) => re.test(remarks)) || [])[1] || (desig === "SMO" ? spec : "")) : spec;
+      const e = { name: titleName(name), designation: desig, specialty: desig === "MO" && !/shifted/i.test(remarks) ? "" : sp, dept: "", empId: /^\d+$/.test(emp) ? emp : "" };
+      e.dept = STAFF_DEPT[e.specialty] || ""; if (remarks) e.remarks = remarks;
+      list.push(e);
+    }
+  }
+  if (!list.length) throw new Error("no doctors found. Is it the hospital's Doctors List with tables for Senior Registrars, Registrars, SMOs and MOs?");
+  return list;
 }
 /* Saves the whole list. Not tied to the app's one-save-at-a-time guard, so a quick link or removal is never silently skipped. */
 async function saveStaff(list, msg) {
@@ -1844,10 +1885,6 @@ const actions = {
   month(b) { state.month = addMonths(state.month, +b.dataset.d); state.upload = null; if (app.sample) { const s = buildSample(); state.rosters = s.rosters; state.requests = s.requests; } else subscribeMonth(); resetForm(); render(); },
   "goto-month"(b) { const u = state.upload; state.month = b.dataset.month; if (!app.sample) subscribeMonth(); if (u) state.upload = reparse(u); render(); },
   "profile-open"() { const d = app.sample ? me() : app.myDoc; state.profile = { changing: false, newName: "", newPhone: "", name: d ? d.name : "", dept: d ? d.dept || "" : "", designation: d ? d.designation || "" : "", phone: d ? d.phone || "" : "" }; state.profileOpen = true; render(); setTimeout(() => { const el = $("#pf-name"); if (el) el.focus(); }, 0); },
-  async "staff-load"() {
-    try { const j = await (await fetch("assets/staff-oct-2026.json", { cache: "no-store" })).json(); await saveStaff(j.list.map(x => ({ ...x })), "Loaded " + j.list.length + " doctors from the October master rota."); }
-    catch (_) { toast("Couldn't load the list. Check your connection and try again."); }
-  },
   async "staff-add"() {
     const lines = String(state.staffPaste || "").split(/\n/).map(l => l.trim()).filter(Boolean); if (!lines.length) { toast("Type at least one name."); return; }
     const add = lines.map(l => { const [name, dept = "", designation = "", phone = ""] = l.split(/\s*[,\t]\s*/); return { name: name.replace(/^dr\.?\s+/i, ""), dept: DEPARTMENTS.includes(dept) ? dept : "", designation: DESIGNATIONS.includes(designation) ? designation : "", phone }; }).filter(x => x.name);
@@ -1857,7 +1894,7 @@ const actions = {
   async "staff-clear"() { if (!confirm("Clear the whole expected staff list?")) return; await saveStaff([], "List cleared."); },
   "staff-show"(b) { state.staffShow = b.checked ? "all" : "missing"; render(); },
   async "staff-copy"() {
-    const groups = new Map(); staffStatus().filter(x => x.state !== "ok").forEach(x => { const k = x.e.dept || "Other"; (groups.get(k) || groups.set(k, []).get(k)).push(x.e.name); });
+    const groups = new Map(); staffStatus().filter(x => x.state !== "ok").forEach(x => { const k = { "Senior Registrar": "Senior Registrars", Registrar: "Registrars", SMO: "SMOs", MO: "MOs" }[x.e.designation] || "Others"; (groups.get(k) || groups.set(k, []).get(k)).push(x.e.name); });
     const text = "Assalam o Alaikum. These doctors haven't registered on the Eastridge duty roster app yet:\n\n" + [...groups].map(([g, n]) => "*" + g + "*: " + n.join(", ")).join("\n") + "\n\nPlease register today: " + location.origin + location.pathname + "\n(Create account → add your full name, WhatsApp number, department and designation.)";
     try { await navigator.clipboard.writeText(text); toast("Copied. Paste it in the WhatsApp group."); } catch (_) { prompt("Copy this message:", text); }
   },
@@ -2143,6 +2180,7 @@ document.addEventListener("change", async e => {
   if (el.id === "file-in") { if (el.files && el.files[0]) await readFile(el.files[0]); return; }
   if (el.dataset && el.dataset.staffLink !== undefined) { const l = (state.staff || []).map(x => ({ ...x })), e = l[+el.dataset.staffLink]; if (e) { if (el.value) e.uid = el.value; else delete e.uid; await saveStaff(l, el.value ? "Linked." : "Link removed."); } return; }
   if (el.dataset && el.dataset.actCg) { state.cgDraft = { ...((state.contact && state.contact.coverGroups) || DEFAULT_COVER_GROUPS), ...(state.cgDraft || {}), [el.dataset.dept]: el.value }; render(); return; }
+  if (el.id === "staff-file") { if (el.files && el.files[0]) await readStaffDocx(el.files[0]); el.value = ""; return; }
   if (el.id === "opd-file") { if (el.files && el.files[0]) await readOpdFile(el.files[0]); return; }
   if (el.id === "dept-file") { if (el.files && el.files[0]) await readDeptFile(el.files[0]); return; }
   const path = el.dataset && el.dataset.bind; if (!path) return;
