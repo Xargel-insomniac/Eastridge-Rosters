@@ -229,6 +229,7 @@ button.chip { font: inherit; font-size: 0.8rem; font-weight: 600; }
 .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 .pill.pending { background: var(--warn-bg); color: var(--warn); }
 .pill.accepted, .pill.done { background: var(--ok-bg); color: var(--ok); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
 .pill.declined, .pill.cancelled, .pill.failed { background: var(--sunk); color: var(--muted); }
 .note { font-size: 0.85rem; color: var(--warn); background: var(--warn-bg); border-radius: 6px; padding: 6px 8px; }
 .note.bad { color: var(--bad); background: var(--bad-bg); }
@@ -264,6 +265,13 @@ details > summary { cursor: pointer; font-weight: 600; }
 .locked-val { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 40px; }
 .subpanel { margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 12px; }
 .subpanel h3 { margin: 0 0 4px; font-size: 1rem; }
+a.btn { text-decoration: none; }
+.staff-sum { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.staff-h { margin: 16px 0 6px; font-size: 1rem; }
+.staff-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 8px; }
+.staff-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.staff-row .btns { margin: 0; gap: 6px; flex-wrap: nowrap; }
+.staff-link { max-width: 150px; font-size: .8rem; }
 .feedback { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin: 22px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .cg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 10px; }
 .pill.cs-today { background: var(--accent-soft); color: var(--accent); }
@@ -926,7 +934,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -1325,6 +1333,65 @@ function renderAuth() {
     <p class="small">${signup ? `Already have an account? <button class="btn ghost" type="button" data-act="auth-mode" data-mode="signin" id="au-to-in">Sign in</button>` : `New here? <button class="btn ghost" type="button" data-act="auth-mode" data-mode="signup" id="au-to-up">Create an account</button>`}</p>
   </form>`;
 }
+/* ---------- expected staff: who should be on the app, and who hasn't registered yet ---------- */
+const nameWords = n => String(n || "").toLowerCase().replace(/\b(dr|dr\.|doctor)\b\.?/g, " ").replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+/* Accounts that could be this person: first name matches a word in their name (and a trailing initial matches a later word);
+   when the rota gives a department, the account's department must match too. A linked account always wins. */
+function staffMatches(e) {
+  const all = app.allDoctors || {};
+  if (e.uid) return all[e.uid] ? [all[e.uid]] : [];
+  const [first, ...rest] = nameWords(e.name); if (!first) return [];
+  const initial = rest.length === 1 && rest[0].length === 1 ? rest[0] : null;
+  const linked = new Set((state.staff || []).map(x => x.uid).filter(Boolean));
+  return Object.values(all).filter(d => {
+    if (linked.has(d.uid)) return false;
+    const w = nameWords(d.name), i = w.indexOf(first); if (i < 0) return false;
+    if (initial && !w.slice(i + 1).some(x => x[0] === initial)) return false;
+    if (rest.length && !initial && !rest.every(r => w.includes(r))) return false;
+    return !e.dept || !d.dept || d.dept === e.dept;
+  });
+}
+function staffStatus() {
+  return (state.staff || []).map(e => { const m = staffMatches(e); return { e, m, state: m.length === 1 ? "ok" : m.length ? "maybe" : "missing" }; });
+}
+const STAFF_INVITE = () => "Assalam o Alaikum! Eastridge Primecare's duty roster is now on an app. Please register so your duties, swaps and cover requests reach you:\n\n1. Open " + location.origin + location.pathname + "\n2. Tap Create account (or Continue with Google)\n3. Add your full name, WhatsApp number, department and designation\n\nThe MSA office will approve you. Thank you!";
+function renderStaff() {
+  if (state.staff === null) return `<section class="panel" style="grid-column:1/-1"><h2>Expected staff</h2><p class="muted">Loading…</p></section>`;
+  const st = staffStatus(), ok = st.filter(x => x.state === "ok").length, dis = app.busy ? "disabled" : "";
+  const by = key => { const m = new Map(); st.forEach(x => { const k = x.e[key] || "Not given"; const v = m.get(k) || [0, 0]; v[1]++; if (x.state === "ok") v[0]++; m.set(k, v); }); return [...m]; };
+  const shown = st.filter(x => state.staffShow === "all" || x.state !== "ok");
+  const groups = new Map(); shown.forEach(x => { const k = x.e.dept || "No department"; (groups.get(k) || groups.set(k, []).get(k)).push(x); });
+  const docOpts = cur => `<option value="">Link to an account…</option>${Object.values(app.allDoctors || {}).sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(d => `<option value="${esc(d.uid)}" ${cur === d.uid ? "selected" : ""}>${esc(d.name || "No name")} · ${esc(d.dept || "")}</option>`).join("")}`;
+  const row = x => { const e = x.e, i = state.staff.indexOf(e);
+    const status = x.state === "ok" ? `<span class="pill done">✓ ${esc(x.m[0].name)}${x.m[0].approved === true ? "" : " · waiting for your approval"}</span>`
+      : x.state === "maybe" ? `<span class="pill warn">${x.m.length} possible: ${x.m.map(d => esc(d.name)).join(", ")}</span>` : `<span class="pill declined">Not registered</span>`;
+    return `<div class="staff-row"><div><b>${esc(e.name)}</b> <span class="muted small">${esc(e.designation || "")}</span><div>${status}</div></div>
+      <div class="btns">${x.state !== "ok" ? `<a class="btn wa" href="https://wa.me/${waNumber(e.phone) || ""}?text=${encodeURIComponent(STAFF_INVITE())}" target="_blank" rel="noopener">Invite</a>` : ""}
+        <select class="staff-link" data-staff-link="${i}" aria-label="Link ${esc(e.name)} to an account">${docOpts(e.uid)}</select>
+        <button class="btn ghost" data-act="staff-del" data-i="${i}" ${dis} aria-label="Remove ${esc(e.name)} from the list">✕</button></div></div>`; };
+  return `<section class="panel" style="grid-column:1/-1" id="staff-panel"><h2>Expected staff · ${ok} of ${st.length} registered</h2>
+    ${st.length ? `<div class="staff-sum">${by("designation").map(([k, v]) => `<span class="pill">${esc(k)}: <b>${v[0]}/${v[1]}</b></span>`).join("")}</div>
+      <div class="staff-sum">${by("dept").map(([k, v]) => `<span class="pill">${esc(k)}: <b>${v[0]}/${v[1]}</b></span>`).join("")}</div>
+      <div class="btns"><label class="check"><input type="checkbox" data-act="staff-show" ${state.staffShow === "all" ? "checked" : ""}> Show registered too</label>
+        <button class="btn wa" data-act="staff-copy" id="staff-copy">Copy reminder for the WhatsApp group</button>
+        <a class="btn" href="https://wa.me/?text=${encodeURIComponent(STAFF_INVITE())}" target="_blank" rel="noopener">Send invite message</a></div>
+      ${shown.length ? [...groups].map(([g, xs]) => `<h3 class="staff-h">${esc(g)} <span class="muted small">(${xs.length})</span></h3><div class="staff-list">${xs.map(row).join("")}</div>`).join("") : `<p class="note ok">Everyone on the list has registered. 🎉</p>`}`
+    : `<p class="muted">Add the doctors who should be on the app. The list then shows who hasn't registered yet, with an invite button for each.</p>
+      <div class="btns"><button class="btn primary" data-act="staff-load" id="staff-load" ${dis}>Load the October 2026 master rota (75 doctors, no consultants)</button></div>`}
+    <details id="staff-add-box" ${state.staffAdd ? "open" : ""}><summary>Add names</summary>
+      <p class="muted small">One per line: <b>Name, Department, Designation, WhatsApp number</b> (only the name is needed). Department and designation should match the app's, e.g. <i>Ahmed, IPD-2 (Medicine) / Dialysis, Senior Registrar, 0300 1234567</i>.</p>
+      <textarea class="plain" id="staff-paste" data-bind="staffPaste" rows="4" placeholder="Ahmed, IPD-2 (Medicine) / Dialysis, Senior Registrar"></textarea>
+      <div class="btns"><button class="btn" data-act="staff-add" id="staff-add" ${dis}>Add to the list</button>${st.length ? `<button class="btn danger" data-act="staff-clear" id="staff-clear" ${dis}>Clear the whole list</button>` : ""}</div>
+    </details>
+    <p class="muted small">Only coordinators see this list. Names are matched to accounts by first name and department; if a match is wrong or missing, pick the right account in "Link to an account".</p>
+  </section>`;
+}
+/* Saves the whole list. Not tied to the app's one-save-at-a-time guard, so a quick link or removal is never silently skipped. */
+async function saveStaff(list, msg) {
+  if (app.offline) { toast("You're offline. Connect to the internet to save changes."); return false; }
+  try { await dbCall(() => app.db.collection("settings").doc("staff").set({ list, updatedAt: Date.now(), updatedBy: app.uid })); if (msg) toast(msg); return true; }
+  catch (e) { toast("Couldn't save the list: " + ((e && (e.message || e.code)) || "unknown error")); return false; }
+}
 function changeRequests() { return Object.values(app.allDoctors || {}).filter(d => d.pendingChange && (d.pendingChange.name || d.pendingChange.phone)); }
 function pendingDoctors() { return Object.values(app.allDoctors || {}).filter(d => d.approved !== true).sort((a, b) => (a.name || "").localeCompare(b.name || "")); }
 function renderTeam() {
@@ -1334,6 +1401,7 @@ function renderTeam() {
     ${changeRequests().length ? `<section class="panel" style="grid-column:1/-1" id="pc-list"><h2>Name and number changes to approve (${changeRequests().length})</h2><div class="list">${changeRequests().map(d => { const pc = d.pendingChange; return `<div class="item"><div class="head"><b>${esc(d.name)}</b><span class="muted small">${esc(d.dept || "")}</span></div>
       ${pc.name ? `<p class="small">Name: ${esc(d.name)} → <b>${esc(pc.name)}</b></p>` : ""}${pc.phone ? `<p class="small">WhatsApp: ${esc(d.phone || "none")} → <b>${esc(pc.phone)}</b></p>` : ""}
       <div class="btns"><button class="btn primary" data-act="pc-approve" data-id="${esc(d.uid)}" id="pca-${esc(d.uid)}" ${app.busy ? "disabled" : ""}>Approve</button><button class="btn" data-act="pc-decline" data-id="${esc(d.uid)}" id="pcd-${esc(d.uid)}" ${app.busy ? "disabled" : ""}>Decline</button></div></div>`; }).join("")}</div></section>` : ""}
+    ${renderStaff()}
     ${renderAnnForm()}
     ${renderMsaForm()}
     ${renderOpdForm()}
@@ -1776,6 +1844,23 @@ const actions = {
   month(b) { state.month = addMonths(state.month, +b.dataset.d); state.upload = null; if (app.sample) { const s = buildSample(); state.rosters = s.rosters; state.requests = s.requests; } else subscribeMonth(); resetForm(); render(); },
   "goto-month"(b) { const u = state.upload; state.month = b.dataset.month; if (!app.sample) subscribeMonth(); if (u) state.upload = reparse(u); render(); },
   "profile-open"() { const d = app.sample ? me() : app.myDoc; state.profile = { changing: false, newName: "", newPhone: "", name: d ? d.name : "", dept: d ? d.dept || "" : "", designation: d ? d.designation || "" : "", phone: d ? d.phone || "" : "" }; state.profileOpen = true; render(); setTimeout(() => { const el = $("#pf-name"); if (el) el.focus(); }, 0); },
+  async "staff-load"() {
+    try { const j = await (await fetch("assets/staff-oct-2026.json", { cache: "no-store" })).json(); await saveStaff(j.list.map(x => ({ ...x })), "Loaded " + j.list.length + " doctors from the October master rota."); }
+    catch (_) { toast("Couldn't load the list. Check your connection and try again."); }
+  },
+  async "staff-add"() {
+    const lines = String(state.staffPaste || "").split(/\n/).map(l => l.trim()).filter(Boolean); if (!lines.length) { toast("Type at least one name."); return; }
+    const add = lines.map(l => { const [name, dept = "", designation = "", phone = ""] = l.split(/\s*[,\t]\s*/); return { name: name.replace(/^dr\.?\s+/i, ""), dept: DEPARTMENTS.includes(dept) ? dept : "", designation: DESIGNATIONS.includes(designation) ? designation : "", phone }; }).filter(x => x.name);
+    if (await saveStaff([...(state.staff || []), ...add], "Added " + add.length + " to the list.")) { state.staffPaste = ""; state.staffAdd = false; }
+  },
+  async "staff-del"(b) { const l = [...(state.staff || [])]; const [x] = l.splice(+b.dataset.i, 1); await saveStaff(l, "Removed " + (x ? x.name : "") + " from the list."); },
+  async "staff-clear"() { if (!confirm("Clear the whole expected staff list?")) return; await saveStaff([], "List cleared."); },
+  "staff-show"(b) { state.staffShow = b.checked ? "all" : "missing"; render(); },
+  async "staff-copy"() {
+    const groups = new Map(); staffStatus().filter(x => x.state !== "ok").forEach(x => { const k = x.e.dept || "Other"; (groups.get(k) || groups.set(k, []).get(k)).push(x.e.name); });
+    const text = "Assalam o Alaikum. These doctors haven't registered on the Eastridge duty roster app yet:\n\n" + [...groups].map(([g, n]) => "*" + g + "*: " + n.join(", ")).join("\n") + "\n\nPlease register today: " + location.origin + location.pathname + "\n(Create account → add your full name, WhatsApp number, department and designation.)";
+    try { await navigator.clipboard.writeText(text); toast("Copied. Paste it in the WhatsApp group."); } catch (_) { prompt("Copy this message:", text); }
+  },
   "profile-close"() { state.profileOpen = false; render(); },
   "pc-start"() { const d = app.myDoc || {}; Object.assign(state.profile, { changing: true, newName: d.name || "", newPhone: d.phone || "" }); render(); setTimeout(() => { const el = $("#pc-name"); if (el) el.focus(); }, 0); },
   async "pc-cancel"() { await guarded(() => dbCall(() => app.db.collection("doctors").doc(app.uid).update({ pendingChange: firebase.firestore.FieldValue.delete(), updatedAt: Date.now() })), "Request cancelled."); },
@@ -2039,12 +2124,13 @@ document.addEventListener("keydown", e => {
   if (state.extPrompt) return actions["ext-cancel"]();
   if ($("#popup") && $("#popup").innerHTML) { actions["ext-pop-later"](); actions["popup-later"](); }
 });
+document.addEventListener("toggle", e => { if (e.target.id === "staff-add-box") state.staffAdd = e.target.open; }, true); // keep "Add names" open across live updates
 document.addEventListener("click", e => { if (e.target.closest("#wa-prompt-go")) setTimeout(() => { state.waPrompt = null; render(); }, 300); });
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
 });
-const LIVE_BINDS = new Set(["csQ", "extPrompt.reason", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
+const LIVE_BINDS = new Set(["csQ", "extPrompt.reason", "staffPaste", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
 document.addEventListener("input", e => {
   const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;
   setBind(path, el.value);
@@ -2055,6 +2141,7 @@ document.addEventListener("input", e => {
 document.addEventListener("change", async e => {
   const el = e.target;
   if (el.id === "file-in") { if (el.files && el.files[0]) await readFile(el.files[0]); return; }
+  if (el.dataset && el.dataset.staffLink !== undefined) { const l = (state.staff || []).map(x => ({ ...x })), e = l[+el.dataset.staffLink]; if (e) { if (el.value) e.uid = el.value; else delete e.uid; await saveStaff(l, el.value ? "Linked." : "Link removed."); } return; }
   if (el.dataset && el.dataset.actCg) { state.cgDraft = { ...((state.contact && state.contact.coverGroups) || DEFAULT_COVER_GROUPS), ...(state.cgDraft || {}), [el.dataset.dept]: el.value }; render(); return; }
   if (el.id === "opd-file") { if (el.files && el.files[0]) await readOpdFile(el.files[0]); return; }
   if (el.id === "dept-file") { if (el.files && el.files[0]) await readDeptFile(el.files[0]); return; }
@@ -2627,12 +2714,13 @@ async function readFile(file) {
 }
 
 /* ---------- start ---------- */
-let unsubContact = null;
+let unsubContact = null, unsubStaff = null;
 function startLive() {
   restoreRescuedDrafts();
   subscribeMonth();
   subscribePending();
   if (!unsubContact) unsubContact = app.db.collection("settings").doc("contact").onSnapshot(snap => { state.contact = snap.exists ? snap.data() : null; render(); }, () => {});
+  if (!unsubStaff && app.isAdmin) unsubStaff = app.db.collection("settings").doc("staff").onSnapshot(snap => { state.staff = snap.exists ? (snap.data().list || []) : []; render(); }, () => {});
   if (!unsubDoctors) unsubDoctors = app.db.collection("doctors").limit(1000).onSnapshot(snap => {
     const all = {}; snap.docs.forEach(x => { const v = x.data(); if (v && v.uid) all[v.uid] = v; });
     app.allDoctors = all;
@@ -2643,6 +2731,7 @@ function startLive() {
 }
 function stopLive() {
   [unsubDoctors, unsubRosters, unsubRequests, unsubContact, unsubPending, unsubPrevOwn, unsubExt, unsubCover].forEach(u => u && u()); unsubCover = null; state.cover = {};
+  if (unsubStaff) unsubStaff(); unsubStaff = null; state.staff = null;
   unsubDoctors = unsubRosters = unsubRequests = unsubContact = unsubPending = unsubPrevOwn = unsubExt = null; state.contact = null; state.extended = {};
   state.pending = []; logMonth = null; rosterSnap = {}; prevOwn = null;
   state.doctors = {}; state.rosters = {}; state.requests = []; state.drafts = {}; state.upload = null; state.editFor = null;

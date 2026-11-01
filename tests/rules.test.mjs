@@ -76,6 +76,11 @@ await t("locked: doctor can still change department and designation", as("ben").
 await t("locked: doctor can ask for a name/number change", as("ben").doc("doctors/ben").set({ pendingChange: { name: "Dr Benjamin", at: 1 } }, { merge: true }), true);
 await t("doctor can't set someone else's email on their profile", as("ben").doc("doctors/ben").set({ email: "boss@x.test" }, { merge: true }), false);
 await t("coordinator approves the name change", as("boss").doc("doctors/ben").update({ name: "Dr Benjamin", pendingChange: null }), true);
+await t("coordinator saves the expected staff list", as("boss").doc("settings/staff").set({ list: [{ name: "Ahmed", dept: "ER" }] }), true);
+await t("coordinator reads the expected staff list", as("boss").doc("settings/staff").get(), true);
+await t("doctors can't read the expected staff list", as("amy").doc("settings/staff").get(), false);
+await t("doctors can't change the expected staff list", as("amy").doc("settings/staff").set({ list: [] }), false);
+await t("doctors still read contact settings", as("amy").doc("settings/contact").get(), true);
 await t("approved can't approve others", as("amy").doc("doctors/pat").update({ approved: true }), false);
 await t("approved can't read admins of others", as("amy").doc("admins/boss").get(), false);
 await t("admin reads own admin doc", as("boss").doc("admins/boss").get(), true);
