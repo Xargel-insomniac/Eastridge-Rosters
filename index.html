@@ -261,6 +261,9 @@ details > summary { cursor: pointer; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .fb-duck, .fb-duck:hover { animation: none; } }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .fb-duck { filter: drop-shadow(0 0 1px rgba(255,255,255,.7)); } }
 :root[data-theme="dark"] .fb-duck { filter: drop-shadow(0 0 1px rgba(255,255,255,.7)); }
+.locked-val { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 40px; }
+.subpanel { margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 12px; }
+.subpanel h3 { margin: 0 0 4px; font-size: 1rem; }
 .feedback { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin: 22px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .cg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 10px; }
 .pill.cs-today { background: var(--accent-soft); color: var(--accent); }
@@ -614,6 +617,13 @@ const DESIGNATIONS = ["MO", "SMO", "Registrar", "Senior Registrar"];
 const DESIG_SHORT = { "MO": "MO", "SMO": "SMO", "Registrar": "Reg", "Senior Registrar": "SR" };
 /* Every doctor states a designation; MSA / admin staff don't need one. */
 const needsDesignation = d => !!d && d.dept !== "MSA" && !DESIGNATIONS.includes(d.designation);
+/* Required details: a real name (letters, no digits or @), a WhatsApp number we can dial, and the sign-in email. */
+const nameValid = n => { const t = String(n || "").trim(); return /^[^@0-9]{3,60}$/.test(t) && /[A-Za-z].*[A-Za-z]/.test(t); };
+const phoneValid = p => { const t = String(p || "").trim(); return /^[0-9+ ()-]{10,20}$/.test(t) && !!waNumber(t); };
+const profileComplete = d => !!d && nameValid(d.name) && phoneValid(d.phone) && !!(d.email || app.email);
+/* Once approved and complete, name and number change only with the coordinator's approval. */
+const profileLocked = d => !!d && !app.isAdmin && d.approved === true && d.profileLocked === true;
+const mustCompleteProfile = () => app.phase === "app" && !app.sample && !!app.myDoc && !profileComplete(app.myDoc);
 const desigOf = id => { const d = state.doctors[id] || (app.allDoctors && app.allDoctors[id]); return (d && d.designation) || ""; };
 const DEPARTMENTS = ["ER", "IPD-1 / Gynae", "IPD-1 / NICU (Paediatrics)", "IPD-2 (Medicine) / Dialysis", "OT / IPD-4 (Surgery)", "ICU / HDU", "Anaesthesia", "Radiology", "MSA"];
 /* Pakistan public holidays. 2026 from the Cabinet Division notification (Eid ul Adha as revised);
@@ -1255,10 +1265,12 @@ function render() {
   { const ann = $("#announce"), home = large ? $("#hero-copy") : $("#ann-slot"); if (ann.parentNode !== home) { home.insertBefore(ann, home.firstChild); annMeasure(); } }
   $("#who").innerHTML = renderWho();
   $("#banner").innerHTML = renderBanner();
-  $("#bar").hidden = !inApp;
+  $("#bar").hidden = !inApp || mustCompleteProfile();
   $("#month-label").textContent = monthLabel(state.month);
   $("#tabs").innerHTML = inApp ? renderTabs() : "";
-  $("#main").innerHTML = !inApp ? renderGate() : app.loading ? `<div class="empty">Loading the roster…</div>` :
+  if (mustCompleteProfile() && !state.profileOpen) { state.profile = { name: app.myDoc.name || "", dept: app.myDoc.dept || "", designation: app.myDoc.designation || "", phone: app.myDoc.phone || "" }; state.profileOpen = true; }
+  if (mustCompleteProfile()) $("#tabs").innerHTML = "";
+  $("#main").innerHTML = !inApp ? renderGate() : mustCompleteProfile() ? "" : app.loading ? `<div class="empty">Loading the roster…</div>` :
     state.tab === "board" ? renderBoard() : state.tab === "mine" ? renderMine() : state.tab === "changes" ? renderChanges() :
     state.tab === "consultants" ? renderConsultants() : state.tab === "team" && app.isAdmin && !app.sample ? renderTeam() : app.canEdit || app.sample ? renderChecks() : renderBoard();
   const fb = inApp && !app.loading ? renderFeedback() : ""; if ($("#feedback").dataset.html !== fb) { $("#feedback").dataset.html = fb; $("#feedback").innerHTML = fb; }
@@ -1277,6 +1289,7 @@ function renderBanner() {
   out += renderInstall();
   if (app.sample) out += `<div class="banner warn"><p><b>Example roster.</b> ${esc(app.sampleReason || "")} These doctors are made up and nothing you change here is saved.</p><button class="btn" data-act="sample-off" id="sample-off">${app.phase === "app" ? "Back to the real roster" : "Close the example"}</button></div>`;
   if (!state.profileOpen && app.phase === "app" && !app.sample && needsDesignation(app.myDoc)) out += `<div class="banner warn"><p><b>Add your designation.</b> Every doctor needs to choose MO, SMO, Registrar or Senior Registrar in their profile.</p><button class="btn" data-act="profile-open" id="desig-add">Add designation</button></div>`;
+  if (app.isAdmin && !app.sample && app.phase === "app" && state.tab !== "team" && changeRequests().length) out += `<div class="banner"><p><b>${changeRequests().length} name/number change${changeRequests().length === 1 ? "" : "s"} waiting for your approval.</b></p><button class="btn" data-act="tab" data-tab="team" id="pc-review">Review</button></div>`;
   if (state.profileOpen && (app.phase === "app" || app.sample)) out += renderProfileForm();
   return out;
 }
@@ -1312,11 +1325,15 @@ function renderAuth() {
     <p class="small">${signup ? `Already have an account? <button class="btn ghost" type="button" data-act="auth-mode" data-mode="signin" id="au-to-in">Sign in</button>` : `New here? <button class="btn ghost" type="button" data-act="auth-mode" data-mode="signup" id="au-to-up">Create an account</button>`}</p>
   </form>`;
 }
+function changeRequests() { return Object.values(app.allDoctors || {}).filter(d => d.pendingChange && (d.pendingChange.name || d.pendingChange.phone)); }
 function pendingDoctors() { return Object.values(app.allDoctors || {}).filter(d => d.approved !== true).sort((a, b) => (a.name || "").localeCompare(b.name || "")); }
 function renderTeam() {
   const pend = pendingDoctors(), ok = sortedDoctors(), dis = app.busy ? "disabled" : "";
   const row = (d, btns) => `<div class="item"><div class="head"><b>${esc(d.name || "No name")}</b><span class="muted small">${d.designation ? esc(d.designation) + " · " : ""}${esc(d.dept || "No department")}</span></div>${d.email || d.phone ? `<p class="small muted">${esc(d.email || "")}${d.email && d.phone ? " · " : ""}${esc(d.phone || "")}</p>` : ""}<div class="btns">${btns}</div></div>`;
   return `<div class="grid2">
+    ${changeRequests().length ? `<section class="panel" style="grid-column:1/-1" id="pc-list"><h2>Name and number changes to approve (${changeRequests().length})</h2><div class="list">${changeRequests().map(d => { const pc = d.pendingChange; return `<div class="item"><div class="head"><b>${esc(d.name)}</b><span class="muted small">${esc(d.dept || "")}</span></div>
+      ${pc.name ? `<p class="small">Name: ${esc(d.name)} → <b>${esc(pc.name)}</b></p>` : ""}${pc.phone ? `<p class="small">WhatsApp: ${esc(d.phone || "none")} → <b>${esc(pc.phone)}</b></p>` : ""}
+      <div class="btns"><button class="btn primary" data-act="pc-approve" data-id="${esc(d.uid)}" id="pca-${esc(d.uid)}" ${app.busy ? "disabled" : ""}>Approve</button><button class="btn" data-act="pc-decline" data-id="${esc(d.uid)}" id="pcd-${esc(d.uid)}" ${app.busy ? "disabled" : ""}>Decline</button></div></div>`; }).join("")}</div></section>` : ""}
     ${renderAnnForm()}
     ${renderMsaForm()}
     ${renderOpdForm()}
@@ -1332,17 +1349,25 @@ function renderTeam() {
   </div>`;
 }
 function renderProfileForm() {
-  const p = state.profile;
-  return `<form class="panel" id="profile-form" data-form="profile">
-    <h2>${(app.sample ? me() : app.myDoc) ? "Edit your profile" : "Set up your doctor profile"}</h2>
-    <p class="muted small">Colleagues see this name on the roster and when you ask them to swap.</p>
+  const p = state.profile, d = app.sample ? me() : app.myDoc, must = mustCompleteProfile(), locked = profileLocked(d) && !must, pc = d && d.pendingChange;
+  const email = (d && d.email) || app.email || "";
+  const nameIn = (id, label, val, bind) => `<div class="field"><label for="${id}">${label}</label><input type="text" id="${id}" data-bind="${bind}" value="${esc(val)}" placeholder="Dr. Sana Malik" required maxlength="60"></div>`;
+  const phoneIn = (id, label, val, bind) => `<div class="field"><label for="${id}">${label}</label><input type="tel" id="${id}" data-bind="${bind}" value="${esc(val)}" placeholder="0300 1234567" required maxlength="20"><span class="muted small">Colleagues use it to message you about swaps.</span></div>`;
+  return `<form class="panel" id="profile-form" data-form="profile" novalidate>
+    <h2>${must ? "Complete your profile" : d ? "Edit your profile" : "Set up your doctor profile"}</h2>
+    ${must ? `<div class="note warn">Your name, email and WhatsApp number are now required. Please ${!nameValid(d.name) ? "add your full name" : ""}${!nameValid(d.name) && !phoneValid(d.phone) ? " and " : ""}${!phoneValid(d.phone) ? "add a valid WhatsApp number" : ""} to keep using the roster.</div>` : `<p class="muted small">Colleagues see this name on the roster and when you ask them to swap. All fields are required.</p>`}
     <div class="row">
-      <div class="field"><label for="pf-name">Name as it should appear</label><input type="text" id="pf-name" data-bind="profile.name" value="${esc(p.name)}" placeholder="Dr. Sana Malik" required maxlength="60"></div>
+      ${locked ? `<div class="field"><span class="lab">Name</span><div class="locked-val"><b>${esc(d.name)}</b><span class="pill">🔒 Coordinator approves changes</span></div></div>
+        <div class="field"><span class="lab">WhatsApp number</span><div class="locked-val"><b>${esc(d.phone)}</b></div></div>`
+        : `${nameIn("pf-name", "Full name as it should appear", p.name, "profile.name")}${phoneIn("pf-phone", "WhatsApp number", p.phone, "profile.phone")}`}
+      <div class="field"><span class="lab">Email</span><div class="locked-val"><b>${esc(email || "No email on this account")}</b><span class="muted small">From your sign-in</span></div></div>
       <div class="field"><label for="pf-dept">Department</label><select id="pf-dept" data-bind="profile.dept"><option value="">Choose your department</option>${DEPARTMENTS.map(x => `<option value="${esc(x)}" ${p.dept === x ? "selected" : ""}>${esc(x)}</option>`).join("")}${p.dept && !DEPARTMENTS.includes(p.dept) ? `<option value="${esc(p.dept)}" selected>${esc(p.dept)} (old name, please change)</option>` : ""}</select></div>
       <div class="field"><label for="pf-desig">Designation${p.dept === "MSA" ? " (not needed for MSA)" : ""}</label><select id="pf-desig" data-bind="profile.designation"><option value="">Choose your designation</option>${DESIGNATIONS.map(x => `<option value="${esc(x)}" ${p.designation === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
-      <div class="field"><label for="pf-phone">WhatsApp number (optional)</label><input type="tel" id="pf-phone" data-bind="profile.phone" value="${esc(p.phone)}" placeholder="0300 1234567" maxlength="20"><span class="muted small">Colleagues use it to message you about swaps.</span></div>
     </div>
-    <div class="btns"><button class="btn primary" type="submit" id="pf-save" ${app.busy ? "disabled" : ""}>Save profile</button>${app.phase === "profile" && !app.sample ? `<button class="btn ghost" type="button" data-act="signout" id="pf-out">Sign out</button>` : `<button class="btn" type="button" data-act="profile-close" id="pf-cancel">Cancel</button>`}</div>
+    ${locked ? (pc ? `<div class="note">Waiting for the coordinator to approve: ${pc.name ? `name → <b>${esc(pc.name)}</b>` : ""}${pc.name && pc.phone ? ", " : ""}${pc.phone ? `number → <b>${esc(pc.phone)}</b>` : ""}. <button class="btn ghost" type="button" data-act="pc-cancel" id="pc-cancel">Cancel request</button></div>`
+      : p.changing ? `<div class="subpanel"><h3>Ask to change your name or number</h3><p class="muted small">The coordinator approves the change before it shows on the roster. Leave a box as it is to keep it.</p><div class="row">${nameIn("pc-name", "New name", p.newName, "profile.newName")}${phoneIn("pc-phone", "New WhatsApp number", p.newPhone, "profile.newPhone")}</div></div>`
+      : `<div class="btns"><button class="btn ghost" type="button" data-act="pc-start" id="pc-start">Ask to change name or number</button></div>`) : ""}
+    <div class="btns"><button class="btn primary" type="submit" id="pf-save" ${app.busy ? "disabled" : ""}>${locked && p.changing ? "Save and send request" : "Save profile"}</button>${(app.phase === "profile" || must) && !app.sample ? `<button class="btn ghost" type="button" data-act="signout" id="pf-out">Sign out</button>` : `<button class="btn" type="button" data-act="profile-close" id="pf-cancel">Cancel</button>`}</div>
   </form>`;
 }
 function renderTabs() {
@@ -1750,8 +1775,16 @@ const actions = {
   tab(b) { state.tab = b.dataset.tab; render(); },
   month(b) { state.month = addMonths(state.month, +b.dataset.d); state.upload = null; if (app.sample) { const s = buildSample(); state.rosters = s.rosters; state.requests = s.requests; } else subscribeMonth(); resetForm(); render(); },
   "goto-month"(b) { const u = state.upload; state.month = b.dataset.month; if (!app.sample) subscribeMonth(); if (u) state.upload = reparse(u); render(); },
-  "profile-open"() { const d = app.sample ? me() : app.myDoc; state.profile = { name: d ? d.name : "", dept: d ? d.dept || "" : "", designation: d ? d.designation || "" : "", phone: d ? d.phone || "" : "" }; state.profileOpen = true; render(); setTimeout(() => { const el = $("#pf-name"); if (el) el.focus(); }, 0); },
+  "profile-open"() { const d = app.sample ? me() : app.myDoc; state.profile = { changing: false, newName: "", newPhone: "", name: d ? d.name : "", dept: d ? d.dept || "" : "", designation: d ? d.designation || "" : "", phone: d ? d.phone || "" : "" }; state.profileOpen = true; render(); setTimeout(() => { const el = $("#pf-name"); if (el) el.focus(); }, 0); },
   "profile-close"() { state.profileOpen = false; render(); },
+  "pc-start"() { const d = app.myDoc || {}; Object.assign(state.profile, { changing: true, newName: d.name || "", newPhone: d.phone || "" }); render(); setTimeout(() => { const el = $("#pc-name"); if (el) el.focus(); }, 0); },
+  async "pc-cancel"() { await guarded(() => dbCall(() => app.db.collection("doctors").doc(app.uid).update({ pendingChange: firebase.firestore.FieldValue.delete(), updatedAt: Date.now() })), "Request cancelled."); },
+  async "pc-approve"(b) {
+    const d = app.allDoctors[b.dataset.id], pc = d && d.pendingChange; if (!pc) return;
+    const upd = { pendingChange: firebase.firestore.FieldValue.delete(), profileLocked: true, updatedAt: Date.now() }; if (pc.name) upd.name = pc.name; if (pc.phone) upd.phone = pc.phone;
+    await guarded(() => dbCall(() => app.db.collection("doctors").doc(d.uid).update(upd)), "Approved. " + (pc.name || d.name) + "'s details are updated.");
+  },
+  async "pc-decline"(b) { const d = app.allDoctors[b.dataset.id]; await guarded(() => dbCall(() => app.db.collection("doctors").doc(d.uid).update({ pendingChange: firebase.firestore.FieldValue.delete(), changeDeclinedAt: Date.now(), updatedAt: Date.now() })), "Declined. Their details stay as they were."); },
   "sample-on"() { startSample("You asked to see how a filled-in month looks."); },
   "sample-off"() { stopSample(); },
   signout() { state.profileOpen = false; if (app.auth) app.auth.signOut(); },
@@ -2011,7 +2044,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
 });
-const LIVE_BINDS = new Set(["csQ", "extPrompt.reason", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "form.note"]);
+const LIVE_BINDS = new Set(["csQ", "extPrompt.reason", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
 document.addEventListener("input", e => {
   const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;
   setBind(path, el.value);
@@ -2035,12 +2068,25 @@ document.addEventListener("submit", async e => {
   if (e.target.id === "auth-form") { e.preventDefault(); await doAuth(); return; }
   if (e.target.id !== "profile-form") return;
   e.preventDefault();
-  const p = state.profile, name = p.name.trim();
-  if (!name) { toast("Add your name so colleagues can find you."); return; }
+  const p = state.profile, d = app.sample ? me() : app.myDoc, locked = profileLocked(d) && !mustCompleteProfile();
+  const name = locked ? d.name : String(p.name || "").trim(), phone = locked ? d.phone : String(p.phone || "").trim();
+  if (!nameValid(name)) { toast("Add your full name (letters only), e.g. Dr. Sana Malik."); return; }
+  if (!phoneValid(phone)) { toast("Add a valid WhatsApp number, e.g. 0300 1234567."); return; }
   if (!p.dept) { toast("Choose your department."); return; }
   if (p.dept !== "MSA" && !DESIGNATIONS.includes(p.designation)) { toast("Choose your designation: MO, SMO, Registrar or Senior Registrar."); return; }
   if (!app.uid) return;
-  const ok = await guarded(() => store.saveDoctor(app.uid, { name, dept: p.dept.trim(), designation: DESIGNATIONS.includes(p.designation) ? p.designation : "", phone: p.phone.trim() }), "Profile saved.");
+  let pending = null;
+  if (locked && p.changing) {
+    const nn = String(p.newName || "").trim(), np = String(p.newPhone || "").trim();
+    if (nn !== d.name && !nameValid(nn)) { toast("The new name needs letters only, e.g. Dr. Sana Malik."); return; }
+    if (np !== d.phone && !phoneValid(np)) { toast("The new WhatsApp number doesn't look right, e.g. 0300 1234567."); return; }
+    if (nn !== d.name || np !== d.phone) { pending = { at: Date.now() }; if (nn !== d.name) pending.name = nn; if (np !== d.phone) pending.phone = np; }
+  }
+  const data = { name, dept: p.dept.trim(), designation: DESIGNATIONS.includes(p.designation) ? p.designation : "", phone };
+  if (!d || !d.email) data.email = app.email || "";
+  if (d && d.approved === true) data.profileLocked = true; // complete from now on: further name/number changes go through the coordinator
+  if (pending) data.pendingChange = pending;
+  const ok = await guarded(() => store.saveDoctor(app.uid, data), pending ? "Saved. Your name/number change is waiting for the coordinator's approval." : "Profile saved.");
   if (ok) { state.profileOpen = false; render(); }
 });
 async function doAuth() {
@@ -2611,6 +2657,12 @@ function decidePhase() {
     if (!d && app.phase !== "profile") state.profile = { name: "", dept: "", designation: "", phone: "" };
     app.phase = d ? "pending" : "profile";
   }
+  if (member && d && !app.sample && !app.profileFixed) { // quietly fill in the sign-in email and lock a complete profile, once per visit
+    const upd = {};
+    if (!d.email && app.email) upd.email = app.email;
+    if (!app.isAdmin && d.approved === true && profileComplete(d) && d.profileLocked !== true) upd.profileLocked = true;
+    if (Object.keys(upd).length) { app.profileFixed = true; app.db.collection("doctors").doc(app.uid).update(upd).catch(() => { app.profileFixed = false; }); }
+  }
   render();
 }
 /* A short quote on the welcome screen. Every quote is shown once before any repeats (the order is kept on this device). */
@@ -2789,7 +2841,7 @@ function init() {
   app.auth.onAuthStateChanged(async u => {
     if (unsubMe) { unsubMe(); unsubMe = null; }
     stopLive();
-    app.sample = false; app.myDoc = null; app.isAdmin = false; app.canEdit = false; app.loading = true; state.profileOpen = false;
+    app.sample = false; app.myDoc = null; app.isAdmin = false; app.canEdit = false; app.loading = true; app.profileFixed = false; state.profileOpen = false;
     if (!u) { app.uid = app.realUid = null; app.busy = false; state.auth = { mode: "signin", email: state.auth.email, password: "", err: "", msg: "" }; app.phase = "auth"; render(); return; }
     app.uid = app.realUid = u.uid; app.email = u.email || "";
     state.auth.password = ""; state.auth.err = state.auth.msg = "";

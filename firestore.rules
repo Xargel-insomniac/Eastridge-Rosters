@@ -81,11 +81,19 @@ service cloud.firestore {
         && request.resource.data.approved == false
         && validName();
       // Doctors edit their own details but can't approve themselves; coordinators can change anything.
+      // Once an approved doctor's profile is complete (profileLocked), their name and WhatsApp number only change
+      // through the coordinator: they can ask (pendingChange) but not change them directly. Department and designation stay free.
       allow update: if isAdmin()
         || (signedIn() && uid() == userId
             && request.resource.data.uid == userId
             && request.resource.data.approved == resource.data.approved
-            && validName());
+            && validName()
+            && (!(resource.data.get('profileLocked', false) == true && resource.data.approved == true)
+                || (request.resource.data.name == resource.data.name
+                    && request.resource.data.get('phone', '') == resource.data.get('phone', '')
+                    && request.resource.data.get('profileLocked', false) == true))
+            && (request.resource.data.get('email', '') == resource.data.get('email', '')
+                || request.resource.data.get('email', '') == request.auth.token.get('email', '')));
       allow delete: if isAdmin();
     }
 

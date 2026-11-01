@@ -32,7 +32,8 @@ await t("approved writes colleague roster (swap accept)", as("ben").doc("rosters
 await t("roster id must match month_doctor", as("amy").doc("rosters/2026-11_ben").set(R("amy")), false);
 await t("roster updatedBy must be self", as("amy").doc("rosters/2026-11_amy").set(R("ben")), false);
 await t("approved can't write a closed (past) month", as("amy").doc("rosters/2026-09_amy").set({ month: "2026-09", doctorId: "amy", shifts: {}, updatedBy: "amy" }), false);
-await t("approved can write the current month", as("amy").doc("rosters/2026-10_amy").set({ month: "2026-10", doctorId: "amy", shifts: {}, updatedBy: "amy" }), true);
+const CUR = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 7); // this month in Pakistan time
+await t("approved can write the current month", as("amy").doc(`rosters/${CUR}_amy`).set({ month: CUR, doctorId: "amy", shifts: {}, updatedBy: "amy" }), true);
 await t("coordinator can correct a closed month", as("boss").doc("rosters/2026-09_amy").set({ month: "2026-09", doctorId: "amy", shifts: {}, updatedBy: "boss" }), true);
 await t("approved can't log a change in a closed month", as("amy").collection("requests").add({ type: "move", status: "done", from: "amy", by: "amy", month: "2026-09" }), false);
 const ANN = { active: true, text: "Upload December rosters by 20 Nov", level: "important", until: "", updatedAt: 1, updatedBy: "boss" };
@@ -67,6 +68,14 @@ await t("cover answer must be yes or no", as("amy").doc("cover/x").set(COV("amy"
 await t("pending doctor can't answer", as("pat").doc("cover/y").set(COV("pat", "yes")), false);
 await t("doctors read cover answers", as("ben").collection("cover").where("month", "in", ["2026-11"]).get(), true);
 await t("doctor can't delete cover answers", as("amy").doc("cover/2026-11-03_N_ICU-HDU_amy").delete(), false);
+await t("approved doctor locks their completed profile", as("ben").doc("doctors/ben").set({ phone: "0321 7654321", profileLocked: true }, { merge: true }), true);
+await t("locked: doctor can't change own name directly", as("ben").doc("doctors/ben").set({ name: "Dr Benjamin" }, { merge: true }), false);
+await t("locked: doctor can't change own number directly", as("ben").doc("doctors/ben").set({ phone: "0300 0000000" }, { merge: true }), false);
+await t("locked: doctor can't unlock their profile", as("ben").doc("doctors/ben").set({ profileLocked: false }, { merge: true }), false);
+await t("locked: doctor can still change department and designation", as("ben").doc("doctors/ben").set({ dept: "ICU / HDU", designation: "SMO" }, { merge: true }), true);
+await t("locked: doctor can ask for a name/number change", as("ben").doc("doctors/ben").set({ pendingChange: { name: "Dr Benjamin", at: 1 } }, { merge: true }), true);
+await t("doctor can't set someone else's email on their profile", as("ben").doc("doctors/ben").set({ email: "boss@x.test" }, { merge: true }), false);
+await t("coordinator approves the name change", as("boss").doc("doctors/ben").update({ name: "Dr Benjamin", pendingChange: null }), true);
 await t("approved can't approve others", as("amy").doc("doctors/pat").update({ approved: true }), false);
 await t("approved can't read admins of others", as("amy").doc("admins/boss").get(), false);
 await t("admin reads own admin doc", as("boss").doc("admins/boss").get(), true);
