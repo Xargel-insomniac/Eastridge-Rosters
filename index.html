@@ -201,6 +201,30 @@ h2.has-ic { display: flex; align-items: center; gap: 10px; }
 @keyframes jt-in { from { opacity: 0; transform: translateY(8px) scale(.95); } to { opacity: 1; transform: none; } }
 @media (max-width: 640px) { .jump-today { bottom: calc(82px + env(safe-area-inset-bottom, 0px)); } }
 @media (prefers-reduced-motion: reduce) { .jump-today { animation: none; } }
+.view-seg { margin-right: auto; }
+.week { display: grid; gap: 12px; }
+.wk-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wk-title { display: grid; justify-items: center; } .wk-title b { font-family: var(--f-display); font-size: 1.15rem; }
+.wk-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 6px; }
+.wd { display: grid; justify-items: center; gap: 2px; padding: 7px 0 8px; border-radius: 12px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font: inherit; }
+.wd .wdn { font-size: .72rem; font-weight: 600; } .wd b { font-family: var(--f-display); font-size: 1.15rem; color: var(--ink); line-height: 1.1; }
+.wd.today b { color: var(--brand-red); }
+.wd.on { background: var(--accent); color: color-mix(in srgb, var(--accent-ink) 75%, transparent); } .wd.on b { color: var(--accent-ink); }
+.wd.out { opacity: .35; cursor: default; }
+.wd.hol .wdn::after { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--brand-red); margin-left: 3px; vertical-align: 2px; }
+.dots { display: flex; gap: 3px; height: 6px; } .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.dots .f-M { background: color-mix(in srgb, var(--m) 70%, var(--surface)); } .dots .f-E { background: color-mix(in srgb, var(--e) 70%, var(--surface)); } .dots .f-N { background: color-mix(in srgb, var(--n) 70%, var(--surface)); } .dots .f-gap { background: var(--bad); }
+.wd.on .dots i { box-shadow: 0 0 0 1.5px var(--accent); }
+.wk-day { margin: 2px 0 0; font-size: 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wk-shifts { display: grid; gap: 10px; }
+.wsh { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.wsh header { display: flex; justify-content: space-between; align-items: center; padding: 9px 14px; font-size: .78rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.wsh header .mono { font-weight: 600; letter-spacing: 0; text-transform: none; font-size: .78rem; }
+.wsh.s-M header { background: var(--m-bg); color: var(--m); } .wsh.s-E header { background: var(--e-bg); color: var(--e); } .wsh.s-N header { background: var(--n-bg); color: var(--n); }
+.wbody { padding: 10px 14px 12px; display: flex; flex-wrap: wrap; gap: 6px; align-content: start; }
+.wbody .dgrp { width: 100%; }
+.wsh.gap .wbody { background: var(--bad-bg); } .wsh.covered .wbody { background: var(--warn-bg); }
+@media (min-width: 900px) { .wk-shifts { grid-template-columns: repeat(3, 1fr); } }
 .bpast { grid-column: 1 / -1; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--sunk); display: flex; justify-content: center; }
 .bpast .btn { font-size: .85rem; }
 .board .bc.today.gap { background: var(--bad-bg); } .board .bc.today.covered { background: var(--warn-bg); }
@@ -1374,6 +1398,7 @@ function updateJumpToday() {
   let show = false;
   if (onBoard) {
     if (state.month !== todayKey.slice(0, 7)) show = true;
+    else if (boardView() === "week") show = state.weekDay && mondayOf(state.weekDay) !== mondayOf(todayKey);
     else { const t = document.querySelector(".board .bd.today"); if (t) { const r = t.getBoundingClientRect(); show = r.bottom < 0 || r.top > innerHeight * 2.5; } }
   }
   b.hidden = !show; b.setAttribute("aria-label", "Jump to today on the hospital roster");
@@ -1879,6 +1904,41 @@ function avatar(id) {
   const h = Math.round((x % 1000) * 137.508) % 360;
   return `<span class="av" style="--h:${h}" aria-hidden="true">${esc(ini)}</span>`;
 }
+/* Week view (day by day): doctors on phones get it by default; the choice is remembered on the device. */
+function boardView() {
+  if (state.boardView) return state.boardView;
+  try { const v = localStorage.getItem("board-view"); if (v === "week" || v === "month") return (state.boardView = v); } catch (_) {}
+  return (state.boardView = !app.canEdit && matchMedia("(max-width: 640px)").matches ? "week" : "month");
+}
+const isoAdd = (date, n) => { const [y, m, d] = date.split("-").map(Number), t = new Date(Date.UTC(y, m - 1, d + n)); return ymd(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()); };
+const mondayOf = date => isoAdd(date, -((dow(date) + 6) % 7));
+function weekDay(month) {
+  let d = state.weekDay;
+  if (!d || d.slice(0, 7) !== month) d = todayKey.slice(0, 7) === month ? todayKey : month + "-01";
+  return (state.weekDay = d);
+}
+function renderWeek(month, cellOf) {
+  const sel = weekDay(month), mon = mondayOf(sel), days = Array.from({ length: 7 }, (_, i) => isoAdd(mon, i));
+  const label = d => +d.slice(8) + " " + MON_SHORT[+d.slice(5, 7) - 1];
+  const thisWeek = mondayOf(todayKey) === mon ? "This week" : mondayOf(isoAdd(todayKey, 7)) === mon ? "Next week" : mondayOf(isoAdd(todayKey, -7)) === mon ? "Last week" : "";
+  const strip = days.map(d => {
+    const inM = d.slice(0, 7) === month, dots = inM ? SHIFTS.map(sh => { const c = cellOf(d, sh); return `<i class="${c.on.length ? "f-" + sh.code : c.gap && !c.cby ? "f-gap" : ""}"></i>`; }).join("") : "";
+    const hol = inM && holidayOf(d);
+    return `<button class="wd${d === sel ? " on" : ""}${d === todayKey ? " today" : ""}${inM ? "" : " out"}${hol ? " hol" : ""}" data-act="week-day" data-date="${d}" ${inM ? "" : "disabled"} aria-pressed="${d === sel}" aria-label="${esc(fmtDate(d))}${hol ? ", " + esc(hol) : ""}">
+      <span class="wdn">${DOW[dow(d)]}</span><b>${+d.slice(8)}</b><span class="dots">${dots}</span></button>`;
+  }).join("");
+  const hol = holidayOf(sel);
+  const shifts = SHIFTS.map(sh => { const c = cellOf(sel, sh);
+    return `<section class="wsh s-${sh.code}${c.gap && !c.cby ? " gap" : ""}${c.cby ? " covered" : ""}"><header><span>${sh.name}</span><span class="mono">${sh.time}${sh.code === "N" ? " +1" : ""}</span></header><div class="wbody">${c.inner}</div></section>`; }).join("");
+  return `<div class="week">
+    <div class="wk-head"><button class="iconbtn" data-act="week-step" data-d="-7" aria-label="Previous week">‹</button>
+      <div class="wk-title"><b>${label(days[0])} – ${label(days[6])}</b>${thisWeek ? `<span class="muted small">${thisWeek}</span>` : ""}</div>
+      <button class="iconbtn" data-act="week-step" data-d="7" aria-label="Next week">›</button></div>
+    <div class="wk-strip" role="group" aria-label="Days of the week">${strip}</div>
+    <h3 class="wk-day">${esc(fmtDate(sel))}${sel === todayKey ? ` <span class="pill done">Today</span>` : ""}${hol ? ` <span class="hname"><span class="hdot" aria-hidden="true"></span>${esc(hol)}</span>` : ""}</h3>
+    <div class="wk-shifts">${shifts}</div>
+  </div>`;
+}
 function renderBoard() {
   const month = state.month, docs = monthDocs(month), a = audit(month);
   const doctors = sortedDoctors();
@@ -1904,6 +1964,7 @@ function renderBoard() {
       <button class="statlink stat" data-act="tab" data-tab="changes" id="st-req"><b>${pendingList().filter(r => r.month === month).length}</b><span>swaps waiting</span></button>
     </div>` : ""}
     <div class="filters">
+      <div class="seg view-seg" role="group" aria-label="Roster view">${[["month", "Month"], ["week", "Week"]].map(([k, l]) => `<button data-act="board-view" data-view="${k}" aria-pressed="${boardView() === k}">${l}</button>`).join("")}</div>
       ${seesAll() ? `<label class="check" for="f-dept">Department <select id="f-dept" data-bind="dept"><option value="all">All departments</option>${deptList().map(d => `<option ${state.dept === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></label>` : `<label class="check" for="f-dept">Department <select id="f-dept" data-bind="docDept">${[myDept(), ...deptList().filter(d => d !== myDept() && d !== "MSA")].filter(Boolean).map(d => `<option value="${esc(d)}" ${deptSel === d ? "selected" : ""}>${esc(d)}${d === myDept() ? " (yours)" : ""}</option>`).join("")}<option value="all" ${deptSel === "all" ? "selected" : ""}>All departments (master rota)</option></select></label>`}
       ${me() ? `<label class="check" for="f-mine"><input type="checkbox" id="f-mine" data-bind="mineOnly" ${state.mineOnly ? "checked" : ""}> Only my duties</label>` : ""}
       ${me() && canAct() && !lockedForMe(month) ? `<span class="muted small">Tap one of your own duties to swap or move it.</span>` : ""}
@@ -1912,6 +1973,32 @@ function renderBoard() {
     ${isClosed(month) && !app.sample ? `<p class="note">${esc(monthLabel(month))} is over and closed. ${app.canEdit ? "As coordinator you can still correct it." : "Only a coordinator can change it now."}</p>` : ""}
     ${datesOf(month).some(holidayOf) ? `<p class="muted small"><span class="hdot" aria-hidden="true"></span> Public holiday. Islamic holidays marked “expected” may move a day with moon sighting.</p>` : ""}
   </section>`;
+  // One shift on one day: who's on (grouped by department in the master rota), and whether it's uncovered.
+  const cellOf = (date, s) => {
+    const on = ids.filter(id => hasDuty(docs[id], date, s.code) && inDept(id, date, s.code) && (!state.mineOnly || id === app.uid))
+      .sort((x, y) => docName(x).localeCompare(docName(y)));
+    const gap = showGaps && !state.mineOnly && uploadedInScope && !ids.some(id => hasDuty(docs[id], date, s.code) && inDept(id, date, s.code));
+    const chip = id => {
+      const mine = id === app.uid, fst = (seesAll() || mine) && flags[id] ? flags[id].get(date + "|" + s.code) : undefined, fl = fst !== undefined && fst !== "approved", fok = fst === "approved";
+      const ds = DESIG_SHORT[desigOf(id)] || "";
+      const home = deptOfId(id), there = dutyDept(id, date, s.code);
+      const dept = (ds ? ` <small>${esc(ds)}</small>` : "") + (home && there !== home ? ` <small class="xd" title="Covering from ${esc(home)} after a swap">↔ ${esc(home)}</small>` : "");
+      const title = esc(docName(id) + (desigOf(id) ? " (" + desigOf(id) + ")" : "") + " · " + fmtDuty({ date, shift: s.code }) + (fst !== undefined ? " · extended duty over " + MAX_STRETCH + " h: " + (extLabel[fst] || "not yet approved") : ""));
+      const av = avatar(id);
+      return mine && canAct() ? `<button class="chip c-${s.code} mine${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" data-act="pick-duty" data-date="${date}" data-shift="${s.code}" title="${title}">${av}<span class="cn">${esc(docName(id))}</span>${dept}</button>`
+        : `<span class="chip c-${s.code}${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" title="${title}">${av}<span class="cn">${esc(docName(id))}</span>${dept}</span>`;
+    };
+    // In the master rota, names are grouped under their department so the list stays readable.
+    let people = "";
+    if (deptSel === "all" && on.length) {
+      const groups = {}; on.forEach(id => ((groups[dutyDept(id, date, s.code)] ||= []).push(id)));
+      people = Object.keys(groups).sort((a, b) => DEPARTMENTS.indexOf(a) - DEPARTMENTS.indexOf(b)).map(g => `<div class="dgrp"><span class="dg">${esc(g)}</span>${groups[g].map(chip).join("")}</div>`).join("");
+    } else people = on.map(chip).join("");
+    const cby = gap && deptSel !== "all" ? coveredBy({ date, shift: s.code, dept: deptSel }) : null;
+    const inner = `${cby ? `<span class="covtag">Covered by ${esc(docName(cby))} (${esc(dutyDept(cby, date, s.code))})</span>` : gap ? `<span class="gaptag">Uncovered</span>` : ""}${people || (gap ? "" : `<span class="none" aria-label="No one">–</span>`)}`;
+    return { on, gap, cby, inner };
+  };
+  if (boardView() === "week") return html + renderWeek(month, cellOf);
   html += `<div class="boardwrap"><div class="board" role="table" aria-label="Duty roster for ${esc(monthLabel(month))}">
     <div role="row" class="brow"><div class="bh" role="columnheader">Date</div>${SHIFTS.map(s => `<div class="bh sh-${s.code}" role="columnheader">${s.name}<span class="mono">${s.time}</span></div>`).join("")}</div>`;
   // This month starts at today; earlier days are one tap away.
@@ -1924,29 +2011,7 @@ function renderBoard() {
     const [, , d] = date.split("-");
     const hol = holidayOf(date);
     html += `<div role="row" class="brow"><div class="bd${we}${date === todayKey ? " today" : ""}${hol ? " hol" : ""}" role="rowheader"${hol ? ` title="${esc(hol)}"` : ""}><b>${+d}</b><span class="muted">${DOW[dow(date)]}</span>${hol ? `<span class="hname"><span class="hdot" aria-hidden="true"></span>${esc(hol)}</span>` : ""}</div>`;
-    for (const s of SHIFTS) {
-      const on = ids.filter(id => hasDuty(docs[id], date, s.code) && inDept(id, date, s.code) && (!state.mineOnly || id === app.uid))
-        .sort((x, y) => docName(x).localeCompare(docName(y)));
-      const gap = showGaps && !state.mineOnly && uploadedInScope && !ids.some(id => hasDuty(docs[id], date, s.code) && inDept(id, date, s.code));
-      const chip = id => {
-        const mine = id === app.uid, fst = (seesAll() || mine) && flags[id] ? flags[id].get(date + "|" + s.code) : undefined, fl = fst !== undefined && fst !== "approved", fok = fst === "approved";
-        const ds = DESIG_SHORT[desigOf(id)] || "";
-        const home = deptOfId(id), there = dutyDept(id, date, s.code);
-        const dept = (ds ? ` <small>${esc(ds)}</small>` : "") + (home && there !== home ? ` <small class="xd" title="Covering from ${esc(home)} after a swap">↔ ${esc(home)}</small>` : "");
-        const title = esc(docName(id) + (desigOf(id) ? " (" + desigOf(id) + ")" : "") + " · " + fmtDuty({ date, shift: s.code }) + (fst !== undefined ? " · extended duty over " + MAX_STRETCH + " h: " + (extLabel[fst] || "not yet approved") : ""));
-        const av = avatar(id);
-        return mine && canAct() ? `<button class="chip c-${s.code} mine${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" data-act="pick-duty" data-date="${date}" data-shift="${s.code}" title="${title}">${av}<span class="cn">${esc(docName(id))}</span>${dept}</button>`
-          : `<span class="chip c-${s.code}${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" title="${title}">${av}<span class="cn">${esc(docName(id))}</span>${dept}</span>`;
-      };
-      // In the master rota, names are grouped under their department so the list stays readable.
-      let people = "";
-      if (deptSel === "all" && on.length) {
-        const groups = {}; on.forEach(id => ((groups[dutyDept(id, date, s.code)] ||= []).push(id)));
-        people = Object.keys(groups).sort((a, b) => DEPARTMENTS.indexOf(a) - DEPARTMENTS.indexOf(b)).map(g => `<div class="dgrp"><span class="dg">${esc(g)}</span>${groups[g].map(chip).join("")}</div>`).join("");
-      } else people = on.map(chip).join("");
-      const cby = gap && deptSel !== "all" ? coveredBy({ date, shift: s.code, dept: deptSel }) : null;
-      html += `<div class="bc s-${s.code}${we}${date === todayKey ? " today" : ""}${gap && !cby ? " gap" : ""}${cby ? " covered" : ""}" role="cell" data-label="${s.name} · ${s.time}">${cby ? `<span class="covtag">Covered by ${esc(docName(cby))} (${esc(dutyDept(cby, date, s.code))})</span>` : gap ? `<span class="gaptag">Uncovered</span>` : ""}${people || (gap ? "" : `<span class="none" aria-label="No one">–</span>`)}</div>`;
-    }
+    for (const s of SHIFTS) { const c = cellOf(date, s); html += `<div class="bc s-${s.code}${we}${date === todayKey ? " today" : ""}${c.gap && !c.cby ? " gap" : ""}${c.cby ? " covered" : ""}" role="cell" data-label="${s.name} · ${s.time}">${c.inner}</div>`; }
     html += `</div>`;
   }
   return html + `</div></div>`;
@@ -2298,10 +2363,17 @@ const actions = {
   "jump-today"() {
     const cur = todayKey.slice(0, 7); state.tab = "board";
     if (state.month !== cur) { state.month = cur; state.upload = null; if (app.sample) { const sm = buildSample(); state.rosters = sm.rosters; state.requests = sm.requests; } else subscribeMonth(); resetForm(); }
-    state.showPast = false; render();
-    requestAnimationFrame(() => { const t = document.querySelector(".board .bd.today"); if (!t) return;
+    state.showPast = false; state.weekDay = todayKey; render();
+    requestAnimationFrame(() => { const t = document.querySelector(".board .bd.today") || document.querySelector(".week"); if (!t) return;
       const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
       scrollTo({ top: scrollY + t.getBoundingClientRect().top - 70, behavior: reduce ? "auto" : "smooth" }); });
+  },
+  "board-view"(b) { state.boardView = b.dataset.view; try { localStorage.setItem("board-view", state.boardView); } catch (_) {} render(); },
+  "week-day"(b) { state.weekDay = b.dataset.date; render(); },
+  "week-step"(b) {
+    const to = isoAdd(weekDay(state.month), +b.dataset.d), m = to.slice(0, 7);
+    if (m !== state.month) { state.month = m; state.upload = null; if (app.sample) { const sm = buildSample(); state.rosters = sm.rosters; state.requests = sm.requests; } else subscribeMonth(); resetForm(); }
+    state.weekDay = to; render();
   },
   "show-past"() { state.showPast = !state.showPast; render(); },
   "ir-fill"(b) { const f = irState(); f[b.dataset.k] = b.dataset.v; irSaveDraft(); render(); },
