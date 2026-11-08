@@ -186,6 +186,8 @@ h2.has-ic { display: flex; align-items: center; gap: 10px; }
 .av { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: .58rem; font-weight: 800; letter-spacing: .02em; color: #fff; background: hsl(var(--h) 52% 42%); margin-left: -4px; }
 .chip { padding-left: 6px; } .chip .cn { overflow: hidden; text-overflow: ellipsis; }
 .board .bc.today { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+.bpast { grid-column: 1 / -1; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--sunk); display: flex; justify-content: center; }
+.bpast .btn { font-size: .85rem; }
 .board .bc.today.gap { background: var(--bad-bg); } .board .bc.today.covered { background: var(--warn-bg); }
 .board .bd.today { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 .btn .ic, .pill .ic { margin-right: 2px; }
@@ -1882,7 +1884,12 @@ function renderBoard() {
   </section>`;
   html += `<div class="boardwrap"><div class="board" role="table" aria-label="Duty roster for ${esc(monthLabel(month))}">
     <div role="row" class="brow"><div class="bh" role="columnheader">Date</div>${SHIFTS.map(s => `<div class="bh sh-${s.code}" role="columnheader">${s.name}<span class="mono">${s.time}</span></div>`).join("")}</div>`;
+  // This month starts at today; earlier days are one tap away.
+  const past = month === todayKey.slice(0, 7) && !state.showPast ? datesOf(month).filter(d => d < todayKey) : [];
+  if (past.length) html += `<div role="row" class="brow"><div class="bpast" role="cell"><button class="btn ghost" data-act="show-past" id="show-past">${ic("roster", 16)} Show ${+past[0].slice(8)}–${+past[past.length - 1].slice(8)} ${MON_SHORT[+month.slice(5) - 1]} (earlier this month)</button></div></div>`;
+  else if (month === todayKey.slice(0, 7) && state.showPast && datesOf(month)[0] < todayKey) html += `<div role="row" class="brow"><div class="bpast" role="cell"><button class="btn ghost" data-act="show-past" id="show-past">Hide earlier days</button></div></div>`;
   for (const date of datesOf(month)) {
+    if (past.includes(date)) continue;
     const we = dow(date) === 0 || dow(date) === 6 ? " we" : "";
     const [, , d] = date.split("-");
     const hol = holidayOf(date);
@@ -2258,6 +2265,7 @@ const actions = {
   "ir-next"() { const f = irState(), st = f.step || 0, miss = irMissing(f, st); if (miss.length) { toast(irMissText(miss)); return; } f.step = st + 1; irSaveDraft(); render(); $("#ir-form").scrollIntoView({ behavior: "smooth", block: "start" }); },
   "ir-back"() { const f = irState(); f.step = Math.max(0, (f.step || 0) - 1); irSaveDraft(); render(); $("#ir-form").scrollIntoView({ behavior: "smooth", block: "start" }); },
   "ir-step"(b) { const f = irState(), to = +b.dataset.step; if (to <= (f.step || 0)) { f.step = to; irSaveDraft(); render(); } },
+  "show-past"() { state.showPast = !state.showPast; render(); },
   "ir-fill"(b) { const f = irState(); f[b.dataset.k] = b.dataset.v; irSaveDraft(); render(); },
   "ir-clear"() { if (!confirm("Clear everything you've typed in this form?")) return; state.ir = irBlank(); state.irFiles = []; irSaveDraft(); irSaveFiles(); render(); },
   "ir-file-del"(b) { state.irFiles = irFiles().filter(x => x.id !== b.dataset.id); irSaveFiles(); render(); },
