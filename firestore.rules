@@ -79,6 +79,19 @@ service cloud.firestore {
         && request.resource.data.details.size() > 0 && request.resource.data.details.size() <= 8000
         && !('headComments' in request.resource.data);
       allow update, delete: if isAdmin();
+
+      // Evidence (photos and voice notes) saved with the report, readable by the same people as the report.
+      // Added only by the reporter, together with the report, and small enough for the free database.
+      match /files/{fileId} {
+        allow read: if isAdmin() || (isMember() && get(/databases/$(database)/documents/incidents/$(id)).data.reportedBy == uid());
+        allow create: if isMember()
+          && request.resource.data.reportedBy == uid()
+          && getAfter(/databases/$(database)/documents/incidents/$(id)).data.reportedBy == uid()
+          && request.resource.data.kind in ['photo', 'audio']
+          && request.resource.data.data is string
+          && request.resource.data.data.size() <= 900000;
+        allow delete: if isAdmin();
+      }
     }
 
     match /admins/{userId} {

@@ -93,6 +93,15 @@ await t("doctor can't read colleagues' reports", as("ben").doc("incidents/i1").g
 await t("doctor can't edit a submitted report", as("amy").doc("incidents/i1").update({ details: "changed" }), false);
 await t("coordinator reads all reports", as("boss").collection("incidents").orderBy("createdAt", "desc").get(), true);
 await t("coordinator adds comments and status", as("boss").doc("incidents/i1").update({ headComments: "Reviewed", status: "qa" }), true);
+const FILE = (by, extra = {}) => ({ kind: "photo", type: "image/jpeg", size: 10, data: "aGVsbG8=", reportedBy: by, createdAt: 1, ...extra });
+await t("reporter attaches a photo to their report", as("amy").doc("incidents/i1/files/f1").set(FILE("amy")), true);
+await t("colleague can't attach to someone else's report", as("ben").doc("incidents/i1/files/f2").set(FILE("ben")), false);
+await t("only photos and voice notes", as("amy").doc("incidents/i1/files/f3").set(FILE("amy", { kind: "video" })), false);
+await t("attachment size is capped", as("amy").doc("incidents/i1/files/f4").set(FILE("amy", { data: "x".repeat(900001) })), false);
+await t("reporter reads their evidence", as("amy").doc("incidents/i1/files/f1").get(), true);
+await t("colleague can't read the evidence", as("ben").doc("incidents/i1/files/f1").get(), false);
+await t("coordinator reads the evidence", as("boss").collection("incidents/i1/files").get(), true);
+await t("reporter can't change evidence", as("amy").doc("incidents/i1/files/f1").update({ data: "Zm9v" }), false);
 await t("approved can't approve others", as("amy").doc("doctors/pat").update({ approved: true }), false);
 await t("approved can't read admins of others", as("amy").doc("admins/boss").get(), false);
 await t("admin reads own admin doc", as("boss").doc("admins/boss").get(), true);

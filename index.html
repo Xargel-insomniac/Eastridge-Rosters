@@ -274,6 +274,13 @@ a.btn.wa { color: #128c4b; }
 .ir-quick { display: flex; gap: 6px; margin-top: 4px; }
 .chip-btn { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; font-size: .72rem; padding: 2px 9px; cursor: pointer; }
 .chip-btn:hover { color: var(--ink); border-color: var(--muted); }
+.ir-evidence { margin: 12px 0; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 12px; }
+.ir-evidence h3 { margin: 0 0 4px; font-size: 1rem; }
+.ir-files { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; align-items: center; }
+.ir-thumb { position: relative; margin: 0; width: 96px; height: 96px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.ir-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ir-x { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(4,18,30,.7); color: #fff; cursor: pointer; font-size: .8rem; }
+.ir-audio { position: relative; display: grid; gap: 4px; padding-right: 30px; } .ir-audio audio { max-width: 280px; height: 36px; } .ir-audio .ir-x { top: 6px; right: 0; }
 .ir-jci { display: grid; gap: 6px; margin: 8px 0 12px; font-size: .86rem; }
 .ir-item { text-align: left; cursor: pointer; width: 100%; display: grid; gap: 4px; font: inherit; color: inherit; }
 .pop.ir-view { max-width: 720px; width: calc(100% - 32px); max-height: calc(100vh - 40px); overflow: auto; text-align: left; }
@@ -947,7 +954,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, incidents: null, ir: null, irView: null, irFilter: "open", irNote: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, incidents: null, ir: null, irFiles: null, irRec: null, irFileCache: {}, irView: null, irFilter: "open", irNote: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -1378,6 +1385,71 @@ function irState() {
   if (!state.ir) { try { state.ir = JSON.parse(localStorage.getItem("ir-draft") || "null"); } catch (_) {} if (!state.ir || typeof state.ir !== "object") state.ir = irBlank(); }
   return state.ir;
 }
+/* ---- evidence: up to 3 photos (shrunk on the phone) and one voice note, stored with the report in incidents/{id}/files ----
+   Kept small so it fits the free database: each item well under Firestore's 1 MB per document. Videos go by WhatsApp. */
+const IR_MAX_PHOTOS = 3, IR_PHOTO_BYTES = 300 * 1024, IR_AUDIO_BYTES = 650 * 1024, IR_AUDIO_SECS = 60;
+function irFiles() {
+  if (!state.irFiles) { try { state.irFiles = JSON.parse(localStorage.getItem("ir-files") || "[]"); } catch (_) { state.irFiles = []; } if (!Array.isArray(state.irFiles)) state.irFiles = []; }
+  return state.irFiles;
+}
+function irSaveFiles() { try { localStorage.setItem("ir-files", JSON.stringify(state.irFiles || [])); } catch (_) { /* too big for this device's storage: kept until the page closes */ } }
+const blobToBase64 = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+async function shrinkPhoto(file) {
+  let img;
+  try { img = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+  catch (_) { img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("couldn't read that photo")); i.src = URL.createObjectURL(file); }); }
+  let max = 1400, q = 0.75, blob;
+  for (let k = 0; k < 8; k++) {
+    const sc = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas");
+    c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    blob = await new Promise(r => c.toBlob(r, "image/jpeg", q));
+    if (blob && blob.size <= IR_PHOTO_BYTES) break;
+    if (q > 0.55) q -= 0.1; else max = Math.round(max * 0.8);
+  }
+  if (!blob || blob.size > IR_PHOTO_BYTES) throw new Error("that photo couldn't be made small enough");
+  return { kind: "photo", type: "image/jpeg", size: blob.size, name: file.name || "photo.jpg", data: await blobToBase64(blob) };
+}
+async function irAddPhotos(files) {
+  const list = irFiles(), room = IR_MAX_PHOTOS - list.filter(x => x.kind === "photo").length;
+  if (room <= 0) { toast("You can attach up to " + IR_MAX_PHOTOS + " photos."); return; }
+  const pick = [...files].filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name)).slice(0, room);
+  if (files.length > room) toast("Only " + IR_MAX_PHOTOS + " photos can be attached; the first " + room + " were added.");
+  for (const f of pick) { try { list.push({ id: Math.random().toString(36).slice(2, 10), ...(await shrinkPhoto(f)) }); } catch (e) { toast("Couldn't add " + (f.name || "a photo") + ": " + (e.message || e) + "."); } }
+  irSaveFiles(); render();
+}
+async function irAddAudio(blob, name) {
+  if (blob.size > IR_AUDIO_BYTES) { toast("That recording is too large (" + Math.round(blob.size / 1024) + " KB). Keep voice notes under about a minute."); return; }
+  const list = irFiles().filter(x => x.kind !== "audio");
+  list.push({ id: Math.random().toString(36).slice(2, 10), kind: "audio", type: blob.type || "audio/webm", size: blob.size, name: name || "voice-note", data: await blobToBase64(blob) });
+  state.irFiles = list; irSaveFiles(); render();
+}
+let irRecTimer = null;
+async function irRecordStart() {
+  if (!navigator.mediaDevices || !window.MediaRecorder) { toast("This browser can't record audio. Choose an audio file instead."); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const type = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus", "audio/webm"].find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || "";
+    const rec = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), audioBitsPerSecond: 24000 }), chunks = [];
+    rec.ondataavailable = e => e.data && e.data.size && chunks.push(e.data);
+    rec.onstop = async () => { stream.getTracks().forEach(t => t.stop()); clearInterval(irRecTimer); state.irRec = null; await irAddAudio(new Blob(chunks, { type: rec.mimeType || type || "audio/webm" }), "voice-note"); };
+    rec.start(1000); state.irRec = { rec, start: Date.now() }; render();
+    irRecTimer = setInterval(() => { const s = Math.floor((Date.now() - state.irRec.start) / 1000), el = $("#ir-rec-time"); if (el) el.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); if (s >= IR_AUDIO_SECS) irRecordStop(); }, 250);
+  } catch (e) { toast("Couldn't use the microphone: " + (e.message || e.name || e) + ". Allow microphone access, or choose an audio file."); }
+}
+function irRecordStop() { if (state.irRec && state.irRec.rec.state !== "inactive") state.irRec.rec.stop(); }
+function irEvidenceHtml(files, opts = {}) {
+  return files.map(x => x.kind === "photo"
+    ? `<figure class="ir-thumb"><a href="data:${esc(x.type)};base64,${x.data}" target="_blank" rel="noopener" download="${esc((opts.ref || "evidence") + "-" + x.id + ".jpg")}"><img src="data:${esc(x.type)};base64,${x.data}" alt="Photo evidence"></a>${opts.remove ? `<button type="button" class="ir-x" data-act="ir-file-del" data-id="${esc(x.id)}" aria-label="Remove photo">✕</button>` : ""}</figure>`
+    : `<div class="ir-audio"><audio controls preload="metadata" src="data:${esc(x.type)};base64,${x.data}"></audio><span class="muted small">Voice note · ${Math.round(x.size / 1024)} KB · <a href="data:${esc(x.type)};base64,${x.data}" download="${esc((opts.ref || "voice-note") + "." + (/mp4|aac|m4a/.test(x.type) ? "m4a" : /ogg/.test(x.type) ? "ogg" : "webm"))}">download</a></span>${opts.remove ? `<button type="button" class="ir-x" data-act="ir-file-del" data-id="${esc(x.id)}" aria-label="Remove voice note">✕</button>` : ""}</div>`).join("");
+}
+async function irLoadFiles(id) {
+  if (state.irFileCache[id]) return;
+  state.irFileCache[id] = "loading";
+  try { const snap = await app.db.collection("incidents").doc(id).collection("files").get(); state.irFileCache[id] = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "photo" ? -1 : 1)); }
+  catch (_) { state.irFileCache[id] = "error"; }
+  render();
+}
+const irVideoLink = x => { const n = waNumber(state.contact && state.contact.msaWhatsApp); return n ? "https://wa.me/" + n + "?text=" + encodeURIComponent("Assalam o Alaikum, video evidence for incident report " + (x.ref || "") + " (" + irFmtDate(x.date) + ", " + (x.location || "") + "). Video attached below.") : ""; };
 function irNoteInit() { const x = (state.incidents || []).find(i => i.id === state.irView); if (x && (!state.irNote || state.irNote.id !== x.id)) state.irNote = { id: x.id, comments: x.headComments || "", status: x.status }; }
 function irSaveDraft() { try { localStorage.setItem("ir-draft", JSON.stringify(state.ir)); } catch (_) {} }
 let unsubIncidents = null;
@@ -1415,6 +1487,16 @@ function renderIncident() {
     ${txt("injury", "Injury description (including body parts involved)", { area: true, rows: 2, wide: true })}
     <div class="ir-grid">${yn("firstAid", "I. First aid given?")}${f.firstAid === "Yes" ? txt("firstAidBy", "If yes, by whom") : ""}${yn("doctorTx", "II. Treatment by doctor?")}${f.doctorTx === "Yes" ? txt("doctorName", "Name of doctor") : ""}${yn("erTx", "III. Treatment in ER?")}${f.erTx === "Yes" ? txt("erBy", "By whom") : ""}</div>
     <details ${f.jci.length ? "open" : ""}><summary>JCI reportable event? ${f.jci.length ? `<b>(${f.jci.length} ticked)</b>` : "(tick any that apply)"}</summary><div class="ir-jci">${IR_JCI.map((j, i) => `<label class="check"><input type="checkbox" data-ir-jci="${i}" ${f.jci.includes(i) ? "checked" : ""}> ${esc(j)}</label>`).join("")}</div></details>
+    <div class="ir-evidence"><h3>Evidence <span class="muted small">(optional)</span></h3>
+      <p class="muted small">Up to ${IR_MAX_PHOTOS} photos and one voice note (up to 1 minute). Photos are made smaller on your phone before saving. For video, use “Send video evidence on WhatsApp” after you submit.</p>
+      <div class="ir-files">${irEvidenceHtml(irFiles(), { remove: true })}</div>
+      <div class="btns">
+        <label class="btn" for="ir-photo-in" ${irFiles().filter(x => x.kind === "photo").length >= IR_MAX_PHOTOS ? `aria-disabled="true" style="opacity:.5;pointer-events:none"` : ""}>📷 Add photos</label><input type="file" id="ir-photo-in" accept="image/*" multiple hidden>
+        ${state.irRec ? `<button type="button" class="btn danger" data-act="ir-rec-stop" id="ir-rec-stop">■ Stop recording <span id="ir-rec-time">0:00</span></button>`
+          : `<button type="button" class="btn" data-act="ir-rec-start" id="ir-rec-start">🎙 ${irFiles().some(x => x.kind === "audio") ? "Re-record voice note" : "Record a voice note"}</button>`}
+        <label class="btn ghost" for="ir-audio-in">or choose an audio file</label><input type="file" id="ir-audio-in" accept="audio/*" hidden>
+      </div>
+    </div>
     <div class="ir-grid">${txt("reporterName", "Your name (employee)", { noQuick: true })}${txt("reporterDesig", "Your designation", { noQuick: true })}</div>
     <label class="check"><input type="checkbox" data-bind="ir.confirm" ${f.confirm ? "checked" : ""}> I confirm this report records facts only and is complete to the best of my knowledge. (This takes the place of a signature.)</label>
     <div class="btns"><button class="btn primary" type="button" data-act="ir-submit" id="ir-submit" ${dis}>Submit report</button><button class="btn ghost" type="button" data-act="ir-clear" id="ir-clear">Clear the form</button></div>
@@ -1423,11 +1505,12 @@ function renderIncident() {
     ${app.isAdmin ? `<div class="btns"><label class="check">Show <select data-bind="irFilter">${[["open", "Open (not closed)"], ["new", "New"], ["review", "Under review"], ["qa", "Sent to QA"], ["closed", "Closed"], ["all", "All"]].map(([v, l]) => `<option value="${v}" ${state.irFilter === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>${list && list.length ? `<button class="btn" data-act="ir-excel" id="ir-excel">Download all as Excel</button>` : ""}</div>` : ""}
     ${list === null ? `<p class="muted">Loading…</p>` : !shown.length ? `<p class="muted">${app.isAdmin ? "No reports here." : "You haven't submitted any reports."}</p>`
       : `<div class="list">${shown.map(x => `<button class="item ir-item" data-act="ir-open" data-id="${esc(x.id)}"><div class="head"><b>${esc(x.ref || x.id)}</b><span class="pill ${x.status === "closed" ? "done" : x.status === "new" ? "warn" : ""}">${esc(IR_STATUS[x.status] || x.status)}</span></div>
-          <span class="small">${esc(irFmtDate(x.date))} ${esc(x.time || "")} · ${esc(x.involves === "Others" ? x.involvesOther || "Others" : x.involves)} · ${esc(x.personName)} · ${esc(x.location)}</span>${app.isAdmin ? `<span class="muted small">Reported by ${esc(x.reporterName)} (${esc(x.reporterDesig || "")})</span>` : ""}</button>`).join("")}</div>`}
+          <span class="small">${esc(irFmtDate(x.date))} ${esc(x.time || "")} · ${esc(x.involves === "Others" ? x.involvesOther || "Others" : x.involves)} · ${esc(x.personName)} · ${esc(x.location)}${(x.attachments || []).length ? " · 📎 " + esc(irEvidenceCount(x)) : ""}</span>${app.isAdmin ? `<span class="muted small">Reported by ${esc(x.reporterName)} (${esc(x.reporterDesig || "")})</span>` : ""}</button>`).join("")}</div>`}
   </section>
   ${view ? renderIncidentView(view) : ""}
   </div>`;
 }
+const irEvidenceCount = x => { const a = x.attachments || [], p = a.filter(i => i.kind === "photo").length, v = a.filter(i => i.kind === "audio").length; return [p ? p + " photo" + (p === 1 ? "" : "s") : "", v ? v + " voice note" + (v === 1 ? "" : "s") : ""].filter(Boolean).join(", ") || "None"; };
 function irRows(x) {
   return [["Event involves", x.involves === "Others" ? "Others: " + (x.involvesOther || "") : x.involves], ["Name of affected person", x.personName], ["Location of incident", x.location], ["Date of incident", irFmtDate(x.date)], ["Time of incident", x.time], ["Age", x.age], ["MR No.", x.mrNo],
     ["Staff name", x.staffName], ["Department", x.staffDept], ["Employee ID", x.staffEmpId], ["Details of incident", x.details], ["Medical treatment", x.treatment], ["Injury description", x.injury],
@@ -1439,6 +1522,9 @@ function renderIncidentView(x) {
   return `<div class="pop-back" data-act="ir-close"></div><div class="pop ir-view" role="dialog" aria-modal="true" aria-labelledby="ir-view-title">
     <h2 id="ir-view-title">${esc(x.ref || "Incident report")} <span class="pill ${x.status === "closed" ? "done" : x.status === "new" ? "warn" : ""}">${esc(IR_STATUS[x.status] || x.status)}</span></h2>
     <dl class="ir-dl">${irRows(x).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v || "")}</dd>`).join("")}</dl>
+    ${(x.attachments || []).length ? (() => { const c = state.irFileCache[x.id]; if (!c) setTimeout(() => irLoadFiles(x.id), 0);
+      return `<div class="ir-evidence"><h3>Evidence</h3>${Array.isArray(c) ? `<div class="ir-files">${irEvidenceHtml(c, { ref: x.ref })}</div>` : c === "error" ? `<p class="note bad">Couldn't load the attachments. Check your connection and open the report again.</p>` : `<p class="muted small">Loading ${x.attachments.length} attachment${x.attachments.length === 1 ? "" : "s"}…</p>`}</div>`; })() : ""}
+    ${!app.isAdmin && x.reportedBy === app.uid && irVideoLink(x) ? `<div class="btns"><a class="btn wa" href="${esc(irVideoLink(x))}" target="_blank" rel="noopener" id="ir-video">🎥 Send video evidence on WhatsApp</a></div><p class="muted small">Opens a chat with the MSA office with the reference ${esc(x.ref)} written in; attach the video there.</p>` : ""}
     ${app.isAdmin ? `<div class="field"><label for="ir-comments">Comments by unit / department head</label><textarea class="plain" id="ir-comments" data-bind="irNote.comments" rows="3" maxlength="4000">${esc(note.comments)}</textarea></div>
       <div class="field"><label for="ir-status">Status</label><select id="ir-status" data-bind="irNote.status">${Object.entries(IR_STATUS).map(([v, l]) => `<option value="${v}" ${note.status === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>`
       : x.headComments ? `<p class="small"><b>Comments by unit / department head:</b> ${esc(x.headComments)}</p>` : ""}
@@ -1446,16 +1532,17 @@ function renderIncidentView(x) {
   </div>`;
 }
 /* A clean A4 copy laid out like the paper form, opened in a new window to print or save as PDF. */
-function printIncident(x) {
+function printIncident(x, files = []) {
   const w = window.open("", "_blank"); if (!w) { toast("Allow pop-ups for this site to print the report."); return; }
   const row = (k, v) => `<tr><th>${esc(k)}</th><td>${esc(v || "")}</td></tr>`;
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(x.ref || "Incident report")}</title><style>
     body{font-family:Arial,sans-serif;color:#111;margin:24px;font-size:12px} header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #041f34;padding-bottom:8px}
     header img{height:56px} h1{font-size:18px;margin:0;color:#041f34} table{width:100%;border-collapse:collapse;margin-top:12px} th,td{border:1px solid #999;padding:6px 8px;text-align:left;vertical-align:top}
-    th{width:30%;background:#f1f3f5} td{white-space:pre-wrap} footer{margin-top:16px;font-size:10px;color:#555;display:flex;justify-content:space-between} .sig{margin-top:18px}
+    th{width:30%;background:#f1f3f5} td{white-space:pre-wrap} .photos{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px} .photos img{max-width:31%;max-height:240px;border:1px solid #999;object-fit:contain} footer{margin-top:16px;font-size:10px;color:#555;display:flex;justify-content:space-between} .sig{margin-top:18px}
     @page{size:A4;margin:14mm} @media print{body{margin:0}}</style></head><body>
     <header><img src="${location.origin}${location.pathname.replace(/[^/]*$/, "")}assets/eastridge-logo.png" alt="Eastridge Primecare"><div style="text-align:right"><h1>INCIDENT REPORT FORM</h1><div>Ref: ${esc(x.ref || x.id)} · Status: ${esc(IR_STATUS[x.status] || x.status)}</div></div></header>
-    <table>${irRows(x).map(([k, v]) => row(k, v)).join("")}${row("Comments by unit / department head", x.headComments || "")}</table>
+    <table>${irRows(x).map(([k, v]) => row(k, v)).join("")}${row("Comments by unit / department head", x.headComments || "")}${row("Evidence attached", (x.attachments || []).length ? irEvidenceCount(x) + ((x.attachments || []).some(a => a.kind === "audio") ? " (voice notes can be played in the app)" : "") : "None")}</table>
+    ${files.filter(f => f.kind === "photo").length ? `<div class="photos">${files.filter(f => f.kind === "photo").map(f => `<img src="data:${esc(f.type)};base64,${f.data}" alt="Photo evidence">`).join("")}</div>` : ""}
     <p class="sig">Confirmed online by ${esc(x.reporterName || "")} (${esc(x.reporterDesig || "")}) on ${esc(x.createdAt ? new Date(x.createdAt).toLocaleDateString("en-GB", { timeZone: "Asia/Karachi" }) : "")}: "This report records facts only and is complete to the best of my knowledge."</p>
     <footer><span>EPC-RWP-QA-F-02</span><span>Submitted through the Eastridge duty roster app</span></footer>
     <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
@@ -2028,7 +2115,10 @@ const actions = {
     try { await navigator.clipboard.writeText(text); toast("Copied. Paste it in the WhatsApp group."); } catch (_) { prompt("Copy this message:", text); }
   },
   "ir-fill"(b) { const f = irState(); f[b.dataset.k] = b.dataset.v; irSaveDraft(); render(); },
-  "ir-clear"() { if (!confirm("Clear everything you've typed in this form?")) return; state.ir = irBlank(); irSaveDraft(); render(); },
+  "ir-clear"() { if (!confirm("Clear everything you've typed in this form?")) return; state.ir = irBlank(); state.irFiles = []; irSaveDraft(); irSaveFiles(); render(); },
+  "ir-file-del"(b) { state.irFiles = irFiles().filter(x => x.id !== b.dataset.id); irSaveFiles(); render(); },
+  "ir-rec-start"() { irRecordStart(); },
+  "ir-rec-stop"() { irRecordStop(); },
   async "ir-submit"() {
     const f = irState(), miss = [];
     if (!f.involves) miss.push("Event involves"); if (f.involves === "Others" && !String(f.involvesOther).trim()) miss.push("Others (specify)");
@@ -2040,13 +2130,24 @@ const actions = {
     const doc = { ref, status: "new", reportedBy: app.uid, reporterDept: (app.myDoc && app.myDoc.dept) || "", createdAt: Date.now() };
     for (const k of ["involves", "involvesOther", ...IR_TEXT.map(x => x[0]), "firstAid", "doctorTx", "erTx"]) doc[k] = String(f[k] || "").trim();
     doc.jci = f.jci.map(i => IR_JCI[i]).filter(Boolean);
-    let id = null;
-    const ok = await guarded(async () => { const r = await dbCall(() => app.db.collection("incidents").add(doc)); id = r.id; }, "Report " + ref + " submitted to the MSA office. Thank you.");
-    if (ok) { state.ir = irBlank(); irSaveDraft(); state.irView = id; render(); }
+    if (state.irRec) { toast("Stop the voice recording first."); return; }
+    const files = irFiles(), ref0 = app.db.collection("incidents").doc(), id = ref0.id;
+    doc.attachments = files.map(x => ({ id: x.id, kind: x.kind, type: x.type, size: x.size }));
+    // report and evidence are saved together: either all of it arrives or none of it
+    const ok = await guarded(async () => {
+      const batch = app.db.batch(); batch.set(ref0, doc);
+      files.forEach(x => batch.set(ref0.collection("files").doc(x.id), { kind: x.kind, type: x.type, size: x.size, data: x.data, reportedBy: app.uid, createdAt: doc.createdAt }));
+      await dbCall(() => batch.commit());
+    }, "Report " + ref + " submitted to the MSA office" + (files.length ? " with " + files.length + " attachment" + (files.length === 1 ? "" : "s") : "") + ". Thank you.");
+    if (ok) { state.irFileCache[id] = files.map(x => ({ ...x })); state.ir = irBlank(); state.irFiles = []; irSaveDraft(); irSaveFiles(); state.irView = id; render(); }
   },
   "ir-open"(b) { state.irView = b.dataset.id; state.irNote = null; render(); },
   "ir-close"() { state.irView = null; state.irNote = null; render(); },
-  "ir-print"(b) { const x = (state.incidents || []).find(i => i.id === b.dataset.id); if (x) printIncident(x); },
+  async "ir-print"(b) {
+    const x = (state.incidents || []).find(i => i.id === b.dataset.id); if (!x) return;
+    if ((x.attachments || []).length && !Array.isArray(state.irFileCache[x.id])) { state.irFileCache[x.id] = null; await irLoadFiles(x.id); }
+    printIncident(x, Array.isArray(state.irFileCache[x.id]) ? state.irFileCache[x.id] : []);
+  },
   async "ir-save-review"(b) {
     const x = (state.incidents || []).find(i => i.id === b.dataset.id); if (!x) return;
     const n = state.irNote && state.irNote.id === x.id ? state.irNote : { comments: x.headComments || "", status: x.status };
@@ -2056,8 +2157,8 @@ const actions = {
   async "ir-excel"() {
     try {
       const XLSX = await loadXLSX(), list = state.incidents || [];
-      const head = ["Ref", "Status", ...irRows(list[0] || {}).map(r => r[0]), "Comments by unit / department head"];
-      const rows = list.map(x => [x.ref, IR_STATUS[x.status] || x.status, ...irRows(x).map(r => r[1]), x.headComments || ""]);
+      const head = ["Ref", "Status", ...irRows(list[0] || {}).map(r => r[0]), "Comments by unit / department head", "Evidence"];
+      const rows = list.map(x => [x.ref, IR_STATUS[x.status] || x.status, ...irRows(x).map(r => r[1]), x.headComments || "", irEvidenceCount(x)]);
       const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet([head, ...rows]); ws["!cols"] = head.map((h, i) => ({ wch: i === 12 ? 60 : 20 }));
       XLSX.utils.book_append_sheet(wb, ws, "Incident reports"); XLSX.writeFile(wb, "Eastridge-Incident-Reports-" + new Date().toISOString().slice(0, 10) + ".xlsx");
     } catch (e) { toast("Couldn't make the Excel file: " + (e.message || e)); }
@@ -2348,6 +2449,8 @@ document.addEventListener("change", async e => {
   if (el.dataset && el.dataset.bind && el.dataset.bind.startsWith("irNote.")) irNoteInit();
   if (el.dataset && el.dataset.staffLink !== undefined) { const l = (state.staff || []).map(x => ({ ...x })), e = l[+el.dataset.staffLink]; if (e) { if (el.value) e.uid = el.value; else delete e.uid; await saveStaff(l, el.value ? "Linked." : "Link removed."); } return; }
   if (el.dataset && el.dataset.actCg) { state.cgDraft = { ...((state.contact && state.contact.coverGroups) || DEFAULT_COVER_GROUPS), ...(state.cgDraft || {}), [el.dataset.dept]: el.value }; render(); return; }
+  if (el.id === "ir-photo-in") { if (el.files && el.files.length) await irAddPhotos(el.files); el.value = ""; return; }
+  if (el.id === "ir-audio-in") { if (el.files && el.files[0]) await irAddAudio(el.files[0], el.files[0].name); el.value = ""; return; }
   if (el.id === "staff-file") { if (el.files && el.files[0]) await readStaffDocx(el.files[0]); el.value = ""; return; }
   if (el.id === "opd-file") { if (el.files && el.files[0]) await readOpdFile(el.files[0]); return; }
   if (el.id === "dept-file") { if (el.files && el.files[0]) await readDeptFile(el.files[0]); return; }
