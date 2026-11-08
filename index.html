@@ -186,6 +186,21 @@ h2.has-ic { display: flex; align-items: center; gap: 10px; }
 .av { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: .58rem; font-weight: 800; letter-spacing: .02em; color: #fff; background: hsl(var(--h) 52% 42%); margin-left: -4px; }
 .chip { padding-left: 6px; } .chip .cn { overflow: hidden; text-overflow: ellipsis; }
 .board .bc.today { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+.panel.mynext { margin-bottom: 14px; display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-left: 4px solid var(--accent); }
+.mynext.s-M { border-left-color: var(--m); } .mynext.s-E { border-left-color: var(--e); } .mynext.s-N { border-left-color: var(--n); }
+.mynext.on { background: color-mix(in srgb, var(--ok-bg) 60%, var(--surface)); }
+.mn-ic { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.mynext.s-M .mn-ic { background: var(--m-bg); color: var(--m); } .mynext.s-E .mn-ic { background: var(--e-bg); color: var(--e); } .mynext.s-N .mn-ic { background: var(--n-bg); color: var(--n); }
+.mn-body, .mynext > div:last-child { display: grid; gap: 2px; min-width: 0; }
+.mn-k { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.mynext.on .mn-k { color: var(--ok); }
+.mynext b { font-family: var(--f-display); font-size: 1.08rem; }
+.jump-today { position: fixed; z-index: 35; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 16px; border-radius: 999px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: .9rem; box-shadow: 0 8px 22px rgba(4,31,52,.28); cursor: pointer; animation: jt-in .22s ease-out; }
+.jump-today[hidden] { display: none; }
+@keyframes jt-in { from { opacity: 0; transform: translateY(8px) scale(.95); } to { opacity: 1; transform: none; } }
+@media (max-width: 640px) { .jump-today { bottom: calc(82px + env(safe-area-inset-bottom, 0px)); } }
+@media (prefers-reduced-motion: reduce) { .jump-today { animation: none; } }
 .bpast { grid-column: 1 / -1; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--sunk); display: flex; justify-content: center; }
 .bpast .btn { font-size: .85rem; }
 .board .bc.today.gap { background: var(--bad-bg); } .board .bc.today.covered { background: var(--warn-bg); }
@@ -687,6 +702,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 
   <div id="main"></div>
   <div id="feedback"></div>
+  <button class="jump-today" id="jump-today" data-act="jump-today" hidden></button>
   <div id="toast" role="status" hidden></div>
   <div id="popup"></div>
   <div id="wa-prompt"></div>
@@ -1350,6 +1366,19 @@ function pendingForMe() { return pendingList().filter(r => r.status === "pending
 
 /* ---------- render ---------- */
 let lastTab = null;
+/* Show "Today" when the hospital roster is on another month, or today's row has scrolled out of sight. */
+function updateJumpToday() {
+  const b = document.getElementById("jump-today"); if (!b) return;
+  if (!b.innerHTML) b.innerHTML = ic("roster", 18) + "<span>Today</span>";
+  const onBoard = (app.sample || app.phase === "app") && !app.loading && state.tab === "board" && !document.body.classList.contains("welcoming");
+  let show = false;
+  if (onBoard) {
+    if (state.month !== todayKey.slice(0, 7)) show = true;
+    else { const t = document.querySelector(".board .bd.today"); if (t) { const r = t.getBoundingClientRect(); show = r.bottom < 0 || r.top > innerHeight * 2.5; } }
+  }
+  b.hidden = !show; b.setAttribute("aria-label", "Jump to today on the hospital roster");
+}
+addEventListener("scroll", () => requestAnimationFrame(updateJumpToday), { passive: true });
 function render() {
   const ae = document.activeElement, fid = ae && ae.id; let sel = null;
   try { if (fid && typeof ae.selectionStart === "number") sel = [ae.selectionStart, ae.selectionEnd]; } catch (_) {}
@@ -1373,6 +1402,7 @@ function render() {
     state.tab === "consultants" ? renderConsultants() : state.tab === "incident" && !app.sample ? renderIncident() : state.tab === "team" && app.isAdmin && !app.sample ? renderTeam() : app.canEdit || app.sample ? renderChecks() : renderBoard();
   decorate($("#main"));
   if (inApp && state.tab !== lastTab) { const m = $("#main"); m.classList.remove("tab-in"); void m.offsetWidth; m.classList.add("tab-in"); lastTab = state.tab; }
+  updateJumpToday();
   const fb = inApp && !app.loading ? renderFeedback() : ""; if ($("#feedback").dataset.html !== fb) { $("#feedback").dataset.html = fb; $("#feedback").innerHTML = fb; }
   if (fid) { const el = document.getElementById(fid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel) try { el.setSelectionRange(sel[0], sel[1]); } catch (_) {} } }
 }
@@ -1866,7 +1896,7 @@ function renderBoard() {
   const uploadedInScope = scopeIds.some(id => docs[id]);
   const flags = {}; ids.forEach(id => (flags[id] = flaggedSlots(id, month)));
   const uploaded = doctors.filter(d => docs[d.uid]).length;
-  let html = renderOnDuty() + `<section class="panel">
+  let html = renderMyNext() + renderOnDuty() + `<section class="panel">
     ${app.canEdit || app.sample ? `<div class="stats">
       <div class="stat okc"><b>${uploaded}<span class="muted" style="font-size:.9rem"> / ${doctors.length}</span></b><span>rosters uploaded</span></div>
       <button class="statlink stat ${a.gaps.filter(g => !coveredBy(g)).length ? "bad" : ""}" data-act="tab" data-tab="checks" id="st-gaps"><b>${a.gaps.filter(g => !coveredBy(g)).length}</b><span>uncovered shifts</span></button>
@@ -2265,6 +2295,14 @@ const actions = {
   "ir-next"() { const f = irState(), st = f.step || 0, miss = irMissing(f, st); if (miss.length) { toast(irMissText(miss)); return; } f.step = st + 1; irSaveDraft(); render(); $("#ir-form").scrollIntoView({ behavior: "smooth", block: "start" }); },
   "ir-back"() { const f = irState(); f.step = Math.max(0, (f.step || 0) - 1); irSaveDraft(); render(); $("#ir-form").scrollIntoView({ behavior: "smooth", block: "start" }); },
   "ir-step"(b) { const f = irState(), to = +b.dataset.step; if (to <= (f.step || 0)) { f.step = to; irSaveDraft(); render(); } },
+  "jump-today"() {
+    const cur = todayKey.slice(0, 7); state.tab = "board";
+    if (state.month !== cur) { state.month = cur; state.upload = null; if (app.sample) { const sm = buildSample(); state.rosters = sm.rosters; state.requests = sm.requests; } else subscribeMonth(); resetForm(); }
+    state.showPast = false; render();
+    requestAnimationFrame(() => { const t = document.querySelector(".board .bd.today"); if (!t) return;
+      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      scrollTo({ top: scrollY + t.getBoundingClientRect().top - 70, behavior: reduce ? "auto" : "smooth" }); });
+  },
   "show-past"() { state.showPast = !state.showPast; render(); },
   "ir-fill"(b) { const f = irState(); f[b.dataset.k] = b.dataset.v; irSaveDraft(); render(); },
   "ir-clear"() { if (!confirm("Clear everything you've typed in this form?")) return; state.ir = irBlank(); state.irFiles = []; irSaveDraft(); irSaveFiles(); render(); },
@@ -2940,6 +2978,32 @@ function dutyPeople(ids, slot, dept) {
   if (cby) return `<span class="duty-person"><span>${esc(docName(cby))} <small>covering from ${esc(dutyDept(cby, slot.date, slot.shift))}</small></span>${contactLinks(cby)}</span>`;
   if (!ids.length) return `<span class="gaptag">No one rostered</span>`;
   return ids.map(id => `<span class="duty-person"><span>${esc(docName(id))}${id === app.uid ? " (you)" : ""}${DESIG_SHORT[desigOf(id)] ? ` <small>${esc(DESIG_SHORT[desigOf(id)])}</small>` : ""}</span>${contactLinks(id)}</span>`).join("");
+}
+/* The signed-in doctor's current or next duty, from the months already loaded (this month and the one being viewed). */
+function myNextDuty() {
+  if (!me()) return null;
+  const now = Date.now(), cur = todayKey.slice(0, 7), list = [];
+  for (const m of [...new Set([addMonths(cur, -1), cur, addMonths(cur, 1), state.month])]) {
+    const r = rosterOf(m, app.uid); if (!r) continue;
+    for (const x of dutyList(onlyMonth(r, m))) {
+      const [y, mo, d] = x.date.split("-").map(Number), sh = SHIFT[x.shift];
+      const start = Date.UTC(y, mo - 1, d, sh.start - 5), end = Date.UTC(y, mo - 1, d, sh.end - 5); // shift hours are Pakistan time (UTC+5)
+      if (end > now) list.push({ ...x, start, end });
+    }
+  }
+  list.sort((a, b) => a.start - b.start);
+  return list[0] || null;
+}
+function renderMyNext() {
+  const n = myNextDuty(); if (!me() || app.canEdit && !app.sample && !n) return "";
+  const dur = ms => { const m = Math.max(1, Math.round(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60; return d ? d + " day" + (d === 1 ? "" : "s") + (h ? " " + h + "h" : "") : h ? h + "h" + (mm ? " " + mm + "m" : "") : mm + "m"; };
+  if (!n) return `<section class="panel mynext none"><div class="mn-ic">${ic("roster", 22)}</div><div><span class="mn-k">Your next duty</span><b>None on the roster yet</b><span class="muted small">Add your duties under My roster.</span></div></section>`;
+  const sh = SHIFT[n.shift], on = n.start <= Date.now(), dept = dutyDept(app.uid, n.date, n.shift);
+  const tomorrow = ymd(...(t => [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()])(new Date(Date.now() + 5 * 3600e3 + 864e5)));
+  const day = n.date === todayKey ? "Today" : n.date === tomorrow ? "Tomorrow" : fmtDate(n.date);
+  return `<section class="panel mynext s-${n.shift}${on ? " on" : ""}"><div class="mn-ic">${ic(on ? "clock" : "roster", 22)}</div>
+    <div class="mn-body"><span class="mn-k">${on ? "You're on duty now" : "Your next duty"}</span><b>${esc(sh.name)} · ${esc(day)} · ${esc(dept)}</b>
+    <span class="muted small">${esc(sh.time)}${n.shift === "N" ? " next day" : ""} · ${on ? "ends in " + dur(n.end - Date.now()) : "starts in " + dur(n.start - Date.now())}</span></div></section>`;
 }
 function renderOnDuty() {
   if (state.month !== currentMonthKey() || app.sample && !state.doctors) return "";
