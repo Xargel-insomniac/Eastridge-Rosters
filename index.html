@@ -201,7 +201,15 @@ h2.has-ic { display: flex; align-items: center; gap: 10px; }
 @keyframes jt-in { from { opacity: 0; transform: translateY(8px) scale(.95); } to { opacity: 1; transform: none; } }
 @media (max-width: 640px) { .jump-today { bottom: calc(82px + env(safe-area-inset-bottom, 0px)); } }
 @media (prefers-reduced-motion: reduce) { .jump-today { animation: none; } }
-.view-seg { margin-right: auto; }
+#view-seg:empty { display: none; }
+.vseg { display: inline-flex; padding: 4px; gap: 4px; border-radius: 999px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); box-shadow: 0 2px 8px rgba(4,31,52,.08); }
+.vseg button { position: relative; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 7px 16px; background: transparent; color: var(--accent); font: inherit; font-weight: 700; font-size: .9rem; cursor: pointer; transition: background-color .2s, color .2s, transform .12s; }
+.vseg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: 0 2px 6px rgba(4,31,52,.25); }
+.vseg button:active { transform: scale(.96); }
+.vnew { position: absolute; top: -9px; right: -6px; padding: 1px 6px; border-radius: 999px; background: var(--brand-red); color: #fff; font-size: .6rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; box-shadow: 0 0 0 2px var(--surface); animation: vnew 1.8s ease-in-out infinite; }
+@keyframes vnew { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .vnew { animation: none; } }
+@media (max-width: 640px) { .bar { gap: 10px; } .month h2 { min-width: 0; font-size: 1.15rem; white-space: nowrap; padding-inline: 4px; } #view-seg { flex: 1 0 100%; } .vseg { display: flex; width: 100%; } .vseg button { flex: 1; justify-content: center; padding: 9px 12px; font-size: .92rem; } .vnew { right: 10px; } }
 .week { display: grid; gap: 12px; }
 .wk-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .wk-title { display: grid; justify-items: center; } .wk-title b { font-family: var(--f-display); font-size: 1.15rem; }
@@ -721,6 +729,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
       <h2 id="month-label"></h2>
       <button class="iconbtn" id="m-next" data-act="month" data-d="1" aria-label="Next month">›</button>
     </div>
+    <div id="view-seg"></div>
     <nav class="tabs" role="tablist" id="tabs"></nav>
   </div>
 
@@ -1419,6 +1428,7 @@ function render() {
   $("#banner").innerHTML = renderBanner();
   $("#bar").hidden = !inApp || mustCompleteProfile();
   $("#month-label").textContent = monthLabel(state.month);
+  { const vs = $("#view-seg"), html = inApp && !app.loading && state.tab === "board" && !mustCompleteProfile() ? renderViewSeg() : ""; if (vs.dataset.html !== html) { vs.dataset.html = html; vs.innerHTML = html; } }
   $("#tabs").innerHTML = inApp ? renderTabs() : "";
   if (mustCompleteProfile() && !state.profileOpen) { state.profile = { name: app.myDoc.name || "", dept: app.myDoc.dept || "", designation: app.myDoc.designation || "", phone: app.myDoc.phone || "" }; state.profileOpen = true; }
   if (mustCompleteProfile()) $("#tabs").innerHTML = "";
@@ -1506,6 +1516,7 @@ const ICON_PATHS = {
   shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
   phone: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/>',
   megaphone: '<path d="M3 10v4a1 1 0 0 0 1 1h3l6 4V5L7 9H4a1 1 0 0 0-1 1zM17 9a4 4 0 0 1 0 6"/>',
+  week: '<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M8.5 9.5v11M15.5 9.5v11"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
   sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
@@ -1905,6 +1916,10 @@ function avatar(id) {
   return `<span class="av" style="--h:${h}" aria-hidden="true">${esc(ini)}</span>`;
 }
 /* Week view (day by day): doctors on phones get it by default; the choice is remembered on the device. */
+function renderViewSeg() {
+  let tried = false; try { tried = localStorage.getItem("board-view") !== null; } catch (_) {}
+  return `<div class="vseg" role="group" aria-label="Roster view">${[["month", "Month", "roster"], ["week", "Week", "week"]].map(([k, l, i]) => `<button data-act="board-view" data-view="${k}" id="view-${k}" aria-pressed="${boardView() === k}">${ic(i, 17)}<span>${l}</span>${k === "week" && !tried ? `<span class="vnew">New</span>` : ""}</button>`).join("")}</div>`;
+}
 function boardView() {
   if (state.boardView) return state.boardView;
   try { const v = localStorage.getItem("board-view"); if (v === "week" || v === "month") return (state.boardView = v); } catch (_) {}
@@ -1964,7 +1979,6 @@ function renderBoard() {
       <button class="statlink stat" data-act="tab" data-tab="changes" id="st-req"><b>${pendingList().filter(r => r.month === month).length}</b><span>swaps waiting</span></button>
     </div>` : ""}
     <div class="filters">
-      <div class="seg view-seg" role="group" aria-label="Roster view">${[["month", "Month"], ["week", "Week"]].map(([k, l]) => `<button data-act="board-view" data-view="${k}" aria-pressed="${boardView() === k}">${l}</button>`).join("")}</div>
       ${seesAll() ? `<label class="check" for="f-dept">Department <select id="f-dept" data-bind="dept"><option value="all">All departments</option>${deptList().map(d => `<option ${state.dept === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></label>` : `<label class="check" for="f-dept">Department <select id="f-dept" data-bind="docDept">${[myDept(), ...deptList().filter(d => d !== myDept() && d !== "MSA")].filter(Boolean).map(d => `<option value="${esc(d)}" ${deptSel === d ? "selected" : ""}>${esc(d)}${d === myDept() ? " (yours)" : ""}</option>`).join("")}<option value="all" ${deptSel === "all" ? "selected" : ""}>All departments (master rota)</option></select></label>`}
       ${me() ? `<label class="check" for="f-mine"><input type="checkbox" id="f-mine" data-bind="mineOnly" ${state.mineOnly ? "checked" : ""}> Only my duties</label>` : ""}
       ${me() && canAct() && !lockedForMe(month) ? `<span class="muted small">Tap one of your own duties to swap or move it.</span>` : ""}
