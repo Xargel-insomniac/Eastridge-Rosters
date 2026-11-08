@@ -81,6 +81,18 @@ await t("coordinator reads the expected staff list", as("boss").doc("settings/st
 await t("doctors can't read the expected staff list", as("amy").doc("settings/staff").get(), false);
 await t("doctors can't change the expected staff list", as("amy").doc("settings/staff").set({ list: [] }), false);
 await t("doctors still read contact settings", as("amy").doc("settings/contact").get(), true);
+const IR = (by, extra = {}) => ({ ref: "IR-1", status: "new", reportedBy: by, details: "Patient slipped in the corridor.", personName: "Mr X", createdAt: 1, ...extra });
+await t("doctor submits an incident report", as("amy").doc("incidents/i1").set(IR("amy")), true);
+await t("doctor can't submit a report as someone else", as("amy").doc("incidents/i2").set(IR("ben")), false);
+await t("report must start as new", as("amy").doc("incidents/i3").set(IR("amy", { status: "closed" })), false);
+await t("report needs details", as("amy").doc("incidents/i4").set(IR("amy", { details: "" })), false);
+await t("doctor can't add the head's comments", as("amy").doc("incidents/i5").set(IR("amy", { headComments: "fine" })), false);
+await t("pending account can't submit", as("pat").doc("incidents/i6").set(IR("pat")), false);
+await t("doctor reads their own reports", as("amy").collection("incidents").where("reportedBy", "==", "amy").get(), true);
+await t("doctor can't read colleagues' reports", as("ben").doc("incidents/i1").get(), false);
+await t("doctor can't edit a submitted report", as("amy").doc("incidents/i1").update({ details: "changed" }), false);
+await t("coordinator reads all reports", as("boss").collection("incidents").orderBy("createdAt", "desc").get(), true);
+await t("coordinator adds comments and status", as("boss").doc("incidents/i1").update({ headComments: "Reviewed", status: "qa" }), true);
 await t("approved can't approve others", as("amy").doc("doctors/pat").update({ approved: true }), false);
 await t("approved can't read admins of others", as("amy").doc("admins/boss").get(), false);
 await t("admin reads own admin doc", as("boss").doc("admins/boss").get(), true);

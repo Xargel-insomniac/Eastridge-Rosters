@@ -68,6 +68,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Incident reports (form EPC-RWP-QA-F-02): approved staff submit their own; they can read only theirs.
+    // Coordinators read all and add the head's comments and status. Nobody else can change or delete a report.
+    match /incidents/{id} {
+      allow read: if isAdmin() || (isMember() && resource.data.reportedBy == uid());
+      allow create: if isMember()
+        && request.resource.data.reportedBy == uid()
+        && request.resource.data.status == 'new'
+        && request.resource.data.details is string
+        && request.resource.data.details.size() > 0 && request.resource.data.details.size() <= 8000
+        && !('headComments' in request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
     match /admins/{userId} {
       allow get: if signedIn() && uid() == userId;
       allow list, write: if false;

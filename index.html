@@ -265,7 +265,20 @@ details > summary { cursor: pointer; font-weight: 600; }
 .locked-val { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 40px; }
 .subpanel { margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 12px; }
 .subpanel h3 { margin: 0 0 4px; font-size: 1rem; }
-a.btn { text-decoration: none; }
+a.btn { text-decoration: none; color: var(--ink); }
+a.btn.primary { color: var(--accent-ink); }
+a.btn.wa { color: #128c4b; }
+.ir-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px 14px; margin-bottom: 6px; }
+.ir-wide { margin-bottom: 6px; } .ir-wide textarea { width: 100%; }
+.ir-radios { display: flex; flex-wrap: wrap; gap: 6px 16px; min-height: 36px; align-items: center; }
+.ir-quick { display: flex; gap: 6px; margin-top: 4px; }
+.chip-btn { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; font-size: .72rem; padding: 2px 9px; cursor: pointer; }
+.chip-btn:hover { color: var(--ink); border-color: var(--muted); }
+.ir-jci { display: grid; gap: 6px; margin: 8px 0 12px; font-size: .86rem; }
+.ir-item { text-align: left; cursor: pointer; width: 100%; display: grid; gap: 4px; font: inherit; color: inherit; }
+.pop.ir-view { max-width: 720px; width: calc(100% - 32px); max-height: calc(100vh - 40px); overflow: auto; text-align: left; }
+.ir-dl { display: grid; grid-template-columns: minmax(120px, 32%) 1fr; gap: 6px 12px; font-size: .88rem; margin: 10px 0 14px; }
+.ir-dl dt { color: var(--muted); } .ir-dl dd { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .staff-sum { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .staff-h { margin: 16px 0 6px; font-size: 1rem; }
 .staff-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 8px; }
@@ -934,7 +947,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, incidents: null, ir: null, irView: null, irFilter: "open", irNote: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -1266,6 +1279,7 @@ function render() {
   try { if (fid && typeof ae.selectionStart === "number") sel = [ae.selectionStart, ae.selectionEnd]; } catch (_) {}
   const inApp = app.sample || app.phase === "app";
   if (inApp && state.tab === "changes") ensureLog();
+  if (inApp && !app.sample && (state.tab === "incident" || app.isAdmin)) ensureIncidents();
   const wp = $("#wa-prompt"); if (wp) { const html = renderExtPrompt() || renderIcsPrompt() || renderWaPrompt(); if (wp.dataset.html !== html) { wp.dataset.html = html; wp.innerHTML = html; } }
   renderSwapPopup(inApp && !state.waPrompt && !state.extPrompt && !state.icsPrompt);
   const large = !inApp || state.tab === "board";
@@ -1280,7 +1294,7 @@ function render() {
   if (mustCompleteProfile()) $("#tabs").innerHTML = "";
   $("#main").innerHTML = !inApp ? renderGate() : mustCompleteProfile() ? "" : app.loading ? `<div class="empty">Loading the roster…</div>` :
     state.tab === "board" ? renderBoard() : state.tab === "mine" ? renderMine() : state.tab === "changes" ? renderChanges() :
-    state.tab === "consultants" ? renderConsultants() : state.tab === "team" && app.isAdmin && !app.sample ? renderTeam() : app.canEdit || app.sample ? renderChecks() : renderBoard();
+    state.tab === "consultants" ? renderConsultants() : state.tab === "incident" && !app.sample ? renderIncident() : state.tab === "team" && app.isAdmin && !app.sample ? renderTeam() : app.canEdit || app.sample ? renderChecks() : renderBoard();
   const fb = inApp && !app.loading ? renderFeedback() : ""; if ($("#feedback").dataset.html !== fb) { $("#feedback").dataset.html = fb; $("#feedback").innerHTML = fb; }
   if (fid) { const el = document.getElementById(fid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel) try { el.setSelectionRange(sel[0], sel[1]); } catch (_) {} } }
 }
@@ -1332,6 +1346,120 @@ function renderAuth() {
     ${inAppBrowser() ? `<div class="note">Google sign-in doesn't work inside WhatsApp, Facebook or Instagram. Tap the ⋮ or share menu and choose <b>Open in Chrome</b> (or Safari), or sign in with email and password instead.</div>` : ""}` : ""}
     <p class="small">${signup ? `Already have an account? <button class="btn ghost" type="button" data-act="auth-mode" data-mode="signin" id="au-to-in">Sign in</button>` : `New here? <button class="btn ghost" type="button" data-act="auth-mode" data-mode="signup" id="au-to-up">Create an account</button>`}</p>
   </form>`;
+}
+/* ---------- incident reports (form EPC-RWP-QA-F-02): fill in online or download the Word form ----------
+   Reports are saved in incidents/: the person who reported sees their own, coordinators see and review all. */
+const IR_INVOLVES = ["Patient", "Visitor", "Staff", "Others"];
+const IR_STATUS = { new: "New", review: "Under review", qa: "Sent to Quality Assurance", closed: "Closed" };
+const IR_JCI = ["Patient death, permanent harm, or severe temporary harm as a result of patient fall", "Medication error leading to death, permanent, or severe temporary harm", "Needle-stick injury",
+  "Transfusing/transplantation of contaminated blood, blood products, organ or tissue", "Unexpected death, permanent or severe temporary harm associated with transport/transfer of patients",
+  "Any healthcare facility-acquired bedsore (pressure ulcer)", "Accidental burn of second degree and above during patient care", "Unintended retention of a foreign object in a patient after surgical/invasive procedure",
+  "Surgery/invasive procedures performed at the wrong site, on the wrong patient, or the wrong procedure", "Administration of incompatible ABO, Non-ABO of blood/blood products, or transplantation of incompatible organs resulting in death, permanent harm or severe harm",
+  "Patient death, permanent, or severe temporary harm associated with intravascular air embolism", "Patient death, permanent, or severe temporary harm as a result of medical device breakdown or failure when in use",
+  "Maternal death and severe maternal morbidity (leading to permanent harm or severe harm)", "Discharge of an infant to the wrong family", "Discharge of a minor or incapacitated patient to an unauthorized person",
+  "Rape or sexual abuse/assault of a patient, staff member, licensed independent practitioner, visitor, or vendor while on-site at the hospital",
+  "Suicide, attempted suicide, or self-harm that results in severe temporary harm, permanent harm, or death while being cared for in the hospital or within 7 days of discharge, including the emergency department",
+  "Death or serious disability associated with failure to manage/identify severe neonatal hyperbilirubinemia", "The unexpected collapse of any building within a healthcare facility",
+  "Fire, flame, or unanticipated smoke, heat, or flashes occurring during direct patient care caused by equipment operated and used by EPC", "Abduction of any patient receiving care within the hospital",
+  "Unanticipated death of a \u201cfull-term\u201d infant", "Physical assault leading to death, permanent harm, or severe harm, or homicide of a patient, staff member, licensed independent practitioner, visitor, or vendor while on-site at the hospital",
+  "Unauthorized departure of the patient (elopement within 72 hours) from the hospital that resulted in death, permanent harm, or severe temporary harm",
+  "Patient death, permanent harm, or severe temporary harm/distress associated with wrong administration/connection of medical gas", "Death, permanent, or severe temporary harm/distress associated with the use of an incorrectly positioned oro- or nasogastric tube",
+  "Radioactive/hazardous material spillage and/or exposure"];
+/* Every text box must be filled: the form says "mention NONE, NOT APPLICABLE or UNKNOWN" instead of leaving blanks. */
+const IR_TEXT = [["personName", "Name of affected person"], ["location", "Location of incident"], ["date", "Date of incident"], ["time", "Time of incident"], ["age", "Age"], ["mrNo", "MR No. (if applicable)"],
+  ["staffName", "Staff name"], ["staffDept", "Department"], ["staffEmpId", "Employee ID"], ["details", "Details of incident"], ["treatment", "Medical treatment (if administered)"], ["injury", "Injury description (including body parts involved)"],
+  ["firstAidBy", "First aid given by"], ["doctorName", "Name of doctor"], ["erBy", "Treatment in ER by"], ["reporterName", "Your name"], ["reporterDesig", "Your designation"]];
+function irBlank() {
+  const d = app.myDoc || {}, t = new Date(Date.now() + 5 * 3600e3);
+  return { involves: "", involvesOther: "", personName: "", location: "", date: t.toISOString().slice(0, 10), time: "", age: "", mrNo: "", staffName: "", staffDept: "", staffEmpId: "", details: "", treatment: "", injury: "",
+    firstAid: "", firstAidBy: "", doctorTx: "", doctorName: "", erTx: "", erBy: "", jci: [], reporterName: d.name || "", reporterDesig: d.designation || (d.dept === "MSA" ? "MSA" : ""), confirm: false };
+}
+function irState() {
+  if (!state.ir) { try { state.ir = JSON.parse(localStorage.getItem("ir-draft") || "null"); } catch (_) {} if (!state.ir || typeof state.ir !== "object") state.ir = irBlank(); }
+  return state.ir;
+}
+function irNoteInit() { const x = (state.incidents || []).find(i => i.id === state.irView); if (x && (!state.irNote || state.irNote.id !== x.id)) state.irNote = { id: x.id, comments: x.headComments || "", status: x.status }; }
+function irSaveDraft() { try { localStorage.setItem("ir-draft", JSON.stringify(state.ir)); } catch (_) {} }
+let unsubIncidents = null;
+function ensureIncidents() {
+  if (unsubIncidents || !app.db || !app.uid) return;
+  const q = app.isAdmin ? app.db.collection("incidents").orderBy("createdAt", "desc").limit(300) : app.db.collection("incidents").where("reportedBy", "==", app.uid).limit(100);
+  unsubIncidents = q.onSnapshot(snap => { state.incidents = snap.docs.map(x => ({ id: x.id, ...x.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); render(); }, () => { state.incidents = []; render(); });
+}
+const irFmtDate = v => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ""); return m ? +m[3] + " " + MON_SHORT[+m[2] - 1] + " " + m[1] : (v || ""); };
+function renderIncident() {
+  const f = irState(), dis = app.busy ? "disabled" : "", list = state.incidents;
+  const quick = k => `<span class="ir-quick">${["None", "Not applicable", "Unknown"].map(v => `<button type="button" class="chip-btn" data-act="ir-fill" data-k="${k}" data-v="${v}">${v === "Not applicable" ? "N/A" : v}</button>`).join("")}</span>`;
+  const txt = (k, label, opt = {}) => `<div class="field${opt.wide ? " ir-wide" : ""}"><label for="ir-${k}">${label}</label>${opt.area ? `<textarea class="plain" id="ir-${k}" data-bind="ir.${k}" rows="${opt.rows || 3}" maxlength="${opt.max || 4000}">${esc(f[k])}</textarea>`
+    : `<input type="${opt.type || "text"}" id="ir-${k}" data-bind="ir.${k}" value="${esc(f[k])}" maxlength="${opt.max || 120}"${opt.ph ? ` placeholder="${esc(opt.ph)}"` : ""}>`}${opt.noQuick ? "" : quick(k)}</div>`;
+  const yn = (k, label, opts = ["Yes", "No"]) => `<div class="field"><span class="lab">${label}</span><div class="ir-radios">${opts.map(v => `<label class="check"><input type="radio" name="ir-${k}" data-bind="ir.${k}" value="${v}" ${f[k] === v ? "checked" : ""}> ${v}</label>`).join("")}</div></div>`;
+  const view = state.irView && list ? list.find(x => x.id === state.irView) : null;
+  const shown = (list || []).filter(x => !app.isAdmin || state.irFilter === "all" || (state.irFilter === "open" ? x.status !== "closed" : x.status === state.irFilter));
+  return `<div class="grid2">
+  <section class="panel" style="grid-column:1/-1"><h2>Incident report</h2>
+    <p class="muted">Record every incident or occurrence, including near misses, involving patients, visitors, attendants or staff. Report <b>within 24 hours</b>. Fill it in online below (no paper needed), or download the form to print.</p>
+    <div class="btns"><a class="btn" href="assets/forms/QA-2-Incident-Report-Form.docx" download="QA-2 Incident Report Form.docx" id="ir-download">⬇ Download the blank form (Word)</a></div>
+    <details><summary>Instructions</summary><ol class="small">
+      <li>Complete this form to record all incidents/occurrences (including near misses) of patients, visitors, attendants and staff.</li><li>Complete a separate form for every person affected.</li><li>Record fact only, NOT opinion.</li><li>Report WITHIN 24 HOURS.</li>
+      <li>Completing this form does NOT constitute an admission of liability of any kind by any person.</li><li>After completion, submit this form to your Supervisor/Head. Supervisor/Head MUST submit it to Quality Assurance. (Online reports go straight to the MSA office.)</li>
+      <li>DO NOT leave blank spaces; mention NONE, NOT APPLICABLE or UNKNOWN where required (use the small buttons under each box).</li></ol></details>
+  </section>
+  <form class="panel" style="grid-column:1/-1" id="ir-form" novalidate><h2>Report an incident online</h2>
+    <p class="muted small">Saved on this device as you type, so you won't lose it. Only you and the coordinators can see what you submit.</p>
+    <div class="field"><span class="lab">Event involves</span><div class="ir-radios">${IR_INVOLVES.map(v => `<label class="check"><input type="radio" name="ir-involves" data-bind="ir.involves" value="${v}" ${f.involves === v ? "checked" : ""}> ${v}</label>`).join("")}</div>
+      ${f.involves === "Others" ? `<input type="text" id="ir-involvesOther" data-bind="ir.involvesOther" value="${esc(f.involvesOther)}" placeholder="Specify" maxlength="120">` : ""}</div>
+    <div class="ir-grid">${txt("personName", "Name of affected person")}${txt("location", "Location of incident")}${txt("date", "Date of incident", { type: "date", noQuick: true })}${txt("time", "Time of incident", { type: "time", noQuick: true })}${txt("age", "Age", { max: 20 })}${txt("mrNo", "MR No. (if applicable)", { max: 40 })}</div>
+    <div class="ir-grid">${txt("staffName", "Staff name")}${txt("staffDept", "Department")}${txt("staffEmpId", "Employee ID", { max: 40 })}</div>
+    ${txt("details", "Details of incident (facts only)", { area: true, rows: 6, wide: true, max: 8000 })}
+    ${txt("treatment", "Medical treatment (if administered)", { area: true, rows: 2, wide: true })}
+    ${txt("injury", "Injury description (including body parts involved)", { area: true, rows: 2, wide: true })}
+    <div class="ir-grid">${yn("firstAid", "I. First aid given?")}${f.firstAid === "Yes" ? txt("firstAidBy", "If yes, by whom") : ""}${yn("doctorTx", "II. Treatment by doctor?")}${f.doctorTx === "Yes" ? txt("doctorName", "Name of doctor") : ""}${yn("erTx", "III. Treatment in ER?")}${f.erTx === "Yes" ? txt("erBy", "By whom") : ""}</div>
+    <details ${f.jci.length ? "open" : ""}><summary>JCI reportable event? ${f.jci.length ? `<b>(${f.jci.length} ticked)</b>` : "(tick any that apply)"}</summary><div class="ir-jci">${IR_JCI.map((j, i) => `<label class="check"><input type="checkbox" data-ir-jci="${i}" ${f.jci.includes(i) ? "checked" : ""}> ${esc(j)}</label>`).join("")}</div></details>
+    <div class="ir-grid">${txt("reporterName", "Your name (employee)", { noQuick: true })}${txt("reporterDesig", "Your designation", { noQuick: true })}</div>
+    <label class="check"><input type="checkbox" data-bind="ir.confirm" ${f.confirm ? "checked" : ""}> I confirm this report records facts only and is complete to the best of my knowledge. (This takes the place of a signature.)</label>
+    <div class="btns"><button class="btn primary" type="button" data-act="ir-submit" id="ir-submit" ${dis}>Submit report</button><button class="btn ghost" type="button" data-act="ir-clear" id="ir-clear">Clear the form</button></div>
+  </form>
+  <section class="panel" style="grid-column:1/-1" id="ir-list"><h2>${app.isAdmin ? "All incident reports" : "My incident reports"}</h2>
+    ${app.isAdmin ? `<div class="btns"><label class="check">Show <select data-bind="irFilter">${[["open", "Open (not closed)"], ["new", "New"], ["review", "Under review"], ["qa", "Sent to QA"], ["closed", "Closed"], ["all", "All"]].map(([v, l]) => `<option value="${v}" ${state.irFilter === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>${list && list.length ? `<button class="btn" data-act="ir-excel" id="ir-excel">Download all as Excel</button>` : ""}</div>` : ""}
+    ${list === null ? `<p class="muted">Loading…</p>` : !shown.length ? `<p class="muted">${app.isAdmin ? "No reports here." : "You haven't submitted any reports."}</p>`
+      : `<div class="list">${shown.map(x => `<button class="item ir-item" data-act="ir-open" data-id="${esc(x.id)}"><div class="head"><b>${esc(x.ref || x.id)}</b><span class="pill ${x.status === "closed" ? "done" : x.status === "new" ? "warn" : ""}">${esc(IR_STATUS[x.status] || x.status)}</span></div>
+          <span class="small">${esc(irFmtDate(x.date))} ${esc(x.time || "")} · ${esc(x.involves === "Others" ? x.involvesOther || "Others" : x.involves)} · ${esc(x.personName)} · ${esc(x.location)}</span>${app.isAdmin ? `<span class="muted small">Reported by ${esc(x.reporterName)} (${esc(x.reporterDesig || "")})</span>` : ""}</button>`).join("")}</div>`}
+  </section>
+  ${view ? renderIncidentView(view) : ""}
+  </div>`;
+}
+function irRows(x) {
+  return [["Event involves", x.involves === "Others" ? "Others: " + (x.involvesOther || "") : x.involves], ["Name of affected person", x.personName], ["Location of incident", x.location], ["Date of incident", irFmtDate(x.date)], ["Time of incident", x.time], ["Age", x.age], ["MR No.", x.mrNo],
+    ["Staff name", x.staffName], ["Department", x.staffDept], ["Employee ID", x.staffEmpId], ["Details of incident", x.details], ["Medical treatment", x.treatment], ["Injury description", x.injury],
+    ["I. First aid given?", x.firstAid + (x.firstAid === "Yes" ? " · by " + (x.firstAidBy || "") : "")], ["II. Treatment by doctor?", x.doctorTx + (x.doctorTx === "Yes" ? " · " + (x.doctorName || "") : "")], ["III. Treatment in ER?", x.erTx + (x.erTx === "Yes" ? " · by " + (x.erBy || "") : "")],
+    ["JCI reportable event", (x.jci || []).join("; ") || "None ticked"], ["Reported by", (x.reporterName || "") + (x.reporterDesig ? ", " + x.reporterDesig : "")], ["Submitted", x.createdAt ? new Date(x.createdAt).toLocaleString("en-GB", { timeZone: "Asia/Karachi" }) : ""]];
+}
+function renderIncidentView(x) {
+  const note = state.irNote && state.irNote.id === x.id ? state.irNote : { id: x.id, comments: x.headComments || "", status: x.status };
+  return `<div class="pop-back" data-act="ir-close"></div><div class="pop ir-view" role="dialog" aria-modal="true" aria-labelledby="ir-view-title">
+    <h2 id="ir-view-title">${esc(x.ref || "Incident report")} <span class="pill ${x.status === "closed" ? "done" : x.status === "new" ? "warn" : ""}">${esc(IR_STATUS[x.status] || x.status)}</span></h2>
+    <dl class="ir-dl">${irRows(x).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v || "")}</dd>`).join("")}</dl>
+    ${app.isAdmin ? `<div class="field"><label for="ir-comments">Comments by unit / department head</label><textarea class="plain" id="ir-comments" data-bind="irNote.comments" rows="3" maxlength="4000">${esc(note.comments)}</textarea></div>
+      <div class="field"><label for="ir-status">Status</label><select id="ir-status" data-bind="irNote.status">${Object.entries(IR_STATUS).map(([v, l]) => `<option value="${v}" ${note.status === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>`
+      : x.headComments ? `<p class="small"><b>Comments by unit / department head:</b> ${esc(x.headComments)}</p>` : ""}
+    <div class="btns">${app.isAdmin ? `<button class="btn primary" data-act="ir-save-review" data-id="${esc(x.id)}" id="ir-save-review" ${app.busy ? "disabled" : ""}>Save</button>` : ""}<button class="btn" data-act="ir-print" data-id="${esc(x.id)}" id="ir-print">Print / save as PDF</button><button class="btn ghost" data-act="ir-close" id="ir-close">Close</button></div>
+  </div>`;
+}
+/* A clean A4 copy laid out like the paper form, opened in a new window to print or save as PDF. */
+function printIncident(x) {
+  const w = window.open("", "_blank"); if (!w) { toast("Allow pop-ups for this site to print the report."); return; }
+  const row = (k, v) => `<tr><th>${esc(k)}</th><td>${esc(v || "")}</td></tr>`;
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(x.ref || "Incident report")}</title><style>
+    body{font-family:Arial,sans-serif;color:#111;margin:24px;font-size:12px} header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #041f34;padding-bottom:8px}
+    header img{height:56px} h1{font-size:18px;margin:0;color:#041f34} table{width:100%;border-collapse:collapse;margin-top:12px} th,td{border:1px solid #999;padding:6px 8px;text-align:left;vertical-align:top}
+    th{width:30%;background:#f1f3f5} td{white-space:pre-wrap} footer{margin-top:16px;font-size:10px;color:#555;display:flex;justify-content:space-between} .sig{margin-top:18px}
+    @page{size:A4;margin:14mm} @media print{body{margin:0}}</style></head><body>
+    <header><img src="${location.origin}${location.pathname.replace(/[^/]*$/, "")}assets/eastridge-logo.png" alt="Eastridge Primecare"><div style="text-align:right"><h1>INCIDENT REPORT FORM</h1><div>Ref: ${esc(x.ref || x.id)} · Status: ${esc(IR_STATUS[x.status] || x.status)}</div></div></header>
+    <table>${irRows(x).map(([k, v]) => row(k, v)).join("")}${row("Comments by unit / department head", x.headComments || "")}</table>
+    <p class="sig">Confirmed online by ${esc(x.reporterName || "")} (${esc(x.reporterDesig || "")}) on ${esc(x.createdAt ? new Date(x.createdAt).toLocaleDateString("en-GB", { timeZone: "Asia/Karachi" }) : "")}: "This report records facts only and is complete to the best of my knowledge."</p>
+    <footer><span>EPC-RWP-QA-F-02</span><span>Submitted through the Eastridge duty roster app</span></footer>
+    <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
+  w.document.close();
 }
 /* ---------- expected staff: who should be on the app, and who hasn't registered yet ---------- */
 const NAME_SKIP = new Set(["dr", "doctor", "muhammad", "mohammad", "muhammed", "syed", "syeda", "sheikh", "shaikh", "mir", "khawaja", "ul", "un", "ur", "ud", "al"]);
@@ -1485,6 +1613,7 @@ function renderTabs() {
   const pend = pendingForMe().length;
   const t = [["board", "Hospital roster", ""], ["mine", me() || !app.canEdit ? "My roster" : "Edit rosters", unsavedCount() ? `<span class="count soft" title="Unsaved changes">•</span>` : ""],
     ["changes", "Swaps & changes", pend ? `<span class="count">${pend}</span>` : ""], ["consultants", "Consultants", ""]];
+  if (!app.sample) { const nNew = app.isAdmin && state.incidents ? state.incidents.filter(x => x.status === "new").length : 0; t.push(["incident", "Incident report", nNew ? `<span class="count">${nNew}</span>` : ""]); }
   if (app.canEdit || app.sample) t.push(["checks", "Checks", issues ? `<span class="count">${issues > 99 ? "99+" : issues}</span>` : ""]);
   if (app.isAdmin && !app.sample) { const pc = pendingDoctors().length; t.push(["team", "Team", pc ? `<span class="count">${pc}</span>` : ""]); }
   return t.map(([k, l, extra]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${state.tab === k}" data-act="tab" data-tab="${k}">${l}${extra}</button>`).join("");
@@ -1898,6 +2027,41 @@ const actions = {
     const text = "Assalam o Alaikum. These doctors haven't registered on the Eastridge duty roster app yet:\n\n" + [...groups].map(([g, n]) => "*" + g + "*: " + n.join(", ")).join("\n") + "\n\nPlease register today: " + location.origin + location.pathname + "\n(Create account → add your full name, WhatsApp number, department and designation.)";
     try { await navigator.clipboard.writeText(text); toast("Copied. Paste it in the WhatsApp group."); } catch (_) { prompt("Copy this message:", text); }
   },
+  "ir-fill"(b) { const f = irState(); f[b.dataset.k] = b.dataset.v; irSaveDraft(); render(); },
+  "ir-clear"() { if (!confirm("Clear everything you've typed in this form?")) return; state.ir = irBlank(); irSaveDraft(); render(); },
+  async "ir-submit"() {
+    const f = irState(), miss = [];
+    if (!f.involves) miss.push("Event involves"); if (f.involves === "Others" && !String(f.involvesOther).trim()) miss.push("Others (specify)");
+    for (const [k, label] of IR_TEXT) { if ((k === "firstAidBy" && f.firstAid !== "Yes") || (k === "doctorName" && f.doctorTx !== "Yes") || (k === "erBy" && f.erTx !== "Yes")) continue; if (!String(f[k] || "").trim()) miss.push(label); }
+    if (!f.firstAid) miss.push("First aid given?"); if (!f.doctorTx) miss.push("Treatment by doctor?"); if (!f.erTx) miss.push("Treatment in ER?");
+    if (miss.length) { toast("Please fill in: " + miss.slice(0, 4).join(", ") + (miss.length > 4 ? " and " + (miss.length - 4) + " more" : "") + ". Use None, N/A or Unknown where it doesn't apply."); return; }
+    if (!f.confirm) { toast("Tick the confirmation box at the bottom to submit."); return; }
+    const t = new Date(Date.now() + 5 * 3600e3), ref = "IR-" + t.toISOString().slice(0, 10).replace(/-/g, "") + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const doc = { ref, status: "new", reportedBy: app.uid, reporterDept: (app.myDoc && app.myDoc.dept) || "", createdAt: Date.now() };
+    for (const k of ["involves", "involvesOther", ...IR_TEXT.map(x => x[0]), "firstAid", "doctorTx", "erTx"]) doc[k] = String(f[k] || "").trim();
+    doc.jci = f.jci.map(i => IR_JCI[i]).filter(Boolean);
+    let id = null;
+    const ok = await guarded(async () => { const r = await dbCall(() => app.db.collection("incidents").add(doc)); id = r.id; }, "Report " + ref + " submitted to the MSA office. Thank you.");
+    if (ok) { state.ir = irBlank(); irSaveDraft(); state.irView = id; render(); }
+  },
+  "ir-open"(b) { state.irView = b.dataset.id; state.irNote = null; render(); },
+  "ir-close"() { state.irView = null; state.irNote = null; render(); },
+  "ir-print"(b) { const x = (state.incidents || []).find(i => i.id === b.dataset.id); if (x) printIncident(x); },
+  async "ir-save-review"(b) {
+    const x = (state.incidents || []).find(i => i.id === b.dataset.id); if (!x) return;
+    const n = state.irNote && state.irNote.id === x.id ? state.irNote : { comments: x.headComments || "", status: x.status };
+    const ok = await guarded(() => dbCall(() => app.db.collection("incidents").doc(x.id).update({ headComments: String(n.comments || "").trim(), status: n.status, reviewedBy: app.uid, reviewedAt: Date.now() })), "Saved.");
+    if (ok) { state.irNote = null; render(); }
+  },
+  async "ir-excel"() {
+    try {
+      const XLSX = await loadXLSX(), list = state.incidents || [];
+      const head = ["Ref", "Status", ...irRows(list[0] || {}).map(r => r[0]), "Comments by unit / department head"];
+      const rows = list.map(x => [x.ref, IR_STATUS[x.status] || x.status, ...irRows(x).map(r => r[1]), x.headComments || ""]);
+      const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet([head, ...rows]); ws["!cols"] = head.map((h, i) => ({ wch: i === 12 ? 60 : 20 }));
+      XLSX.utils.book_append_sheet(wb, ws, "Incident reports"); XLSX.writeFile(wb, "Eastridge-Incident-Reports-" + new Date().toISOString().slice(0, 10) + ".xlsx");
+    } catch (e) { toast("Couldn't make the Excel file: " + (e.message || e)); }
+  },
   "profile-close"() { state.profileOpen = false; render(); },
   "pc-start"() { const d = app.myDoc || {}; Object.assign(state.profile, { changing: true, newName: d.name || "", newPhone: d.phone || "" }); render(); setTimeout(() => { const el = $("#pc-name"); if (el) el.focus(); }, 0); },
   async "pc-cancel"() { await guarded(() => dbCall(() => app.db.collection("doctors").doc(app.uid).update({ pendingChange: firebase.firestore.FieldValue.delete(), updatedAt: Date.now() })), "Request cancelled."); },
@@ -2167,10 +2331,12 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
 });
-const LIVE_BINDS = new Set(["csQ", "extPrompt.reason", "staffPaste", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
+const LIVE_BINDS = new Set([...IR_TEXT.map(x => "ir." + x[0]), "ir.involvesOther", "irNote.comments", "csQ", "extPrompt.reason", "staffPaste", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
 document.addEventListener("input", e => {
   const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;
+  if (path.startsWith("irNote.")) irNoteInit();
   setBind(path, el.value);
+  if (path.startsWith("ir.")) irSaveDraft();
   if (path === "pasteText") { const b = $("#read-paste"); if (b) b.disabled = !canAct() || !el.value.trim(); }
   if (path === "deptPaste") { const b = $("#dept-read-paste"); if (b) b.disabled = app.busy || !el.value.trim(); }
   if (path === "csQ") render(); // search as you type
@@ -2178,6 +2344,8 @@ document.addEventListener("input", e => {
 document.addEventListener("change", async e => {
   const el = e.target;
   if (el.id === "file-in") { if (el.files && el.files[0]) await readFile(el.files[0]); return; }
+  if (el.dataset && el.dataset.irJci !== undefined) { const f = irState(), i = +el.dataset.irJci; f.jci = el.checked ? [...new Set([...f.jci, i])].sort((a, b) => a - b) : f.jci.filter(x => x !== i); irSaveDraft(); render(); return; }
+  if (el.dataset && el.dataset.bind && el.dataset.bind.startsWith("irNote.")) irNoteInit();
   if (el.dataset && el.dataset.staffLink !== undefined) { const l = (state.staff || []).map(x => ({ ...x })), e = l[+el.dataset.staffLink]; if (e) { if (el.value) e.uid = el.value; else delete e.uid; await saveStaff(l, el.value ? "Linked." : "Link removed."); } return; }
   if (el.dataset && el.dataset.actCg) { state.cgDraft = { ...((state.contact && state.contact.coverGroups) || DEFAULT_COVER_GROUPS), ...(state.cgDraft || {}), [el.dataset.dept]: el.value }; render(); return; }
   if (el.id === "staff-file") { if (el.files && el.files[0]) await readStaffDocx(el.files[0]); el.value = ""; return; }
@@ -2186,6 +2354,7 @@ document.addEventListener("change", async e => {
   const path = el.dataset && el.dataset.bind; if (!path) return;
   setBind(path, el.type === "checkbox" ? el.checked : el.value);
   if (path === "form.colleague") state.form.take = "";
+  if (path.startsWith("ir.")) irSaveDraft();
   if (path === "editFor") state.upload = null;
   if (!LIVE_BINDS.has(path)) render();
 });
@@ -2770,6 +2939,7 @@ function startLive() {
 function stopLive() {
   [unsubDoctors, unsubRosters, unsubRequests, unsubContact, unsubPending, unsubPrevOwn, unsubExt, unsubCover].forEach(u => u && u()); unsubCover = null; state.cover = {};
   if (unsubStaff) unsubStaff(); unsubStaff = null; state.staff = null;
+  if (unsubIncidents) unsubIncidents(); unsubIncidents = null; state.incidents = null; state.irView = null;
   unsubDoctors = unsubRosters = unsubRequests = unsubContact = unsubPending = unsubPrevOwn = unsubExt = null; state.contact = null; state.extended = {};
   state.pending = []; logMonth = null; rosterSnap = {}; prevOwn = null;
   state.doctors = {}; state.rosters = {}; state.requests = []; state.drafts = {}; state.upload = null; state.editFor = null;
