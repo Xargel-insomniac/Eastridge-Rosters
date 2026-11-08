@@ -89,6 +89,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: linear-gradient(180deg, rgba(4,31,52,.55) 0%, rgba(4,31,52,0) 28%), linear-gradient(0deg, rgba(4,31,52,.92) 0%, rgba(4,31,52,.55) 38%, rgba(4,31,52,0) 70%); }
 @keyframes drift { from { transform: scale(1.12); } to { transform: scale(1.0); } }
 .mast-inner { width: 100%; max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.mast-inner { min-width: 0; }
 .mast-top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; padding-block: 18px; }
 .brand { display: flex; gap: 14px; align-items: center; min-width: 0; }
 .logo-plate { display: block; background: #ffffff; border-radius: 14px; padding: 10px 16px; box-shadow: 0 10px 30px rgba(4,31,52,.35); line-height: 0; transition: padding .45s cubic-bezier(.2,.7,.2,1), border-radius .45s, box-shadow .3s; }
@@ -96,6 +97,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .bar-title { font-family: var(--f-display); font-weight: 600; font-size: 1rem; white-space: nowrap; padding-left: 14px; border-left: 1px solid var(--line); display: none; }
 .who { display: flex; gap: 4px 10px; align-items: center; flex-wrap: wrap; font-size: 0.9rem; border-radius: 999px; padding: 4px 6px 4px 14px; background: rgba(4,31,52,.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,.18); }
 .who:empty { display: none; }
+#banner:empty, #ann-slot:empty, #feedback:empty { display: none; }
+@media (max-width: 640px) {
+  .masthead.compact .who { flex: 1 0 100%; max-width: 100%; order: 9; flex-wrap: nowrap; gap: 6px; font-size: .8rem; padding: 0; min-width: 0; }
+  .masthead.compact .who > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .masthead.compact .who .btn { padding: 4px 8px; font-size: .78rem; white-space: nowrap; }
+  .masthead.compact .who .pill { font-size: .6rem; padding: 1px 6px; }
+}
 .who b { font-weight: 600; }
 .masthead:not(.compact) .who .btn.ghost { color: #ffffff; }
 .masthead:not(.compact) .who .btn.ghost:hover { border-color: rgba(255,255,255,.4); }
@@ -153,6 +161,57 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--bad); color: var(--surface); font-size: 0.72rem; display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; }
 .count.soft { background: var(--line); color: var(--ink); }
+.ic { flex: none; vertical-align: -0.2em; }
+/* section headings with an icon */
+h2.has-ic { display: flex; align-items: center; gap: 10px; }
+.h-ic { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+/* empty states */
+.empty { padding: 26px 20px; }
+.empty-ic { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.empty.sm { padding: 18px 16px; } .empty.sm .empty-ic { width: 44px; height: 44px; } .empty.sm .empty-ic .ic { width: 22px; height: 22px; }
+.empty p { margin: 0; max-width: 46ch; }
+/* loading placeholders */
+.skel { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.sk { display: block; height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--sunk) 0%, var(--line) 50%, var(--sunk) 100%); background-size: 200% 100%; animation: sk 1.3s ease-in-out infinite; }
+.sk-h { height: 22px; width: 40%; } .sk-s { width: 60%; }
+.sk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; } .sk-grid .sk { height: 46px; border-radius: 8px; }
+@keyframes sk { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+/* gentle motion: tab content eases in, buttons respond to a press */
+#main.tab-in { animation: tab-in .28s cubic-bezier(.2,.7,.2,1); }
+@keyframes tab-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.btn, .tab, .chip.mine, .chip-btn { transition: transform .12s ease, background-color .15s, color .15s, border-color .15s; }
+.btn:active:not(:disabled), .tab:active, .chip.mine:active, .chip-btn:active { transform: scale(.96); }
+@media (prefers-reduced-motion: reduce) { #main.tab-in, .sk { animation: none; } .btn:active, .tab:active { transform: none; } }
+/* roster: initials, today's row */
+.av { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: .58rem; font-weight: 800; letter-spacing: .02em; color: #fff; background: hsl(var(--h) 52% 42%); margin-left: -4px; }
+.chip { padding-left: 6px; } .chip .cn { overflow: hidden; text-overflow: ellipsis; }
+.board .bc.today { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+.board .bc.today.gap { background: var(--bad-bg); } .board .bc.today.covered { background: var(--warn-bg); }
+.board .bd.today { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.btn .ic, .pill .ic { margin-right: 2px; }
+.tab-ic { position: relative; display: inline-grid; }
+.tab .ts { display: none; }
+.tab .tab-ic .ic { width: 17px; height: 17px; }
+@media (max-width: 1020px) { .dl-hrs { display: none; } }
+@media (min-width: 641px) and (max-width: 1020px) { .masthead:not(.compact) .hero-copy > * { max-width: calc(100% - min(420px, 40vw) - 32px); } }
+.tab-ic .count { position: absolute; top: -7px; right: -10px; min-width: 16px; height: 16px; padding: 0 4px; font-size: .62rem; box-shadow: 0 0 0 2px var(--sunk); }
+@media (min-width: 641px) { .tab-ic { display: contents; } .tab-ic .count { order: 3; position: static; box-shadow: none; min-width: 20px; height: 20px; font-size: .72rem; } .tab .tl { order: 2; } }
+/* phones: the tabs become a bottom bar with icons and short labels, within thumb reach */
+@media (max-width: 640px) {
+  .tabs { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; max-width: none; gap: 0; border-radius: 0; overflow: visible; justify-content: space-around;
+    padding: 5px 4px calc(5px + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--surface) 92%, transparent); border-top: 1px solid var(--line);
+    backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 -6px 20px rgba(4,31,52,.08); }
+  .tab { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px; padding: 4px 2px; font-size: .66rem; font-weight: 600; letter-spacing: .01em; background: transparent !important; box-shadow: none !important; }
+  .tab .tl { display: none; } .tab .ts { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .tab .tab-ic { padding: 4px 16px; border-radius: 999px; transition: background-color .2s; }
+  .tab .tab-ic .ic { width: 21px; height: 21px; }
+  .tab[aria-selected="true"] { color: var(--accent); }
+  .tab[aria-selected="true"] .tab-ic { background: var(--accent-soft); }
+  .tab-ic .count { top: -2px; right: 6px; box-shadow: 0 0 0 2px var(--surface); }
+  .tab .tab-ic { position: relative; }
+  .wrap { padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
+  #toast { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+}
 
 /* panels */
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 14px; min-width: 0; }
@@ -170,7 +229,7 @@ button.statlink:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* form */
 .field { display: grid; gap: 4px; min-width: 0; }
 .field label, .field .lab { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
-input[type=text], input[type=tel], input[type=date], input[type=email], input[type=password], select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 0; }
+input[type=text], input[type=tel], input[type=date], input[type=time], input[type=number], input[type=search], input[type=email], input[type=password], select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 0; }
 textarea { font-family: var(--f-mono); font-size: 0.82rem; min-height: 90px; resize: vertical; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
 .row > .field { flex: 1 1 180px; }
@@ -274,6 +333,18 @@ a.btn.wa { color: #128c4b; }
 .ir-quick { display: flex; gap: 6px; margin-top: 4px; }
 .chip-btn { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; font-size: .72rem; padding: 2px 9px; cursor: pointer; }
 .chip-btn:hover { color: var(--ink); border-color: var(--muted); }
+.ir-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.ir-steps button { width: 100%; display: grid; justify-items: center; gap: 4px; border: 0; background: none; padding: 0; color: var(--muted); font: inherit; font-size: .74rem; font-weight: 600; cursor: pointer; }
+.ir-steps button:disabled { cursor: default; }
+.ir-steps .n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--line); background: var(--surface); font-size: .8rem; font-weight: 800; }
+.ir-steps li.on button { color: var(--ink); } .ir-steps li.on .n { border-color: var(--accent); color: var(--accent); }
+.ir-steps li.done .n { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.ir-steps .l { text-align: center; line-height: 1.2; white-space: nowrap; } .ir-steps .ls { display: none; }
+.ir-bar { height: 4px; border-radius: 4px; background: var(--sunk); overflow: hidden; } .ir-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .3s; }
+.ir-step-title { margin: 4px 0 0; font-size: 1rem; }
+.ir-review { border: 1px solid var(--line); border-radius: 12px; padding: 4px 14px; background: var(--sunk); max-height: 420px; overflow: auto; }
+.ir-nav { position: sticky; bottom: 0; background: var(--surface); padding-block: 8px; margin-inline: -16px; padding-inline: 16px; border-top: 1px solid var(--line); z-index: 3; }
+@media (max-width: 640px) { .ir-steps .l { display: none; } .ir-steps .ls { display: block; font-size: .66rem; } .ir-nav { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); } }
 .ir-evidence { margin: 12px 0; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 12px; }
 .ir-evidence h3 { margin: 0 0 4px; font-size: 1rem; }
 .ir-files { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; align-items: center; }
@@ -587,7 +658,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
     <div class="who" id="who"></div>
   </div>
   <div class="dayline" id="dayline" aria-label="Today's shifts">
-    <div class="dl-pill"><span class="dl-seg" data-s="M"><i class="dl-fill"></i><b>Morning</b></span><span class="dl-seg" data-s="E"><i class="dl-fill"></i><b>Evening</b></span><span class="dl-seg" data-s="N"><i class="dl-fill"></i><b>Night</b></span></div>
+    <div class="dl-pill"><span class="dl-seg" data-s="M" title="Morning 08:00 – 14:00"><i class="dl-fill"></i><b>Morning</b></span><span class="dl-seg" data-s="E" title="Evening 14:00 – 20:00"><i class="dl-fill"></i><b>Evening</b></span><span class="dl-seg" data-s="N" title="Night 20:00 – 08:00"><i class="dl-fill"></i><b>Night</b></span></div>
   </div>
   <div class="mast-inner hero-copy" id="hero-copy">
     <div id="announce" role="region" aria-label="Announcement" hidden></div>
@@ -600,11 +671,6 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 <main class="wrap">
   <div id="ann-slot"></div>
 
-  <div class="key" aria-label="Shift times">
-    <span class="keyitem sh-M"><b>Morning</b><span class="mono">08:00 – 14:00</span></span>
-    <span class="keyitem sh-E"><b>Evening</b><span class="mono">14:00 – 20:00</span></span>
-    <span class="keyitem sh-N"><b>Night</b><span class="mono">20:00 – 08:00 next day</span></span>
-  </div>
 
   <div id="banner"></div>
 
@@ -1281,6 +1347,7 @@ function flaggedSlots(id, month) {
 function pendingForMe() { return pendingList().filter(r => r.status === "pending" && r.to === app.uid && (r.type === "swap" || r.type === "cover")); }
 
 /* ---------- render ---------- */
+let lastTab = null;
 function render() {
   const ae = document.activeElement, fid = ae && ae.id; let sel = null;
   try { if (fid && typeof ae.selectionStart === "number") sel = [ae.selectionStart, ae.selectionEnd]; } catch (_) {}
@@ -1299,9 +1366,11 @@ function render() {
   $("#tabs").innerHTML = inApp ? renderTabs() : "";
   if (mustCompleteProfile() && !state.profileOpen) { state.profile = { name: app.myDoc.name || "", dept: app.myDoc.dept || "", designation: app.myDoc.designation || "", phone: app.myDoc.phone || "" }; state.profileOpen = true; }
   if (mustCompleteProfile()) $("#tabs").innerHTML = "";
-  $("#main").innerHTML = !inApp ? renderGate() : mustCompleteProfile() ? "" : app.loading ? `<div class="empty">Loading the roster…</div>` :
+  $("#main").innerHTML = !inApp ? renderGate() : mustCompleteProfile() ? "" : app.loading ? `<div class="skel" aria-label="Loading the roster" role="status"><span class="sk sk-h"></span><span class="sk"></span><span class="sk"></span><span class="sk sk-s"></span><div class="sk-grid">${"<span class=\"sk\"></span>".repeat(12)}</div></div>` :
     state.tab === "board" ? renderBoard() : state.tab === "mine" ? renderMine() : state.tab === "changes" ? renderChanges() :
     state.tab === "consultants" ? renderConsultants() : state.tab === "incident" && !app.sample ? renderIncident() : state.tab === "team" && app.isAdmin && !app.sample ? renderTeam() : app.canEdit || app.sample ? renderChecks() : renderBoard();
+  decorate($("#main"));
+  if (inApp && state.tab !== lastTab) { const m = $("#main"); m.classList.remove("tab-in"); void m.offsetWidth; m.classList.add("tab-in"); lastTab = state.tab; }
   const fb = inApp && !app.loading ? renderFeedback() : ""; if ($("#feedback").dataset.html !== fb) { $("#feedback").dataset.html = fb; $("#feedback").innerHTML = fb; }
   if (fid) { const el = document.getElementById(fid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel) try { el.setSelectionRange(sel[0], sel[1]); } catch (_) {} } }
 }
@@ -1336,7 +1405,7 @@ function renderGate() {
     <div class="field"><span class="lab">Your user ID (the coordinator may ask for it)</span><div class="btns"><code class="mono" id="my-uid" style="word-break:break-all">${esc(app.uid)}</code><button class="btn" data-act="copy" data-src="my-uid" id="copy-uid">Copy</button></div></div>
     <div class="btns"><button class="btn" data-act="profile-open" id="pend-edit">Edit my details</button></div>
   </section>`;
-  return `<div class="empty">Connecting…</div>`;
+  return `<div class="skel" role="status" aria-label="Connecting"><span class="sk sk-h"></span><span class="sk"></span><span class="sk sk-s"></span></div>`;
 }
 function renderAuth() {
   const a = state.auth, signup = a.mode === "signup";
@@ -1354,6 +1423,50 @@ function renderAuth() {
     <p class="small">${signup ? `Already have an account? <button class="btn ghost" type="button" data-act="auth-mode" data-mode="signin" id="au-to-in">Sign in</button>` : `New here? <button class="btn ghost" type="button" data-act="auth-mode" data-mode="signup" id="au-to-up">Create an account</button>`}</p>
   </form>`;
 }
+/* ---------- icons: one line-icon set used across the app (stroke follows the text colour) ---------- */
+const ICON_PATHS = {
+  roster: '<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M7.5 13.5h3M13.5 13.5h3M7.5 17h3"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  swap: '<path d="M7 4 3 8l4 4M3 8h13a4 4 0 0 1 4 4M17 20l4-4-4-4M21 16H8a4 4 0 0 1-4-4"/>',
+  steth: '<path d="M6 3v6a5 5 0 0 0 10 0V3M6 3H4.5M16 3h1.5M11 14v2a5 5 0 0 0 10 0v-2"/><circle cx="21" cy="12" r="2"/>',
+  alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  checks: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
+  team: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.3a3.5 3.5 0 0 1 0 7.4M18.5 14a6.5 6.5 0 0 1 3 6"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  clip: '<path d="m21 11-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.3-8.3"/>',
+  video: '<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3.5v11L16 14"/>',
+  lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10.3 20a2 2 0 0 0 3.4 0"/>',
+  file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+  shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  phone: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/>',
+  megaphone: '<path d="M3 10v4a1 1 0 0 0 1 1h3l6 4V5L7 9H4a1 1 0 0 0-1 1zM17 9a4 4 0 0 1 0 6"/>',
+  layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
+};
+const HEAD_ICONS = [["On duty now", "clock"], ["Waiting for your answer", "inbox"], ["Sent and waiting", "clock"], ["Ask for a change", "swap"], ["Change log", "file"],
+  ["Extended duties", "clock"], ["Uncovered shifts", "alert"], ["Rosters not uploaded", "upload"], ["Your roster", "roster"], ["Upload from a file", "upload"], ["Upload a department rota", "upload"],
+  ["Can't upload", "phone"], ["Add my duties", "roster"], ["Add these duties", "roster"], ["Incident report", "alert"], ["Report an incident online", "file"], ["My incident reports", "inbox"], ["All incident reports", "inbox"],
+  ["Expected staff", "team"], ["Name and number changes", "user"], ["Waiting for approval", "team"], ["On the duty roster", "team"], ["Staff not on the duty roster", "team"],
+  ["Announcement banner", "megaphone"], ["Rota by WhatsApp", "phone"], ["Station cover groups", "layers"], ["Consultants", "steth"], ["Edit your profile", "user"], ["Complete your profile", "user"], ["Set up your doctor profile", "user"]];
+function decorate(root) {
+  root.querySelectorAll(".panel > h2:first-child, form.panel > h2:first-child").forEach(h => {
+    if (h.querySelector(".h-ic")) return;
+    const t = h.textContent.trim(), m = HEAD_ICONS.find(([k]) => t.startsWith(k)); if (!m) return;
+    h.insertAdjacentHTML("afterbegin", `<span class="h-ic">${ic(m[1], 18)}</span>`); h.classList.add("has-ic");
+  });
+  root.querySelectorAll(".empty:not(.loading)").forEach(e => { if (!e.querySelector(".empty-ic")) e.insertAdjacentHTML("afterbegin", `<span class="empty-ic">${ic(e.dataset.icon || "inbox", 26)}</span>`); });
+}
+const ic = (name, size = 18, cls = "") => `<svg class="ic${cls ? " " + cls : ""}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ""}</svg>`;
 /* ---------- incident reports (form EPC-RWP-QA-F-02): fill in online or download the Word form ----------
    Reports are saved in incidents/: the person who reported sees their own, coordinators see and review all. */
 const IR_INVOLVES = ["Patient", "Visitor", "Staff", "Others"];
@@ -1376,10 +1489,25 @@ const IR_JCI = ["Patient death, permanent harm, or severe temporary harm as a re
 const IR_TEXT = [["personName", "Name of affected person"], ["location", "Location of incident"], ["date", "Date of incident"], ["time", "Time of incident"], ["age", "Age"], ["mrNo", "MR No. (if applicable)"],
   ["staffName", "Staff name"], ["staffDept", "Department"], ["staffEmpId", "Employee ID"], ["details", "Details of incident"], ["treatment", "Medical treatment (if administered)"], ["injury", "Injury description (including body parts involved)"],
   ["firstAidBy", "First aid given by"], ["doctorName", "Name of doctor"], ["erBy", "Treatment in ER by"], ["reporterName", "Your name"], ["reporterDesig", "Your designation"]];
+const IR_STEPS = [["Who & where", "who was affected, where and when", "Who"], ["What happened", "staff involved and the details", "Details"], ["Treatment", "treatment and injuries", "Treatment"], ["Evidence", "photos, voice note and JCI events", "Evidence"], ["Review", "check everything and confirm", "Review"]];
+/* What's still missing on a step (the form forbids blanks: None, N/A or Unknown instead). */
+function irMissing(f, step) {
+  const miss = [], need = k => !String(f[k] || "").trim();
+  const fields = [["personName", "age", "mrNo", "location", "date", "time"], ["staffName", "staffDept", "staffEmpId", "details"], ["treatment", "injury"], [], ["reporterName", "reporterDesig"]][step] || [];
+  if (step === 0) { if (!f.involves) miss.push("Event involves"); if (f.involves === "Others" && need("involvesOther")) miss.push("Others (specify)"); }
+  for (const k of fields) if (need(k)) miss.push((IR_TEXT.find(x => x[0] === k) || [k, k])[1]);
+  if (step === 2) {
+    if (!f.firstAid) miss.push("First aid given?"); else if (f.firstAid === "Yes" && need("firstAidBy")) miss.push("First aid given by");
+    if (!f.doctorTx) miss.push("Treatment by doctor?"); else if (f.doctorTx === "Yes" && need("doctorName")) miss.push("Name of doctor");
+    if (!f.erTx) miss.push("Treatment in ER?"); else if (f.erTx === "Yes" && need("erBy")) miss.push("Treatment in ER by");
+  }
+  return miss;
+}
+const irMissText = miss => "Please fill in: " + miss.slice(0, 4).join(", ") + (miss.length > 4 ? " and " + (miss.length - 4) + " more" : "") + ". Use None, N/A or Unknown where it doesn't apply.";
 function irBlank() {
   const d = app.myDoc || {}, t = new Date(Date.now() + 5 * 3600e3);
   return { involves: "", involvesOther: "", personName: "", location: "", date: t.toISOString().slice(0, 10), time: "", age: "", mrNo: "", staffName: "", staffDept: "", staffEmpId: "", details: "", treatment: "", injury: "",
-    firstAid: "", firstAidBy: "", doctorTx: "", doctorName: "", erTx: "", erBy: "", jci: [], reporterName: d.name || "", reporterDesig: d.designation || (d.dept === "MSA" ? "MSA" : ""), confirm: false };
+    firstAid: "", firstAidBy: "", doctorTx: "", doctorName: "", erTx: "", erBy: "", jci: [], reporterName: d.name || "", reporterDesig: d.designation || (d.dept === "MSA" ? "MSA" : ""), confirm: false, step: 0 };
 }
 function irState() {
   if (!state.ir) { try { state.ir = JSON.parse(localStorage.getItem("ir-draft") || "null"); } catch (_) {} if (!state.ir || typeof state.ir !== "object") state.ir = irBlank(); }
@@ -1439,8 +1567,8 @@ async function irRecordStart() {
 function irRecordStop() { if (state.irRec && state.irRec.rec.state !== "inactive") state.irRec.rec.stop(); }
 function irEvidenceHtml(files, opts = {}) {
   return files.map(x => x.kind === "photo"
-    ? `<figure class="ir-thumb"><a href="data:${esc(x.type)};base64,${x.data}" target="_blank" rel="noopener" download="${esc((opts.ref || "evidence") + "-" + x.id + ".jpg")}"><img src="data:${esc(x.type)};base64,${x.data}" alt="Photo evidence"></a>${opts.remove ? `<button type="button" class="ir-x" data-act="ir-file-del" data-id="${esc(x.id)}" aria-label="Remove photo">✕</button>` : ""}</figure>`
-    : `<div class="ir-audio"><audio controls preload="metadata" src="data:${esc(x.type)};base64,${x.data}"></audio><span class="muted small">Voice note · ${Math.round(x.size / 1024)} KB · <a href="data:${esc(x.type)};base64,${x.data}" download="${esc((opts.ref || "voice-note") + "." + (/mp4|aac|m4a/.test(x.type) ? "m4a" : /ogg/.test(x.type) ? "ogg" : "webm"))}">download</a></span>${opts.remove ? `<button type="button" class="ir-x" data-act="ir-file-del" data-id="${esc(x.id)}" aria-label="Remove voice note">✕</button>` : ""}</div>`).join("");
+    ? `<figure class="ir-thumb"><a href="data:${esc(x.type)};base64,${x.data}" target="_blank" rel="noopener" download="${esc((opts.ref || "evidence") + "-" + x.id + ".jpg")}"><img src="data:${esc(x.type)};base64,${x.data}" alt="Photo evidence"></a>${opts.remove ? `<button type="button" class="ir-x" data-act="ir-file-del" data-id="${esc(x.id)}" aria-label="Remove photo">${ic("x", 14)}</button>` : ""}</figure>`
+    : `<div class="ir-audio"><audio controls preload="metadata" src="data:${esc(x.type)};base64,${x.data}"></audio><span class="muted small">Voice note · ${Math.round(x.size / 1024)} KB · <a href="data:${esc(x.type)};base64,${x.data}" download="${esc((opts.ref || "voice-note") + "." + (/mp4|aac|m4a/.test(x.type) ? "m4a" : /ogg/.test(x.type) ? "ogg" : "webm"))}">download</a></span>${opts.remove ? `<button type="button" class="ir-x" data-act="ir-file-del" data-id="${esc(x.id)}" aria-label="Remove voice note">${ic("x", 14)}</button>` : ""}</div>`).join("");
 }
 async function irLoadFiles(id) {
   if (state.irFileCache[id]) return;
@@ -1460,7 +1588,7 @@ function ensureIncidents() {
 }
 const irFmtDate = v => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ""); return m ? +m[3] + " " + MON_SHORT[+m[2] - 1] + " " + m[1] : (v || ""); };
 function renderIncident() {
-  const f = irState(), dis = app.busy ? "disabled" : "", list = state.incidents;
+  const f = irState(), dis = app.busy ? "disabled" : "", list = state.incidents, step = Math.min(IR_STEPS.length - 1, Math.max(0, f.step || 0));
   const quick = k => `<span class="ir-quick">${["None", "Not applicable", "Unknown"].map(v => `<button type="button" class="chip-btn" data-act="ir-fill" data-k="${k}" data-v="${v}">${v === "Not applicable" ? "N/A" : v}</button>`).join("")}</span>`;
   const txt = (k, label, opt = {}) => `<div class="field${opt.wide ? " ir-wide" : ""}"><label for="ir-${k}">${label}</label>${opt.area ? `<textarea class="plain" id="ir-${k}" data-bind="ir.${k}" rows="${opt.rows || 3}" maxlength="${opt.max || 4000}">${esc(f[k])}</textarea>`
     : `<input type="${opt.type || "text"}" id="ir-${k}" data-bind="ir.${k}" value="${esc(f[k])}" maxlength="${opt.max || 120}"${opt.ph ? ` placeholder="${esc(opt.ph)}"` : ""}>`}${opt.noQuick ? "" : quick(k)}</div>`;
@@ -1470,42 +1598,46 @@ function renderIncident() {
   return `<div class="grid2">
   <section class="panel" style="grid-column:1/-1"><h2>Incident report</h2>
     <p class="muted">Record every incident or occurrence, including near misses, involving patients, visitors, attendants or staff. Report <b>within 24 hours</b>. Fill it in online below (no paper needed), or download the form to print.</p>
-    <div class="btns"><a class="btn" href="assets/forms/QA-2-Incident-Report-Form.docx" download="QA-2 Incident Report Form.docx" id="ir-download">⬇ Download the blank form (Word)</a></div>
+    <div class="btns"><a class="btn" href="assets/forms/QA-2-Incident-Report-Form.docx" download="QA-2 Incident Report Form.docx" id="ir-download">${ic("download")} Download the blank form (Word)</a></div>
     <details><summary>Instructions</summary><ol class="small">
       <li>Complete this form to record all incidents/occurrences (including near misses) of patients, visitors, attendants and staff.</li><li>Complete a separate form for every person affected.</li><li>Record fact only, NOT opinion.</li><li>Report WITHIN 24 HOURS.</li>
       <li>Completing this form does NOT constitute an admission of liability of any kind by any person.</li><li>After completion, submit this form to your Supervisor/Head. Supervisor/Head MUST submit it to Quality Assurance. (Online reports go straight to the MSA office.)</li>
       <li>DO NOT leave blank spaces; mention NONE, NOT APPLICABLE or UNKNOWN where required (use the small buttons under each box).</li></ol></details>
   </section>
   <form class="panel" style="grid-column:1/-1" id="ir-form" novalidate><h2>Report an incident online</h2>
-    <p class="muted small">Saved on this device as you type, so you won't lose it. Only you and the coordinators can see what you submit.</p>
-    <div class="field"><span class="lab">Event involves</span><div class="ir-radios">${IR_INVOLVES.map(v => `<label class="check"><input type="radio" name="ir-involves" data-bind="ir.involves" value="${v}" ${f.involves === v ? "checked" : ""}> ${v}</label>`).join("")}</div>
+    <p class="muted small">Saved on this device as you go, so you won't lose it. Only you and the coordinators can see what you submit.</p>
+    <ol class="ir-steps" aria-label="Steps">${IR_STEPS.map((st, i) => `<li class="${i < step ? "done" : i === step ? "on" : ""}"${i === step ? ` aria-current="step"` : ""}><button type="button" data-act="ir-step" data-step="${i}" ${i > step ? "disabled" : ""}><span class="n">${i < step ? ic("check", 14) : i + 1}</span><span class="l">${st[0]}</span><span class="l ls">${st[2]}</span></button></li>`).join("")}</ol>
+    <div class="ir-bar" aria-hidden="true"><i style="width:${Math.round(step / (IR_STEPS.length - 1) * 100)}%"></i></div>
+    <h3 class="ir-step-title">Step ${step + 1} of ${IR_STEPS.length}: ${IR_STEPS[step][1]}</h3>
+    ${step === 0 ? `<div class="field"><span class="lab">Event involves</span><div class="ir-radios">${IR_INVOLVES.map(v => `<label class="check"><input type="radio" name="ir-involves" data-bind="ir.involves" value="${v}" ${f.involves === v ? "checked" : ""}> ${v}</label>`).join("")}</div>
       ${f.involves === "Others" ? `<input type="text" id="ir-involvesOther" data-bind="ir.involvesOther" value="${esc(f.involvesOther)}" placeholder="Specify" maxlength="120">` : ""}</div>
-    <div class="ir-grid">${txt("personName", "Name of affected person")}${txt("location", "Location of incident")}${txt("date", "Date of incident", { type: "date", noQuick: true })}${txt("time", "Time of incident", { type: "time", noQuick: true })}${txt("age", "Age", { max: 20 })}${txt("mrNo", "MR No. (if applicable)", { max: 40 })}</div>
-    <div class="ir-grid">${txt("staffName", "Staff name")}${txt("staffDept", "Department")}${txt("staffEmpId", "Employee ID", { max: 40 })}</div>
-    ${txt("details", "Details of incident (facts only)", { area: true, rows: 6, wide: true, max: 8000 })}
-    ${txt("treatment", "Medical treatment (if administered)", { area: true, rows: 2, wide: true })}
-    ${txt("injury", "Injury description (including body parts involved)", { area: true, rows: 2, wide: true })}
-    <div class="ir-grid">${yn("firstAid", "I. First aid given?")}${f.firstAid === "Yes" ? txt("firstAidBy", "If yes, by whom") : ""}${yn("doctorTx", "II. Treatment by doctor?")}${f.doctorTx === "Yes" ? txt("doctorName", "Name of doctor") : ""}${yn("erTx", "III. Treatment in ER?")}${f.erTx === "Yes" ? txt("erBy", "By whom") : ""}</div>
-    <details ${f.jci.length ? "open" : ""}><summary>JCI reportable event? ${f.jci.length ? `<b>(${f.jci.length} ticked)</b>` : "(tick any that apply)"}</summary><div class="ir-jci">${IR_JCI.map((j, i) => `<label class="check"><input type="checkbox" data-ir-jci="${i}" ${f.jci.includes(i) ? "checked" : ""}> ${esc(j)}</label>`).join("")}</div></details>
-    <div class="ir-evidence"><h3>Evidence <span class="muted small">(optional)</span></h3>
-      <p class="muted small">Up to ${IR_MAX_PHOTOS} photos and one voice note (up to 1 minute). Photos are made smaller on your phone before saving. For video, use “Send video evidence on WhatsApp” after you submit.</p>
-      <div class="ir-files">${irEvidenceHtml(irFiles(), { remove: true })}</div>
-      <div class="btns">
-        <label class="btn" for="ir-photo-in" ${irFiles().filter(x => x.kind === "photo").length >= IR_MAX_PHOTOS ? `aria-disabled="true" style="opacity:.5;pointer-events:none"` : ""}>📷 Add photos</label><input type="file" id="ir-photo-in" accept="image/*" multiple hidden>
-        ${state.irRec ? `<button type="button" class="btn danger" data-act="ir-rec-stop" id="ir-rec-stop">■ Stop recording <span id="ir-rec-time">0:00</span></button>`
-          : `<button type="button" class="btn" data-act="ir-rec-start" id="ir-rec-start">🎙 ${irFiles().some(x => x.kind === "audio") ? "Re-record voice note" : "Record a voice note"}</button>`}
-        <label class="btn ghost" for="ir-audio-in">or choose an audio file</label><input type="file" id="ir-audio-in" accept="audio/*" hidden>
-      </div>
-    </div>
-    <div class="ir-grid">${txt("reporterName", "Your name (employee)", { noQuick: true })}${txt("reporterDesig", "Your designation", { noQuick: true })}</div>
-    <label class="check"><input type="checkbox" data-bind="ir.confirm" ${f.confirm ? "checked" : ""}> I confirm this report records facts only and is complete to the best of my knowledge. (This takes the place of a signature.)</label>
-    <div class="btns"><button class="btn primary" type="button" data-act="ir-submit" id="ir-submit" ${dis}>Submit report</button><button class="btn ghost" type="button" data-act="ir-clear" id="ir-clear">Clear the form</button></div>
+      <div class="ir-grid">${txt("personName", "Name of affected person")}${txt("age", "Age", { max: 20 })}${txt("mrNo", "MR No. (if applicable)", { max: 40 })}${txt("location", "Location of incident")}${txt("date", "Date of incident", { type: "date", noQuick: true })}${txt("time", "Time of incident", { type: "time", noQuick: true })}</div>`
+    : step === 1 ? `<p class="muted small">Staff involved in the incident (if any).</p><div class="ir-grid">${txt("staffName", "Staff name")}${txt("staffDept", "Department")}${txt("staffEmpId", "Employee ID", { max: 40 })}</div>
+      ${txt("details", "Details of incident (facts only, not opinion)", { area: true, rows: 7, wide: true, max: 8000 })}`
+    : step === 2 ? `${txt("treatment", "Medical treatment (if administered)", { area: true, rows: 2, wide: true })}${txt("injury", "Injury description (including body parts involved)", { area: true, rows: 2, wide: true })}
+      <div class="ir-grid">${yn("firstAid", "I. First aid given?")}${f.firstAid === "Yes" ? txt("firstAidBy", "If yes, by whom") : ""}${yn("doctorTx", "II. Treatment by doctor?")}${f.doctorTx === "Yes" ? txt("doctorName", "Name of doctor") : ""}${yn("erTx", "III. Treatment in ER?")}${f.erTx === "Yes" ? txt("erBy", "By whom") : ""}</div>`
+    : step === 3 ? `<div class="ir-evidence"><h3>Evidence <span class="muted small">(optional)</span></h3>
+        <p class="muted small">Up to ${IR_MAX_PHOTOS} photos and one voice note (up to 1 minute). Photos are made smaller on your phone before saving. For video, use “Send video evidence on WhatsApp” after you submit.</p>
+        <div class="ir-files">${irEvidenceHtml(irFiles(), { remove: true })}</div>
+        <div class="btns">
+          <label class="btn" for="ir-photo-in" ${irFiles().filter(x => x.kind === "photo").length >= IR_MAX_PHOTOS ? `aria-disabled="true" style="opacity:.5;pointer-events:none"` : ""}>${ic("camera")} Add photos</label><input type="file" id="ir-photo-in" accept="image/*" multiple hidden>
+          ${state.irRec ? `<button type="button" class="btn danger" data-act="ir-rec-stop" id="ir-rec-stop">${ic("stop")} Stop recording <span id="ir-rec-time">0:00</span></button>`
+            : `<button type="button" class="btn" data-act="ir-rec-start" id="ir-rec-start">${ic("mic")} ${irFiles().some(x => x.kind === "audio") ? "Re-record voice note" : "Record a voice note"}</button>`}
+          <label class="btn ghost" for="ir-audio-in">or choose an audio file</label><input type="file" id="ir-audio-in" accept="audio/*" hidden>
+        </div></div>
+      <div class="field"><span class="lab">JCI reportable event? <span class="muted small">Tick any that apply (staff may report other events too).</span></span><div class="ir-jci">${IR_JCI.map((j, i) => `<label class="check"><input type="checkbox" data-ir-jci="${i}" ${f.jci.includes(i) ? "checked" : ""}> ${esc(j)}</label>`).join("")}</div></div>`
+    : `<div class="ir-review"><dl class="ir-dl">${irRows({ ...f, jci: f.jci.map(i => IR_JCI[i]), createdAt: 0, attachments: irFiles() }).filter(r => !/^(Reported by|Submitted)$/.test(r[0])).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v || "")}</dd>`).join("")}<dt>Evidence</dt><dd>${esc(irEvidenceCount({ attachments: irFiles() }))}</dd></dl></div>
+      <div class="ir-grid">${txt("reporterName", "Your name (employee)", { noQuick: true })}${txt("reporterDesig", "Your designation", { noQuick: true })}</div>
+      <label class="check"><input type="checkbox" data-bind="ir.confirm" ${f.confirm ? "checked" : ""}> I confirm this report records facts only and is complete to the best of my knowledge. (This takes the place of a signature.)</label>`}
+    <div class="btns ir-nav">${step > 0 ? `<button class="btn" type="button" data-act="ir-back" id="ir-back">Back</button>` : ""}
+      ${step < IR_STEPS.length - 1 ? `<button class="btn primary" type="button" data-act="ir-next" id="ir-next">Next: ${IR_STEPS[step + 1][0]}</button>` : `<button class="btn primary" type="button" data-act="ir-submit" id="ir-submit" ${dis}>Submit report</button>`}
+      <button class="btn ghost" type="button" data-act="ir-clear" id="ir-clear">Clear the form</button></div>
   </form>
   <section class="panel" style="grid-column:1/-1" id="ir-list"><h2>${app.isAdmin ? "All incident reports" : "My incident reports"}</h2>
     ${app.isAdmin ? `<div class="btns"><label class="check">Show <select data-bind="irFilter">${[["open", "Open (not closed)"], ["new", "New"], ["review", "Under review"], ["qa", "Sent to QA"], ["closed", "Closed"], ["all", "All"]].map(([v, l]) => `<option value="${v}" ${state.irFilter === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>${list && list.length ? `<button class="btn" data-act="ir-excel" id="ir-excel">Download all as Excel</button>` : ""}</div>` : ""}
-    ${list === null ? `<p class="muted">Loading…</p>` : !shown.length ? `<p class="muted">${app.isAdmin ? "No reports here." : "You haven't submitted any reports."}</p>`
+    ${list === null ? `<div class="skel" role="status" aria-label="Loading reports"><span class="sk"></span><span class="sk sk-s"></span></div>` : !shown.length ? `<div class="empty sm" data-icon="shield"><p>${app.isAdmin ? "No reports here." : "You haven't submitted any reports. Reports you send appear here with their status."}</p></div>`
       : `<div class="list">${shown.map(x => `<button class="item ir-item" data-act="ir-open" data-id="${esc(x.id)}"><div class="head"><b>${esc(x.ref || x.id)}</b><span class="pill ${x.status === "closed" ? "done" : x.status === "new" ? "warn" : ""}">${esc(IR_STATUS[x.status] || x.status)}</span></div>
-          <span class="small">${esc(irFmtDate(x.date))} ${esc(x.time || "")} · ${esc(x.involves === "Others" ? x.involvesOther || "Others" : x.involves)} · ${esc(x.personName)} · ${esc(x.location)}${(x.attachments || []).length ? " · 📎 " + esc(irEvidenceCount(x)) : ""}</span>${app.isAdmin ? `<span class="muted small">Reported by ${esc(x.reporterName)} (${esc(x.reporterDesig || "")})</span>` : ""}</button>`).join("")}</div>`}
+          <span class="small">${esc(irFmtDate(x.date))} ${esc(x.time || "")} · ${esc(x.involves === "Others" ? x.involvesOther || "Others" : x.involves)} · ${esc(x.personName)} · ${esc(x.location)}${(x.attachments || []).length ? " · " + ic("clip", 14) + " " + esc(irEvidenceCount(x)) : ""}</span>${app.isAdmin ? `<span class="muted small">Reported by ${esc(x.reporterName)} (${esc(x.reporterDesig || "")})</span>` : ""}</button>`).join("")}</div>`}
   </section>
   ${view ? renderIncidentView(view) : ""}
   </div>`;
@@ -1524,7 +1656,7 @@ function renderIncidentView(x) {
     <dl class="ir-dl">${irRows(x).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v || "")}</dd>`).join("")}</dl>
     ${(x.attachments || []).length ? (() => { const c = state.irFileCache[x.id]; if (!c) setTimeout(() => irLoadFiles(x.id), 0);
       return `<div class="ir-evidence"><h3>Evidence</h3>${Array.isArray(c) ? `<div class="ir-files">${irEvidenceHtml(c, { ref: x.ref })}</div>` : c === "error" ? `<p class="note bad">Couldn't load the attachments. Check your connection and open the report again.</p>` : `<p class="muted small">Loading ${x.attachments.length} attachment${x.attachments.length === 1 ? "" : "s"}…</p>`}</div>`; })() : ""}
-    ${!app.isAdmin && x.reportedBy === app.uid && irVideoLink(x) ? `<div class="btns"><a class="btn wa" href="${esc(irVideoLink(x))}" target="_blank" rel="noopener" id="ir-video">🎥 Send video evidence on WhatsApp</a></div><p class="muted small">Opens a chat with the MSA office with the reference ${esc(x.ref)} written in; attach the video there.</p>` : ""}
+    ${!app.isAdmin && x.reportedBy === app.uid && irVideoLink(x) ? `<div class="btns"><a class="btn wa" href="${esc(irVideoLink(x))}" target="_blank" rel="noopener" id="ir-video">${ic("video")} Send video evidence on WhatsApp</a></div><p class="muted small">Opens a chat with the MSA office with the reference ${esc(x.ref)} written in; attach the video there.</p>` : ""}
     ${app.isAdmin ? `<div class="field"><label for="ir-comments">Comments by unit / department head</label><textarea class="plain" id="ir-comments" data-bind="irNote.comments" rows="3" maxlength="4000">${esc(note.comments)}</textarea></div>
       <div class="field"><label for="ir-status">Status</label><select id="ir-status" data-bind="irNote.status">${Object.entries(IR_STATUS).map(([v, l]) => `<option value="${v}" ${note.status === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>`
       : x.headComments ? `<p class="small"><b>Comments by unit / department head:</b> ${esc(x.headComments)}</p>` : ""}
@@ -1576,19 +1708,19 @@ function renderStaff() {
   const groups = new Map(); [...shown].sort((a, b) => (ORDER.indexOf(a.e.designation) + 1 || 9) - (ORDER.indexOf(b.e.designation) + 1 || 9)).forEach(x => { const k = plural[x.e.designation] || x.e.designation || "Other"; (groups.get(k) || groups.set(k, []).get(k)).push(x); });
   const docOpts = cur => `<option value="">Link to an account…</option>${Object.values(app.allDoctors || {}).sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(d => `<option value="${esc(d.uid)}" ${cur === d.uid ? "selected" : ""}>${esc(d.name || "No name")} · ${esc(d.dept || "")}</option>`).join("")}`;
   const row = x => { const e = x.e, i = state.staff.indexOf(e);
-    const status = x.state === "ok" ? `<span class="pill done">✓ ${esc(x.m[0].name)}${x.m[0].approved === true ? "" : " · waiting for your approval"}</span>`
+    const status = x.state === "ok" ? `<span class="pill done">${ic("check", 13)} ${esc(x.m[0].name)}${x.m[0].approved === true ? "" : " · waiting for your approval"}</span>`
       : x.state === "maybe" ? `<span class="pill warn">${x.m.length} possible: ${x.m.map(d => esc(d.name)).join(", ")}</span>` : `<span class="pill declined">Not registered</span>`;
     return `<div class="staff-row"><div><b>${esc(e.name)}</b> <span class="muted small">${esc([e.specialty || (e.dept ? e.dept : ""), e.empId ? "ID " + e.empId : ""].filter(Boolean).join(" · "))}</span>${e.remarks ? `<div class="muted small">${esc(e.remarks)}</div>` : ""}<div>${status}</div></div>
       <div class="btns">${x.state !== "ok" ? `<a class="btn wa" href="https://wa.me/${waNumber(e.phone) || ""}?text=${encodeURIComponent(STAFF_INVITE())}" target="_blank" rel="noopener">Invite</a>` : ""}
         <select class="staff-link" data-staff-link="${i}" aria-label="Link ${esc(e.name)} to an account">${docOpts(e.uid)}</select>
-        <button class="btn ghost" data-act="staff-del" data-i="${i}" ${dis} aria-label="Remove ${esc(e.name)} from the list">✕</button></div></div>`; };
+        <button class="btn ghost" data-act="staff-del" data-i="${i}" ${dis} aria-label="Remove ${esc(e.name)} from the list">${ic("x", 16)}</button></div></div>`; };
   return `<section class="panel" style="grid-column:1/-1" id="staff-panel"><h2>Expected staff · ${ok} of ${st.length} registered</h2>
     ${st.length ? `<div class="staff-sum">${by("designation").map(([k, v]) => `<span class="pill">${esc(k)}: <b>${v[0]}/${v[1]}</b></span>`).join("")}</div>
       <div class="staff-sum">${by("specialty").map(([k, v]) => `<span class="pill">${esc(k)}: <b>${v[0]}/${v[1]}</b></span>`).join("")}</div>
       <div class="btns"><label class="check"><input type="checkbox" data-act="staff-show" ${state.staffShow === "all" ? "checked" : ""}> Show registered too</label>
         <button class="btn wa" data-act="staff-copy" id="staff-copy">Copy reminder for the WhatsApp group</button>
         <a class="btn" href="https://wa.me/?text=${encodeURIComponent(STAFF_INVITE())}" target="_blank" rel="noopener">Send invite message</a></div>
-      ${shown.length ? [...groups].map(([g, xs]) => `<h3 class="staff-h">${esc(g)} <span class="muted small">(${xs.length})</span></h3><div class="staff-list">${xs.map(row).join("")}</div>`).join("") : `<p class="note ok">Everyone on the list has registered. 🎉</p>`}`
+      ${shown.length ? [...groups].map(([g, xs]) => `<h3 class="staff-h">${esc(g)} <span class="muted small">(${xs.length})</span></h3><div class="staff-list">${xs.map(row).join("")}</div>`).join("") : `<p class="note ok">${ic("sparkle", 16)} Everyone on the list has registered.</p>`}`
     : `<p class="muted">Add the doctors who should be on the app. The list then shows who hasn't registered yet, with an invite button for each.</p>
       <div class="btns"><label class="btn primary" for="staff-file">Upload the doctors list (Word .docx)</label></div>`}
     <input type="file" id="staff-file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
@@ -1681,7 +1813,7 @@ function renderProfileForm() {
     <h2>${must ? "Complete your profile" : d ? "Edit your profile" : "Set up your doctor profile"}</h2>
     ${must ? `<div class="note warn">Your name, email and WhatsApp number are now required. Please ${!nameValid(d.name) ? "add your full name" : ""}${!nameValid(d.name) && !phoneValid(d.phone) ? " and " : ""}${!phoneValid(d.phone) ? "add a valid WhatsApp number" : ""} to keep using the roster.</div>` : `<p class="muted small">Colleagues see this name on the roster and when you ask them to swap. All fields are required.</p>`}
     <div class="row">
-      ${locked ? `<div class="field"><span class="lab">Name</span><div class="locked-val"><b>${esc(d.name)}</b><span class="pill">🔒 Coordinator approves changes</span></div></div>
+      ${locked ? `<div class="field"><span class="lab">Name</span><div class="locked-val"><b>${esc(d.name)}</b><span class="pill">${ic("lock", 13)} Coordinator approves changes</span></div></div>
         <div class="field"><span class="lab">WhatsApp number</span><div class="locked-val"><b>${esc(d.phone)}</b></div></div>`
         : `${nameIn("pf-name", "Full name as it should appear", p.name, "profile.name")}${phoneIn("pf-phone", "WhatsApp number", p.phone, "profile.phone")}`}
       <div class="field"><span class="lab">Email</span><div class="locked-val"><b>${esc(email || "No email on this account")}</b><span class="muted small">From your sign-in</span></div></div>
@@ -1697,16 +1829,24 @@ function renderProfileForm() {
 function renderTabs() {
   const a = app.loading ? null : audit(state.month);
   const issues = a ? a.stretches.length + a.gaps.length : 0;
-  const pend = pendingForMe().length;
-  const t = [["board", "Hospital roster", ""], ["mine", me() || !app.canEdit ? "My roster" : "Edit rosters", unsavedCount() ? `<span class="count soft" title="Unsaved changes">•</span>` : ""],
-    ["changes", "Swaps & changes", pend ? `<span class="count">${pend}</span>` : ""], ["consultants", "Consultants", ""]];
-  if (!app.sample) { const nNew = app.isAdmin && state.incidents ? state.incidents.filter(x => x.status === "new").length : 0; t.push(["incident", "Incident report", nNew ? `<span class="count">${nNew}</span>` : ""]); }
-  if (app.canEdit || app.sample) t.push(["checks", "Checks", issues ? `<span class="count">${issues > 99 ? "99+" : issues}</span>` : ""]);
-  if (app.isAdmin && !app.sample) { const pc = pendingDoctors().length; t.push(["team", "Team", pc ? `<span class="count">${pc}</span>` : ""]); }
-  return t.map(([k, l, extra]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${state.tab === k}" data-act="tab" data-tab="${k}">${l}${extra}</button>`).join("");
+  const pend = pendingForMe().length, badge = (n, soft) => n ? `<span class="count${soft ? " soft" : ""}">${n > 99 ? "99+" : n}</span>` : "";
+  const t = [["board", "Hospital roster", "Roster", "roster", ""], ["mine", me() || !app.canEdit ? "My roster" : "Edit rosters", me() || !app.canEdit ? "Mine" : "Edit", "user", unsavedCount() ? `<span class="count soft" title="Unsaved changes">•</span>` : ""],
+    ["changes", "Swaps & changes", "Swaps", "swap", badge(pend)], ["consultants", "Consultants", "OPD", "steth", ""]];
+  if (!app.sample) { const nNew = app.isAdmin && state.incidents ? state.incidents.filter(x => x.status === "new").length : 0; t.push(["incident", "Incident report", "Incident", "alert", badge(nNew)]); }
+  if (app.canEdit || app.sample) t.push(["checks", "Checks", "Checks", "checks", badge(issues)]);
+  if (app.isAdmin && !app.sample) t.push(["team", "Team", "Team", "team", badge(pendingDoctors().length)]);
+  return t.map(([k, l, short, icon, extra]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${state.tab === k}" aria-label="${esc(l)}" data-act="tab" data-tab="${k}"><span class="tab-ic">${ic(icon, 20)}${extra}</span><span class="tl">${esc(l)}</span><span class="ts" aria-hidden="true">${esc(short)}</span></button>`).join("");
 }
 function unsavedCount() { return Object.keys(state.drafts).length; }
 
+/* Initials in a colour picked from the name, so the same doctor always has the same colour. */
+function avatar(id) {
+  const words = String(docName(id) || "?").replace(/^dr\.?\s+/i, "").split(/\s+/).filter(Boolean);
+  const ini = ((words[0] || "?")[0] + (words.length > 1 ? words[words.length - 1][0] : "")).toUpperCase();
+  let x = 2166136261; for (const c of String(id)) x = Math.imul(x ^ c.charCodeAt(0), 16777619) >>> 0; // FNV-1a, then spread round the colour wheel
+  const h = Math.round((x % 1000) * 137.508) % 360;
+  return `<span class="av" style="--h:${h}" aria-hidden="true">${esc(ini)}</span>`;
+}
 function renderBoard() {
   const month = state.month, docs = monthDocs(month), a = audit(month);
   const doctors = sortedDoctors();
@@ -1757,8 +1897,9 @@ function renderBoard() {
         const home = deptOfId(id), there = dutyDept(id, date, s.code);
         const dept = (ds ? ` <small>${esc(ds)}</small>` : "") + (home && there !== home ? ` <small class="xd" title="Covering from ${esc(home)} after a swap">↔ ${esc(home)}</small>` : "");
         const title = esc(docName(id) + (desigOf(id) ? " (" + desigOf(id) + ")" : "") + " · " + fmtDuty({ date, shift: s.code }) + (fst !== undefined ? " · extended duty over " + MAX_STRETCH + " h: " + (extLabel[fst] || "not yet approved") : ""));
-        return mine && canAct() ? `<button class="chip c-${s.code} mine${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" data-act="pick-duty" data-date="${date}" data-shift="${s.code}" title="${title}">${esc(docName(id))}${dept}</button>`
-          : `<span class="chip c-${s.code}${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" title="${title}">${esc(docName(id))}${dept}</span>`;
+        const av = avatar(id);
+        return mine && canAct() ? `<button class="chip c-${s.code} mine${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" data-act="pick-duty" data-date="${date}" data-shift="${s.code}" title="${title}">${av}<span class="cn">${esc(docName(id))}</span>${dept}</button>`
+          : `<span class="chip c-${s.code}${fl ? " flag" : ""}${fok ? " flag-ok" : ""}" title="${title}">${av}<span class="cn">${esc(docName(id))}</span>${dept}</span>`;
       };
       // In the master rota, names are grouped under their department so the list stays readable.
       let people = "";
@@ -1767,7 +1908,7 @@ function renderBoard() {
         people = Object.keys(groups).sort((a, b) => DEPARTMENTS.indexOf(a) - DEPARTMENTS.indexOf(b)).map(g => `<div class="dgrp"><span class="dg">${esc(g)}</span>${groups[g].map(chip).join("")}</div>`).join("");
       } else people = on.map(chip).join("");
       const cby = gap && deptSel !== "all" ? coveredBy({ date, shift: s.code, dept: deptSel }) : null;
-      html += `<div class="bc s-${s.code}${we}${gap && !cby ? " gap" : ""}${cby ? " covered" : ""}" role="cell" data-label="${s.name} · ${s.time}">${cby ? `<span class="covtag">Covered by ${esc(docName(cby))} (${esc(dutyDept(cby, date, s.code))})</span>` : gap ? `<span class="gaptag">Uncovered</span>` : ""}${people || (gap ? "" : `<span class="none" aria-label="No one">–</span>`)}</div>`;
+      html += `<div class="bc s-${s.code}${we}${date === todayKey ? " today" : ""}${gap && !cby ? " gap" : ""}${cby ? " covered" : ""}" role="cell" data-label="${s.name} · ${s.time}">${cby ? `<span class="covtag">Covered by ${esc(docName(cby))} (${esc(dutyDept(cby, date, s.code))})</span>` : gap ? `<span class="gaptag">Uncovered</span>` : ""}${people || (gap ? "" : `<span class="none" aria-label="No one">–</span>`)}</div>`;
     }
     html += `</div>`;
   }
@@ -2114,17 +2255,17 @@ const actions = {
     const text = "Assalam o Alaikum. These doctors haven't registered on the Eastridge duty roster app yet:\n\n" + [...groups].map(([g, n]) => "*" + g + "*: " + n.join(", ")).join("\n") + "\n\nPlease register today: " + location.origin + location.pathname + "\n(Create account → add your full name, WhatsApp number, department and designation.)";
     try { await navigator.clipboard.writeText(text); toast("Copied. Paste it in the WhatsApp group."); } catch (_) { prompt("Copy this message:", text); }
   },
+  "ir-next"() { const f = irState(), st = f.step || 0, miss = irMissing(f, st); if (miss.length) { toast(irMissText(miss)); return; } f.step = st + 1; irSaveDraft(); render(); $("#ir-form").scrollIntoView({ behavior: "smooth", block: "start" }); },
+  "ir-back"() { const f = irState(); f.step = Math.max(0, (f.step || 0) - 1); irSaveDraft(); render(); $("#ir-form").scrollIntoView({ behavior: "smooth", block: "start" }); },
+  "ir-step"(b) { const f = irState(), to = +b.dataset.step; if (to <= (f.step || 0)) { f.step = to; irSaveDraft(); render(); } },
   "ir-fill"(b) { const f = irState(); f[b.dataset.k] = b.dataset.v; irSaveDraft(); render(); },
   "ir-clear"() { if (!confirm("Clear everything you've typed in this form?")) return; state.ir = irBlank(); state.irFiles = []; irSaveDraft(); irSaveFiles(); render(); },
   "ir-file-del"(b) { state.irFiles = irFiles().filter(x => x.id !== b.dataset.id); irSaveFiles(); render(); },
   "ir-rec-start"() { irRecordStart(); },
   "ir-rec-stop"() { irRecordStop(); },
   async "ir-submit"() {
-    const f = irState(), miss = [];
-    if (!f.involves) miss.push("Event involves"); if (f.involves === "Others" && !String(f.involvesOther).trim()) miss.push("Others (specify)");
-    for (const [k, label] of IR_TEXT) { if ((k === "firstAidBy" && f.firstAid !== "Yes") || (k === "doctorName" && f.doctorTx !== "Yes") || (k === "erBy" && f.erTx !== "Yes")) continue; if (!String(f[k] || "").trim()) miss.push(label); }
-    if (!f.firstAid) miss.push("First aid given?"); if (!f.doctorTx) miss.push("Treatment by doctor?"); if (!f.erTx) miss.push("Treatment in ER?");
-    if (miss.length) { toast("Please fill in: " + miss.slice(0, 4).join(", ") + (miss.length > 4 ? " and " + (miss.length - 4) + " more" : "") + ". Use None, N/A or Unknown where it doesn't apply."); return; }
+    const f = irState();
+    for (let st = 0; st < IR_STEPS.length; st++) { const miss = irMissing(f, st); if (miss.length) { f.step = st; irSaveDraft(); render(); toast(irMissText(miss)); return; } }
     if (!f.confirm) { toast("Tick the confirmation box at the bottom to submit."); return; }
     const t = new Date(Date.now() + 5 * 3600e3), ref = "IR-" + t.toISOString().slice(0, 10).replace(/-/g, "") + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
     const doc = { ref, status: "new", reportedBy: app.uid, reporterDept: (app.myDoc && app.myDoc.dept) || "", createdAt: Date.now() };
@@ -2568,7 +2709,8 @@ let wxLabel = ""; // e.g. "24° Rain", shown after the date on the clock once th
     if (dl) { // glass pill: the current shift fills up as it goes, and shows the time left
       const len = SHIFT[code].hours * 60, leftTxt = (left >= 60 ? Math.floor(left / 60) + "h " : "") + (left % 60) + "m";
       dl.dataset.shift = code; dl.style.setProperty("--p", Math.min(100, Math.max(0, (len - left) / len * 100)).toFixed(1) + "%");
-      dl.querySelectorAll(".dl-seg").forEach(el => { el.querySelector("b").textContent = SHIFT[el.dataset.s].name + (el.dataset.s === code ? " · " + leftTxt : ""); });
+      const HRS = { M: "08–14", E: "14–20", N: "20–08" };
+      dl.querySelectorAll(".dl-seg").forEach(el => { el.querySelector("b").innerHTML = SHIFT[el.dataset.s].name + (el.dataset.s === code ? " · " + leftTxt + "<span class=\"dl-hrs\"> left</span>" : "<span class=\"dl-hrs\"> " + HRS[el.dataset.s] + "</span>"); });
     }
   }
   // Approximate sunrise and sunset in Pakistan (Islamabad) for each month, in minutes after midnight.
