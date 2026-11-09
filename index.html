@@ -2845,7 +2845,19 @@ async function exportMonth() {
   XLSX.writeFile(wb, "Eastridge-Duty-Roster-" + month + ".xlsx");
 }
 
-let wxLabel = ""; // e.g. "24° Rain", shown after the date on the clock once the weather has loaded
+let wxLabel = "";
+/* Iqbal Day on phones: keep the crescent and star centred in the gap between the logo and the clock. */
+function placeMoon() {
+  const moon = document.querySelector(".iq-moon"); if (!moon || !document.documentElement.classList.contains("iqbal")) return;
+  const mh = document.getElementById("masthead"); if (!mh || mh.classList.contains("compact") || innerWidth > 640) { moon.style.left = moon.style.top = moon.style.display = ""; return; }
+  const box = mh.getBoundingClientRect(), logo = mh.querySelector(".logo-plate").getBoundingClientRect(), clock = mh.querySelector(".clock").getBoundingClientRect();
+  const gap = clock.left - logo.right, size = Math.min(40, gap - 16);
+  if (size < 26) { moon.style.display = "none"; return; }
+  moon.style.display = ""; moon.style.width = moon.style.height = size + "px";
+  moon.style.left = (logo.right + (gap - size) / 2 - box.left) + "px";
+  moon.style.top = ((logo.top + logo.bottom) / 2 - size / 2 - box.top) + "px";
+}
+addEventListener("resize", placeMoon); // e.g. "24° Rain", shown after the date on the clock once the weather has loaded
 /* ---------- live clock: Pakistan time, worked out on the device every second (no database reads) ---------- */
 (function clock() {
   const ticks = document.querySelector("#clock .ticks");
@@ -2863,6 +2875,7 @@ let wxLabel = ""; // e.g. "24° Rain", shown after the date on the clock once th
     const left = ((endH * 60 - (h * 60 + m)) + 1440) % 1440 || 1440;
     document.getElementById("ck-date").textContent = DOW[t.getUTCDay()] + " " + t.getUTCDate() + " " + MON_SHORT[t.getUTCMonth()] + (wxLabel ? " · " + wxLabel : "");
     if (sec === 0 || !skyDone) sky(t, h * 60 + m);
+    placeMoon();
     document.getElementById("ck-sub").textContent = SHIFT[code].name + " shift · " + (left >= 60 ? Math.floor(left / 60) + "h " : "") + (left % 60) + "m left";
     document.getElementById("clock").dataset.shift = code;
     // Day timeline under the photo: Morning 08–14, Evening 14–20, Night 20–08, with a marker at now.
