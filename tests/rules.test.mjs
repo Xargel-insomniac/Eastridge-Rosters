@@ -111,6 +111,8 @@ await t("doctor applies for leave to their HOD", as("amy").doc("leaves/l1").set(
 await t("leave can't be sent to someone who isn't that HOD", as("amy").doc("leaves/l2").set(LV("amy", { hodUid: "carl" })), false);
 await t("leave can't be created already approved", as("amy").doc("leaves/l3").set(LV("amy", { status: "approved" })), false);
 await t("can't apply for leave as someone else", as("carl").doc("leaves/l4").set(LV("amy")), false);
+await t("doctor applies for annual leave", as("amy").doc("leaves/l7").set(LV("amy", { type: "annual", from: "2027-02-01", to: "2027-02-03" })), true);
+await t("an unknown leave type is refused", as("amy").doc("leaves/l8").set(LV("amy", { type: "study", from: "2027-03-01", to: "2027-03-01" })), false);
 await t("leave to the MSA office (no HOD) is allowed", as("carl").doc("leaves/l5").set(LV("carl", { hodUid: "" })), true);
 await t("HOD reads the leave sent to them", as("ben").doc("leaves/l1").get(), true);
 await t("HOD lists their department's leave", as("ben").collection("leaves").where("hodUid", "==", "ben").get(), true);

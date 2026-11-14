@@ -202,6 +202,22 @@ h2.has-ic { display: flex; align-items: center; gap: 10px; }
 .av { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: .58rem; font-weight: 800; letter-spacing: .02em; color: #fff; background: hsl(var(--h) 52% 42%); margin-left: -4px; }
 .chip { padding-left: 6px; } .chip .cn { overflow: hidden; text-overflow: ellipsis; }
 .board .bc.today { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+.lv-bal { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.lv-tile { border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 4px; background: var(--surface); min-width: 0; }
+.lv-tile .lab { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.lv-tile > b { font-family: var(--f-display); font-size: 1.7rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.lv-tile > b small { font-size: .8rem; font-weight: 600; color: var(--muted); font-family: var(--f-body); }
+.lv-tile .bar { height: 6px; border-radius: 99px; background: var(--sunk, color-mix(in srgb, var(--line) 60%, transparent)); overflow: hidden; }
+.lv-tile .bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.lv-tile.low .bar i { background: var(--warn); } .lv-tile.over { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); } .lv-tile.over .bar i { background: var(--bad); } .lv-tile.over > b { color: var(--bad); }
+@media (max-width: 420px) { .lv-tile { padding: 10px 8px; } .lv-tile > b { font-size: 1.4rem; } .lv-tile > b small { display: block; } }
+.lv-bal-line { display: flex; gap: 6px; align-items: flex-start; } .lv-bal-line.over { color: var(--bad); font-weight: 600; }
+.lvb-list { display: grid; gap: 6px; }
+.lvb-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 64px); gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; }
+.lvb-row > span:first-child { display: grid; min-width: 0; } .lvb-row > span:first-child b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lvb-c { display: grid; justify-items: center; line-height: 1.15; font-variant-numeric: tabular-nums; } .lvb-c b { font-size: 1.05rem; }
+.lvb-c .muted.small { font-size: .68rem; } .lvb-c.low b { color: var(--warn); } .lvb-c.over b { color: var(--bad); }
+@media (max-width: 420px) { .lvb-row { grid-template-columns: minmax(0, 1fr) repeat(3, 50px); gap: 4px; } }
 .allot-btn { margin-left: 6px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
 .allot-list { display: grid; gap: 8px; max-height: 50vh; overflow: auto; }
 .allot-opt { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
@@ -1628,7 +1644,41 @@ const HOD_GROUPS = [
   { key: "peds", label: "Paediatrics", name: "Dr Anum Hina Azam" },
 ];
 const HOD_BY = Object.fromEntries(HOD_GROUPS.map(g => [g.key, g]));
-const LEAVE_TYPES = { casual: "Casual (annual)", sick: "Sick", emergency: "Emergency", expak: "Ex-Pakistan" };
+const LEAVE_TYPES = { casual: "Casual", annual: "Annual", sick: "Sick", emergency: "Emergency", expak: "Ex-Pakistan" };
+/* HR policy: yearly allowances (1 Jan to 31 Dec, every calendar day counts). Emergency leave uses Casual days, Ex-Pakistan uses Annual days. */
+const LEAVE_POOLS = { casual: { label: "Casual", days: 10 }, annual: { label: "Annual", days: 14 }, sick: { label: "Sick", days: 10 } };
+const POOL_OF = { casual: "casual", emergency: "casual", annual: "annual", expak: "annual", sick: "sick" };
+const TYPE_HINT = { emergency: "uses Casual days", expak: "uses Annual days" };
+const thisYear = () => todayKey.slice(0, 4);
+const daysInYear = (from, to, y) => { const a = from > y + "-01-01" ? from : y + "-01-01", b = to < y + "-12-31" ? to : y + "-12-31"; return a <= b ? datesBetween(a, b).length : 0; };
+const yearsOf = (from, to) => { const out = []; for (let y = +from.slice(0, 4); y <= +to.slice(0, 4); y++) out.push(String(y)); return out; };
+/* Days used (approved, from the on-leave list everyone can read) and waiting (pending requests this person can see) per allowance. */
+function leaveBalance(uid, year, exceptId) {
+  const used = { casual: 0, annual: 0, sick: 0 }, pending = { casual: 0, annual: 0, sick: 0 };
+  for (const o of state.onleave) if (o.uid === uid && o.id !== exceptId) used[POOL_OF[o.type || (state.leaves[o.id] || {}).type] || "casual"] += daysInYear(o.from, o.to, year);
+  for (const l of Object.values(state.leaves)) if (l.uid === uid && l.status === "pending" && l.id !== exceptId) pending[POOL_OF[l.type] || "casual"] += daysInYear(l.from, l.to, year);
+  const left = k => LEAVE_POOLS[k].days - used[k];
+  return { used, pending, left };
+}
+/* What a request would use, per year: [{ year, pool, need, left, over }]. */
+function balanceCheck(uid, type, from, to, exceptId) {
+  const pool = POOL_OF[type]; if (!pool || !from || !to || from > to) return [];
+  return yearsOf(from, to).map(y => { const need = daysInYear(from, to, y), left = leaveBalance(uid, y, exceptId).left(pool); return { year: y, pool, need, left, over: Math.max(0, need - left) }; }).filter(x => x.need);
+}
+const balLine = (c, lead) => c.map(x => `${lead}<b>${x.need}</b> ${LEAVE_POOLS[x.pool].label} day${x.need === 1 ? "" : "s"}${c.length > 1 || x.year !== thisYear() ? " of " + x.year : ""}: ` + (x.over ? `<b>${x.over} more than ${x.left > 0 ? "the " + x.left + " left" : "the balance (none left)"}</b>` : `${x.left - x.need} of ${LEAVE_POOLS[x.pool].days} left after`)).join(" · ");
+function renderBalanceTiles(uid, year) {
+  const b = leaveBalance(uid, year);
+  return `<div class="lv-bal">${Object.entries(LEAVE_POOLS).map(([k, p]) => { const left = b.left(k), pct = Math.max(0, Math.min(100, (b.used[k] / p.days) * 100));
+    return `<div class="lv-tile${left < 0 ? " over" : left <= 2 ? " low" : ""}" id="bal-${k}"><span class="lab">${p.label}</span><b>${left < 0 ? 0 : left}<small> of ${p.days} left</small></b>
+      <span class="bar" aria-hidden="true"><i style="width:${pct}%"></i></span><span class="muted small">${b.used[k]} used${b.pending[k] ? ` · ${b.pending[k]} waiting` : ""}${left < 0 ? ` · <b>${-left} over</b>` : ""}</span></div>`; }).join("")}</div>`;
+}
+function renderBalanceTable(list, year, title) {
+  if (!list.length) return "";
+  const rows = list.slice().sort((a, b) => (a.dept || "").localeCompare(b.dept || "") || (a.name || "").localeCompare(b.name || "")).map(d => { const b = leaveBalance(d.uid, year);
+    return `<div class="lvb-row"><span><b>${esc(d.name)}</b><span class="muted small">${esc(d.dept || "")}</span></span>${Object.entries(LEAVE_POOLS).map(([k, p]) => { const left = b.left(k);
+      return `<span class="lvb-c${left < 0 ? " over" : left <= 2 ? " low" : ""}"><span class="muted small">${p.label}</span><b>${b.used[k]}</b><span class="muted small">/${p.days}</span></span>`; }).join("")}</div>`; }).join("");
+  return `<section class="panel" style="grid-column:1/-1" id="lv-balances"><h2>${title} · ${year}</h2><p class="muted small">Days used out of each allowance (approved leave). Emergency counts as Casual, Ex-Pakistan as Annual. Every calendar day counts; resets on 1 January.</p><div class="lvb-list">${rows}</div></section>`;
+}
 const LEAVE_STATUS = { pending: "Waiting for approval", approved: "Approved", rejected: "Not approved", cancelled: "Cancelled" };
 const LEAVE_OUT = ["Radiology", "Anaesthesia", "MSA"]; // not part of leave management yet
 const hodUidOf = g => ((state.contact && state.contact.hods) || {})[g] || "";
@@ -1671,8 +1721,8 @@ function subscribeLeaves() {
     unsubLeaves.push(col.where("uid", "==", app.uid).limit(100).onSnapshot(put, () => {}));
     if (myHodGroups().length) unsubLeaves.push(col.where("hodUid", "==", app.uid).limit(300).onSnapshot(put, () => {}));
   }
-  const from = addMonths(currentMonthKey(), -1) + "-01";
-  unsubOnleave = app.db.collection("onleave").where("to", ">=", from).limit(500).onSnapshot(snap => { state.onleave = snap.docs.map(x => ({ id: x.id, ...x.data() })); render(); }, () => {});
+  const prev = addMonths(currentMonthKey(), -1) + "-01", jan = thisYear() + "-01-01", from = prev < jan ? prev : jan; // balances need the whole year
+  unsubOnleave = app.db.collection("onleave").where("to", ">=", from).limit(2000).onSnapshot(snap => { state.onleave = snap.docs.map(x => ({ id: x.id, ...x.data() })); render(); }, () => {});
 }
 function stopLeaves() { leavesKey = ""; unsubLeaves.forEach(u => u()); unsubLeaves = []; if (unsubOnleave) unsubOnleave(); unsubOnleave = null; state.leaves = {}; state.onleave = []; state.lvRosters = {}; }
 const leaveList = () => Object.values(state.leaves).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -1760,19 +1810,25 @@ function renderLeave() {
   const shown = forMe.filter(l => state.lvFilter === "all" || (state.lvFilter === "pending" ? l.status === "pending" : l.status === state.lvFilter));
   const preview = canApplyLeave() && f.from && f.to && f.from <= f.to ? leaveCoverage({ uid: app.uid, from: f.from, to: f.to }) : null;
   const hod = canApplyLeave() ? HOD_BY[app.myDoc.hod] : null, iAmMyHod = hod && hodUidOf(hod.key) === app.uid;
+  const chk = canApplyLeave() && LEAVE_TYPES[f.type] ? balanceCheck(app.uid, f.type, f.from, f.to) : [];
+  const team = app.isAdmin ? Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && !LEAVE_OUT.includes(x.dept)) : myTeam();
   return `<div class="grid2">
+  ${canApplyLeave() ? `<section class="panel" style="grid-column:1/-1" id="lv-mybal"><h2>My leave balance · ${thisYear()}</h2>${renderBalanceTiles(app.uid, thisYear())}
+    <p class="muted small">Emergency leave uses Casual days and Ex-Pakistan uses Annual days. Every calendar day of leave counts. Allowances reset on 1 January.</p></section>` : ""}
   ${groups.length || app.isAdmin ? `<section class="panel" style="grid-column:1/-1" id="lv-review"><h2>${app.isAdmin ? "Leave requests (all departments)" : "Leave requests for " + groups.map(g => HOD_BY[g].label).join(", ")}</h2>
     <div class="btns"><label class="check">Show <select data-bind="lvFilter">${[["pending", "Waiting for a decision"], ["approved", "Approved"], ["rejected", "Not approved"], ["all", "All"]].map(([v, t]) => `<option value="${v}" ${state.lvFilter === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
     ${shown.length ? `<div class="lv-list">${shown.map(l => leaveCard(l, app.isAdmin && !(groups.includes(l.group) && l.hodUid === app.uid) ? "admin" : "hod")).join("")}</div>` : `<div class="empty sm" data-icon="roster"><p>${state.lvFilter === "pending" ? "No leave requests waiting for you." : "Nothing here."}</p></div>`}
   </section>` : ""}
   ${canApplyLeave() ? `<form class="panel" id="lv-form" novalidate><h2>Apply for leave</h2>
     <p class="muted small">Goes to ${iAmMyHod ? "the MSA office (you're the HOD)" : `<b>${esc(hod.name)}</b> (${esc(hod.label)})`}${!iAmMyHod && !hodUidOf(hod.key) ? `. <span class="note">${esc(hod.name)} hasn't been linked to an account yet, so the MSA office will see it first.</span>` : ""}. Your reason is confidential: only you, your HOD and the MSA office can read it.</p>
-    <div class="field"><span class="lab">Type of leave</span><div class="ir-radios">${Object.entries(LEAVE_TYPES).map(([k, t]) => `<label class="check"><input type="radio" name="lv-type" data-bind="lv.type" value="${k}" ${f.type === k ? "checked" : ""}> ${t}</label>`).join("")}</div></div>
+    <div class="field"><span class="lab">Type of leave</span><div class="ir-radios">${Object.entries(LEAVE_TYPES).map(([k, t]) => `<label class="check"><input type="radio" name="lv-type" data-bind="lv.type" value="${k}" ${f.type === k ? "checked" : ""}> ${t}${TYPE_HINT[k] ? ` <span class="muted small">(${TYPE_HINT[k]})</span>` : ""}</label>`).join("")}</div></div>
     <div class="ir-grid"><div class="field"><label for="lv-from">From</label><input type="date" id="lv-from" data-bind="lv.from" value="${esc(f.from)}"></div><div class="field"><label for="lv-to">To (last day of leave)</label><input type="date" id="lv-to" data-bind="lv.to" value="${esc(f.to)}" min="${esc(f.from)}"></div></div>
     <div class="field"><label for="lv-reason">Reason</label><textarea class="plain" id="lv-reason" data-bind="lv.reason" rows="3" maxlength="1000" placeholder="Kept confidential">${esc(f.reason)}</textarea></div>
     ${preview ? (preview.loading ? `<p class="muted small">Checking your duties…</p>` : preview.rows.length ? `<div class="note">You have <b>${preview.rows.length}</b> dut${preview.rows.length === 1 ? "y" : "ies"} in this period. ${preview.rows.filter(r => !r.ok).length ? `<b>${preview.rows.filter(r => !r.ok).length}</b> would leave the station without a doctor, so after you apply, ask colleagues to cover them below.${f.type === "emergency" ? " (Emergency leave can be approved before cover is arranged.)" : ""}` : "Each one still has a colleague from the station on duty."}</div>` : `<p class="muted small">You have no duties in this period.</p>`) : ""}
+    ${chk.length ? `<div class="note${chk.some(x => x.over) ? " bad" : " ok"}" id="lv-balnote">This uses ${balLine(chk, "")}.${chk.some(x => x.over) ? " You can still apply; your HOD will see that it's over your balance." : ""}</div>` : ""}
     <div class="btns"><button class="btn primary" type="button" data-act="lv-submit" id="lv-submit" ${app.busy ? "disabled" : ""}>Apply for leave</button></div>
   </form>` : !app.isAdmin && !groups.length ? `<section class="panel"><h2>Leave</h2><p class="muted">${LEAVE_OUT.includes((app.myDoc || {}).dept) ? "Leave management for your department is coming soon." : "You're not on the duty roster, so there's nothing to apply for here."}</p></section>` : ""}
+  ${team.length && (app.isAdmin || groups.length) ? renderBalanceTable(team, thisYear(), app.isAdmin ? "Leave balances" : "Your team's leave balances") : ""}
   ${canApplyLeave() ? `<section class="panel" id="lv-mine"><h2>My leave</h2>${mine.length ? `<div class="lv-list">${mine.map(l => leaveCard(l, "mine")).join("")}</div>` : `<div class="empty sm" data-icon="roster"><p>No leave requests yet. Requests you send appear here with their status.</p></div>`}</section>` : ""}
   </div>`;
 }
@@ -1795,6 +1851,8 @@ function leaveCard(l, role) {
     <div class="head"><b>${esc(role === "mine" ? LEAVE_TYPES[l.type] + " leave" : l.name || docName(l.uid))}</b>${st}</div>
     <p class="small">${role === "mine" ? "" : `<span class="pill">${esc(LEAVE_TYPES[l.type])}</span> `}<b>${esc(fmtRange(l.from, l.to))}</b> · ${n} day${n === 1 ? "" : "s"}${role !== "mine" ? " · " + esc(l.dept || "") : ""}</p>
     ${l.reason ? `<p class="small lv-reason">${ic("lock", 13)} <span>${esc(l.reason)}</span></p>` : ""}
+    ${role !== "mine" && l.status === "pending" ? (() => { const c = balanceCheck(l.uid, l.type, l.from, l.to, l.id);
+      return c.length ? `<p class="small lv-bal-line${c.some(x => x.over) ? " over" : ""}">${ic(c.some(x => x.over) ? "alert" : "roster", 13)} <span>${c.some(x => x.over) ? "Over balance: " : "Balance: "}${balLine(c, "uses ")}</span></p>` : ""; })() : ""}
     ${verdict}${rows}
     ${overlap.length ? `<p class="small note">Also away in ${esc(HOD_BY[l.group] ? HOD_BY[l.group].label : "this department")} on some of these days: ${overlap.map(x => esc(x.name || docName(x.uid)) + " (" + esc(fmtRange(x.from, x.to)) + (x.status === "pending" ? ", waiting" : "") + ")").join("; ")}</p>` : ""}
     ${l.comment ? `<p class="small"><b>${l.decidedRole === "msa" ? "MSA office" : "HOD"}:</b> ${esc(l.comment)}</p>` : ""}
@@ -2745,17 +2803,19 @@ const actions = {
     if (!f.from || !f.to) { toast("Choose the dates."); return; }
     if (f.to < f.from) { toast("The last day can't be before the first day."); return; }
     if (datesBetween(f.from, f.to).length > 90) { toast("Leave can be at most 90 days in one request."); return; }
-    if (f.from < todayKey && f.type !== "sick" && f.type !== "emergency") { toast("Casual and Ex-Pakistan leave can't start in the past."); return; }
+    if (f.from < todayKey && f.type !== "sick" && f.type !== "emergency") { toast("Casual, Annual and Ex-Pakistan leave can't start in the past."); return; }
     if (!String(f.reason || "").trim()) { toast("Add a reason (it stays confidential)."); return; }
     const g = app.myDoc.hod, hodUid = hodUidOf(g) === app.uid ? "" : hodUidOf(g);
     const clash = leaveList().find(l => l.uid === app.uid && (l.status === "pending" || l.status === "approved") && l.from <= f.to && f.from <= l.to);
     if (clash) { toast("You already have leave on some of these days (" + fmtRange(clash.from, clash.to) + ")."); return; }
+    const bc = balanceCheck(app.uid, f.type, f.from, f.to), over = bc.filter(x => x.over);
+    if (over.length && !confirm("This is " + over.map(x => x.over + " day" + (x.over === 1 ? "" : "s") + " more than your " + LEAVE_POOLS[x.pool].label + " balance" + (bc.length > 1 ? " for " + x.year : "")).join(" and ") + ". Apply anyway? Your HOD decides.")) return;
     const doc = { uid: app.uid, name: docName(app.uid), dept: app.myDoc.dept || "", group: g, hodUid, type: f.type, from: f.from, to: f.to, reason: String(f.reason).trim(), status: "pending", relief: {}, createdAt: Date.now() };
     const to = hodUid ? hodUid : null, n = to ? 0 : waNumber(state.contact && state.contact.msaWhatsApp), win = to || n ? waWindow() : null;
     const ok = await guarded(() => dbCall(() => app.db.collection("leaves").add(doc)), "Leave request sent to " + (hodUid ? HOD_BY[g].name : "the MSA office") + ".");
     if (!ok) { waAbort(win); return; }
     state.lv = { type: "casual", from: todayKey, to: todayKey, reason: "" }; render();
-    const text = "Assalam o Alaikum, this is " + docName(app.uid) + " (" + (app.myDoc.dept || "") + "). I've applied for " + lvText(doc) + " on the Eastridge duty roster. Please review it in the Leave tab:";
+    const text = "Assalam o Alaikum, this is " + docName(app.uid) + " (" + (app.myDoc.dept || "") + "). I've applied for " + lvText(doc) + " on the Eastridge duty roster." + (bc.length ? " " + bc.map(x => LEAVE_POOLS[x.pool].label + " balance" + (bc.length > 1 ? " " + x.year : "") + ": " + Math.max(0, x.left) + " of " + LEAVE_POOLS[x.pool].days + " days left" + (x.over ? " (this is " + x.over + " over)" : "")).join("; ") + "." : "") + " Please review it in the Leave tab:";
     if (to) waSend(win, to, text); else if (n) waGo(win, "https://wa.me/" + n + "?text=" + encodeURIComponent(text + "\n\n" + location.origin + location.pathname)); else waAbort(win);
   },
   async "lv-cancel"(b) {
@@ -2793,7 +2853,7 @@ const actions = {
           batch.set(app.db.collection("rosters").doc(m + "_" + safeId(l.uid)), { month: m, doctorId: l.uid, shifts: onlyMonth(shifts, m), away: kept, updatedAt: Date.now(), updatedBy: app.uid });
           batch.set(app.db.collection("requests").doc(), { type: "edit", status: "done", month: m, from: l.uid, added: 0, removed: gone.length, note: "Leave approved", by: app.uid, createdAt: Date.now(), decidedAt: Date.now() });
         }
-        batch.set(app.db.collection("onleave").doc(l.id), { uid: l.uid, from: l.from, to: l.to, dept: l.dept || "", group: l.group, createdAt: Date.now() });
+        batch.set(app.db.collection("onleave").doc(l.id), { uid: l.uid, from: l.from, to: l.to, type: l.type, dept: l.dept || "", group: l.group, createdAt: Date.now() });
       }
       batch.update(app.db.collection("leaves").doc(l.id), { status: approve ? "approved" : "rejected", comment, decidedBy: app.uid, decidedAt: Date.now(), decidedRole: role, removed });
       await dbCall(() => batch.commit());
