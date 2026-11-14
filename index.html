@@ -107,7 +107,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .who b { font-weight: 600; }
 .masthead:not(.compact) .who .btn.ghost { color: #ffffff; }
 .masthead:not(.compact) .who .btn.ghost:hover { border-color: rgba(255,255,255,.4); }
-.masthead:not(.compact) .who .pill.done { background: var(--brand-red); color: #ffffff; }
+.who .pill.done { background: var(--brand-red); color: #ffffff; border-color: transparent; } /* Coordinator and HOD badges: always red */
 .hero-copy { align-self: end; padding-block: 8px 32px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; max-width: 1080px; animation: rise .8s .15s cubic-bezier(.2,.7,.2,1) both; }
 .hero-copy > * { max-width: 40rem; }
 .hero-copy .eyebrow { color: rgba(255,255,255,.82); }
@@ -1580,7 +1580,8 @@ function render() {
 function renderWho() {
   if (app.sample || !app.uid || app.phase === "setup") return "";
   const d = app.myDoc;
-  const role = app.isAdmin ? `<span class="pill done">Coordinator</span> ` : "";
+  const hod = myHodGroups(); // HODs get a badge like the coordinator's: "HOD · Medicine"
+  const role = (app.isAdmin ? `<span class="pill done">Coordinator</span> ` : "") + (hod.length ? `<span class="pill done hod-badge" id="hod-badge">HOD · ${hod.map(g => esc(HOD_BY[g].label)).join(", ")}</span> ` : "");
   const name = d ? `<b>${esc(d.name)}</b>${d.designation ? " · " + esc(d.designation) : ""}${d.dept ? " · " + esc(d.dept) : ""}` : esc(app.email || "Signed in");
   return `<span>${role}${name}</span>${d && app.phase === "app" ? `<button class="btn ghost" data-act="profile-open" id="who-edit">Edit profile</button>` : ""}<button class="btn ghost" data-act="signout" id="who-out">Sign out</button>`;
 }
