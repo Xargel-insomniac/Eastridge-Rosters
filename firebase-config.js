@@ -12,3 +12,6 @@ window.FIREBASE_CONFIG = {
 
 // Shows "Continue with Google" on the sign-in screen (Google must be enabled in Firebase Authentication).
 window.ROSTER_GOOGLE_SIGNIN = true;
+
+// Firebase App Check site key (reCAPTCHA v3), from Firebase console → App Check → Apps → Roster. Empty = App Check off.
+window.APP_CHECK_SITE_KEY = "";

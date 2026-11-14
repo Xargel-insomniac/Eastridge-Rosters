@@ -127,14 +127,21 @@ Approved doctors can technically write any doctor's roster, because accepting a 
 |---|---|
 | `index.html` | The whole app (one page, no build step). |
 | `manifest.webmanifest`, `sw.js` | Phone-app settings and the offline helper. Bump `VERSION` in `sw.js` if phones ever seem stuck on an old copy. |
-| `vercel.json` | Vercel settings: static site, no build, caching and security headers. |
+| `vercel.json` | Vercel settings: static site, no build, caching and security headers (Content-Security-Policy, HSTS, Permissions-Policy). If you add a new outside service, add its address to the Content-Security-Policy or the browser will block it. |
 | `assets/` | Hospital logo, favicon and the hospital photo used on the home page. |
+| `assets/vendor/` | Firebase 12.19.0 (app, auth, firestore, app-check compat builds from the `firebase` npm package) and SheetJS 0.20.3 (from cdn.sheetjs.com), served from this site so no outside server can change the code the app runs. To upgrade, replace the files, change the file names in `index.html` and `sw.js`, and bump `VERSION`. |
 | `docs/` | Screenshots used in this README. |
 | `firebase-config.js` | Your Firebase project settings. These values are not secret; access is controlled by the rules. |
 | `firestore.rules` | Database security rules. Paste into the Firebase console, or deploy with `npm run deploy:rules`. |
-| `tests/rules.test.mjs` | 59 automated checks of the security rules (`npm install && npm run test:rules`, needs Java). |
+| `tests/rules.test.mjs` | 117 automated checks of the security rules (`npm install && npm run test:rules`, needs Java). |
 
 Before `firebase-config.js` is filled in, the site shows a **Connect a database** screen with an example month you can explore. Nothing is saved there.
+
+## Device security
+
+- **Signing out wipes the device:** unsent incident report drafts (patient details, photos), unsaved roster changes and the offline copy of the roster are removed.
+- **"This is a shared computer"** (tick box on the sign-in screen, remembered on that computer): the sign-in lasts only while the tab is open, no offline copy is kept, and drafts live only in that tab. Use it on ward PCs.
+- **App Check:** paste the reCAPTCHA v3 site key from Firebase → App Check into `APP_CHECK_SITE_KEY` in `firebase-config.js`. Watch Firebase → App Check → Firestore for a week; once nearly all requests show as verified, click **Enforce**.
 
 ## Updating the security rules
 

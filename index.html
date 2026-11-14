@@ -670,6 +670,9 @@ textarea.plain { font-family: var(--f-body); font-size: 0.95rem; min-height: 72p
 .auth-ic { flex: none; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
 .auth-go { width: 100%; justify-content: center; padding-block: 12px; font-size: 1rem; }
 .auth-forgot { justify-self: center; margin-top: -6px; }
+.auth-shared { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.auth-shared input { width: 18px; height: 18px; margin: 2px 0 0; flex: none; accent-color: var(--accent); }
+.auth-shared > span { display: grid; gap: 1px; } .auth-shared b { font-size: .9rem; }
 .auth-foot { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 2px 0 0; font-size: .8rem; color: var(--muted); }
 @media (max-width: 640px) { .auth-card { margin-top: -28px; } }
 .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: .1em; }
@@ -836,9 +839,11 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
   <div id="wa-prompt"></div>
 </main>
 
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<!-- Firebase 12.19.0 and SheetJS 0.20.3 are kept in assets/vendor (copied from the official packages), so no outside site can change the code the app runs. -->
+<script src="assets/vendor/firebase-app-compat-12.19.0.js"></script>
+<script src="assets/vendor/firebase-auth-compat-12.19.0.js"></script>
+<script src="assets/vendor/firebase-firestore-compat-12.19.0.js"></script>
+<script src="assets/vendor/firebase-app-check-compat-12.19.0.js"></script>
 <script src="firebase-config.js"></script>
 <script>
 /* ===== LOGIC START ===== */
@@ -1208,21 +1213,39 @@ function recoverFromGlitch() {
   if (app.recovering) return; app.recovering = true;
   try {
     localStorage.setItem("fs-safe-mode", String(Date.now()));
-    if (app.uid && Object.keys(state.drafts).length) localStorage.setItem("draft-rescue", JSON.stringify({ uid: app.uid, drafts: state.drafts, at: Date.now() }));
+    if (app.uid && Object.keys(state.drafts).length) draftStore().setItem("draft-rescue", JSON.stringify({ uid: app.uid, drafts: state.drafts, at: Date.now() }));
   } catch (_) {}
   toast("Fixing a connection glitch. Reloading now; your unsaved changes are kept.");
   setTimeout(() => location.reload(), 1800);
 }
 function restoreRescuedDrafts() {
   try {
-    const r = JSON.parse(localStorage.getItem("draft-rescue") || "null"); if (!r) return;
-    localStorage.removeItem("draft-rescue");
+    const r = JSON.parse(draftStore().getItem("draft-rescue") || "null"); if (!r) return;
+    draftStore().removeItem("draft-rescue");
     if (r.uid !== app.uid || Date.now() - r.at > 864e5) return;
     Object.assign(state.drafts, r.drafts);
     setTimeout(() => toast("Your unsaved roster changes were kept. Check them and press Save."), 600);
   } catch (_) {}
 }
 window.addEventListener("unhandledrejection", ev => { if (firestoreBroken(ev.reason)) recoverFromGlitch(); });
+/* Shared computers (ward PCs): chosen on the sign-in screen and remembered on that device. The sign-in lasts only while
+   the tab is open, no offline copy of the roster is kept, and unsaved drafts live only in that tab. */
+const sharedDevice = () => { try { return localStorage.getItem("shared-device") === "1"; } catch (_) { return false; } };
+const draftStore = () => sharedDevice() ? sessionStorage : localStorage;
+/* Signing out leaves nothing private behind: incident drafts (patient details, photos), unsaved roster changes
+   and the offline copy of the roster, staff list and requests are all removed from the device. */
+const PRIVATE_KEYS = ["ir-draft", "ir-files", "draft-rescue"];
+function wipeDeviceData() {
+  PRIVATE_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} try { sessionStorage.removeItem(k); } catch (_) {} });
+  state.ir = null; state.irFiles = null; state.drafts = {};
+}
+async function wipeOfflineCopy() {
+  let tries = 0; try { tries = +sessionStorage.getItem("wipe-tries") || 0; sessionStorage.setItem("wipe-tries", String(tries + 1)); } catch (_) {}
+  if (tries >= 2) return false; // another open tab holds the copy; it is wiped when that tab signs out too
+  app.phase = "starting"; render();
+  try { await app.db.terminate(); await app.db.clearPersistence(); localStorage.removeItem("fs-cached"); } catch (_) {}
+  location.reload(); return true;
+}
 window.addEventListener("error", ev => { if (firestoreBroken(ev.error || ev.message)) recoverFromGlitch(); });
 function onDbError(e) {
   if (firestoreBroken(e)) return recoverFromGlitch();
@@ -1585,6 +1608,7 @@ function renderAuth() {
       <p class="muted small">${signup ? "For Eastridge Primecare doctors. After you add your details, the roster coordinator approves you." : "Sign in to see the roster, swap duties and report incidents."}</p></div></div>
     <div class="field"><label for="au-email">Email</label><input type="email" id="au-email" data-bind="auth.email" value="${esc(a.email)}" autocomplete="email" placeholder="you@example.com"></div>
     <div class="field"><label for="au-pw">Password</label><input type="password" id="au-pw" data-bind="auth.password" value="${esc(a.password)}" autocomplete="${signup ? "new-password" : "current-password"}"${signup ? ` placeholder="At least 6 characters"` : ""}></div>
+    <label class="auth-shared"><input type="checkbox" id="au-shared" ${sharedDevice() ? "checked" : ""}><span><b>This is a shared computer</b><span class="muted small">You're signed out when the tab closes, and nothing is kept on this device.</span></span></label>
     ${a.err ? `<div class="note bad">${esc(a.err)}</div>` : ""}${a.msg ? `<div class="note ok">${esc(a.msg)}</div>` : ""}
     <button class="btn primary auth-go" type="submit" id="au-submit" ${app.busy ? "disabled" : ""}>${signup ? "Create account" : "Sign in"}</button>
     ${signup ? "" : `<button class="btn ghost auth-forgot" type="button" data-act="reset-pw" id="au-reset">Forgot password?</button>`}
@@ -1872,17 +1896,17 @@ function irBlank() {
     firstAid: "", firstAidBy: "", doctorTx: "", doctorName: "", erTx: "", erBy: "", jci: [], reporterName: d.name || "", reporterDesig: d.designation || (d.dept === "MSA" ? "MSA" : ""), confirm: false, step: 0 };
 }
 function irState() {
-  if (!state.ir) { try { state.ir = JSON.parse(localStorage.getItem("ir-draft") || "null"); } catch (_) {} if (!state.ir || typeof state.ir !== "object") state.ir = irBlank(); }
+  if (!state.ir) { try { state.ir = JSON.parse(draftStore().getItem("ir-draft") || "null"); } catch (_) {} if (!state.ir || typeof state.ir !== "object") state.ir = irBlank(); }
   return state.ir;
 }
 /* ---- evidence: up to 3 photos (shrunk on the phone) and one voice note, stored with the report in incidents/{id}/files ----
    Kept small so it fits the free database: each item well under Firestore's 1 MB per document. Videos go by WhatsApp. */
 const IR_MAX_PHOTOS = 3, IR_PHOTO_BYTES = 300 * 1024, IR_AUDIO_BYTES = 650 * 1024, IR_AUDIO_SECS = 60;
 function irFiles() {
-  if (!state.irFiles) { try { state.irFiles = JSON.parse(localStorage.getItem("ir-files") || "[]"); } catch (_) { state.irFiles = []; } if (!Array.isArray(state.irFiles)) state.irFiles = []; }
+  if (!state.irFiles) { try { state.irFiles = JSON.parse(draftStore().getItem("ir-files") || "[]"); } catch (_) { state.irFiles = []; } if (!Array.isArray(state.irFiles)) state.irFiles = []; }
   return state.irFiles;
 }
-function irSaveFiles() { try { localStorage.setItem("ir-files", JSON.stringify(state.irFiles || [])); } catch (_) { /* too big for this device's storage: kept until the page closes */ } }
+function irSaveFiles() { try { draftStore().setItem("ir-files", JSON.stringify(state.irFiles || [])); } catch (_) { /* too big for this device's storage: kept until the page closes */ } }
 const blobToBase64 = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
 async function shrinkPhoto(file) {
   let img;
@@ -1941,7 +1965,7 @@ async function irLoadFiles(id) {
 }
 const irVideoLink = x => { const n = waNumber(state.contact && state.contact.msaWhatsApp); return n ? "https://wa.me/" + n + "?text=" + encodeURIComponent("Assalam o Alaikum, video evidence for incident report " + (x.ref || "") + " (" + irFmtDate(x.date) + ", " + (x.location || "") + "). Video attached below.") : ""; };
 function irNoteInit() { const x = (state.incidents || []).find(i => i.id === state.irView); if (x && (!state.irNote || state.irNote.id !== x.id)) state.irNote = { id: x.id, comments: x.headComments || "", status: x.status }; }
-function irSaveDraft() { try { localStorage.setItem("ir-draft", JSON.stringify(state.ir)); } catch (_) {} }
+function irSaveDraft() { try { draftStore().setItem("ir-draft", JSON.stringify(state.ir)); } catch (_) {} }
 let unsubIncidents = null;
 function ensureIncidents() {
   if (unsubIncidents || !app.db || !app.uid) return;
@@ -2858,7 +2882,7 @@ const actions = {
   async "pc-decline"(b) { const d = app.allDoctors[b.dataset.id]; await guarded(() => dbCall(() => app.db.collection("doctors").doc(d.uid).update({ pendingChange: firebase.firestore.FieldValue.delete(), changeDeclinedAt: Date.now(), updatedAt: Date.now() })), "Declined. Their details stay as they were."); },
   "sample-on"() { startSample("You asked to see how a filled-in month looks."); },
   "sample-off"() { stopSample(); },
-  signout() { state.profileOpen = false; if (app.auth) app.auth.signOut(); },
+  signout() { state.profileOpen = false; wipeDeviceData(); if (app.auth) app.auth.signOut(); },
   "auth-mode"(b) { state.auth.mode = b.dataset.mode; state.auth.err = state.auth.msg = ""; render(); },
   async google() {
     state.auth.err = state.auth.msg = "";
@@ -3129,6 +3153,14 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("change", async e => {
   const el = e.target;
+  if (el.id === "au-shared") {
+    try { if (el.checked) localStorage.setItem("shared-device", "1"); else localStorage.removeItem("shared-device"); } catch (_) {}
+    if (!app.auth) return;
+    app.auth.setPersistence(el.checked ? firebase.auth.Auth.Persistence.SESSION : firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+    // The offline copy can only be switched off before the database starts: reload (keeping the email typed so far).
+    if (el.checked && app.keepsCopy) { try { sessionStorage.setItem("au-email", state.auth.email || ""); } catch (_) {} localStorage.removeItem("fs-cached"); try { await app.db.terminate(); await app.db.clearPersistence(); } catch (_) {} location.reload(); }
+    return;
+  }
   if (el.id === "file-in") { if (el.files && el.files[0]) await readFile(el.files[0]); return; }
   if (el.dataset && el.dataset.irJci !== undefined) { const f = irState(), i = +el.dataset.irJci; f.jci = el.checked ? [...new Set([...f.jci, i])].sort((a, b) => a - b) : f.jci.filter(x => x !== i); irSaveDraft(); render(); return; }
   if (el.dataset && el.dataset.bind && el.dataset.bind.startsWith("irNote.")) irNoteInit();
@@ -3723,7 +3755,7 @@ function loadXLSX() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
   return (xlsxPromise ||= new Promise((res, rej) => {
     const s = document.createElement("script");
-    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.src = "assets/vendor/xlsx-0.20.3.full.min.js";
     s.onload = () => res(window.XLSX); s.onerror = () => { xlsxPromise = null; rej(new Error("Couldn't load the Excel reader.")); };
     document.head.appendChild(s);
   }));
@@ -3949,6 +3981,7 @@ function startWelcome() {
 }
 function init() {
   startWelcome();
+  try { const e = sessionStorage.getItem("au-email"); if (e !== null) { state.auth.email = e; sessionStorage.removeItem("au-email"); } } catch (_) {}
   loadWeather(); setInterval(loadWeather, 30 * 60e3);
   const cfg = window.FIREBASE_CONFIG;
   app.googleOn = !!window.ROSTER_GOOGLE_SIGNIN;
@@ -3962,7 +3995,11 @@ function init() {
     // One tab keeps the offline copy (syncing it across tabs is a known trigger of the glitch above);
     // a device that hit the glitch in the last week runs without it.
     let safeMode = false; try { safeMode = Date.now() - (+localStorage.getItem("fs-safe-mode") || 0) < 7 * 864e5; } catch (_) {}
-    if (!safeMode) app.db.enablePersistence().catch(() => {});
+    app.keepsCopy = !safeMode && !sharedDevice();
+    if (app.keepsCopy) app.db.enablePersistence().catch(() => {});
+    if (sharedDevice()) app.auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(() => {});
+    // App Check: proves requests come from this app, not someone else's script (site key from Firebase → App Check).
+    if (window.APP_CHECK_SITE_KEY && firebase.appCheck && !emu) firebase.appCheck().activate(new firebase.appCheck.ReCaptchaV3Provider(window.APP_CHECK_SITE_KEY), true);
   }
   catch (e) { app.phase = "setup"; app.setupError = "The settings in firebase-config.js look wrong: " + e.message; render(); return; }
   render();
@@ -3972,8 +4009,13 @@ function init() {
     if (unsubMe) { unsubMe(); unsubMe = null; }
     stopLive();
     app.sample = false; app.myDoc = null; app.isAdmin = false; app.canEdit = false; app.loading = true; app.profileFixed = false; state.profileOpen = false;
-    if (!u) { app.uid = app.realUid = null; app.busy = false; state.auth = { mode: "signin", email: state.auth.email, password: "", err: "", msg: "" }; app.phase = "auth"; render(); return; }
+    if (!u) {
+      wipeDeviceData();
+      let cached = false; try { cached = localStorage.getItem("fs-cached") === "1"; } catch (_) {}
+      if (cached && await wipeOfflineCopy()) return;
+      app.uid = app.realUid = null; app.busy = false; state.auth = { mode: "signin", email: state.auth.email, password: "", err: "", msg: "" }; app.phase = "auth"; render(); return; }
     app.uid = app.realUid = u.uid; app.email = u.email || "";
+    try { sessionStorage.removeItem("wipe-tries"); if (app.keepsCopy) localStorage.setItem("fs-cached", "1"); } catch (_) {}
     state.auth.password = ""; state.auth.err = state.auth.msg = "";
     app.phase = "starting"; render();
     try { app.isAdmin = (await app.db.collection("admins").doc(u.uid).get()).exists; } catch (_) { app.isAdmin = false; }

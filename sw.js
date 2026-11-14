@@ -1,11 +1,13 @@
 // Eastridge Roster service worker: keeps the app's own files on the phone so it opens instantly and
 // still shows the last-loaded roster without Wi-Fi. Roster data itself is cached by Firestore, not here.
-const VERSION = "2026-11-14-2";
+const VERSION = "2026-11-14-3";
 const CACHE = "eastridge-" + VERSION;
 const CORE = [
   "/", "/firebase-config.js", "/manifest.webmanifest",
   "/assets/eastridge-logo.png", "/assets/hospital.webp", "/assets/hospital-900.webp",
   "/assets/icon-192.png", "/assets/favicon.png",
+  "/assets/vendor/firebase-app-compat-12.19.0.js", "/assets/vendor/firebase-auth-compat-12.19.0.js",
+  "/assets/vendor/firebase-firestore-compat-12.19.0.js", "/assets/vendor/firebase-app-check-compat-12.19.0.js",
 ];
 const CDN = /^https:\/\/(www\.gstatic\.com\/firebasejs\/|cdnjs\.cloudflare\.com\/|fonts\.googleapis\.com\/|fonts\.gstatic\.com\/)/;
 
