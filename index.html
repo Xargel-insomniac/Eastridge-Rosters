@@ -202,6 +202,12 @@ h2.has-ic { display: flex; align-items: center; gap: 10px; }
 .av { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: .58rem; font-weight: 800; letter-spacing: .02em; color: #fff; background: hsl(var(--h) 52% 42%); margin-left: -4px; }
 .chip { padding-left: 6px; } .chip .cn { overflow: hidden; text-overflow: ellipsis; }
 .board .bc.today { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+.allot-btn { margin-left: 6px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+.allot-list { display: grid; gap: 8px; max-height: 50vh; overflow: auto; }
+.allot-opt { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.allot-opt > span:last-child { display: grid; gap: 1px; } .allot-opt .av { margin-left: 0; width: 26px; height: 26px; font-size: .68rem; }
+.allot-opt.free span.small { color: var(--ok); } .allot-opt.busy span.small { color: var(--warn); }
+.allot-opt:disabled { opacity: .5; cursor: default; } .allot-opt:not(:disabled):hover { border-color: var(--accent); background: var(--accent-soft); }
 .hodp-list { display: grid; gap: 10px; }
 .hodp-opt { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background-color .15s, transform .12s; }
 .hodp-opt:hover { border-color: var(--accent); background: var(--accent-soft); } .hodp-opt:active { transform: scale(.98); }
@@ -1160,7 +1166,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, leaves: {}, onleave: [], lv: null, lvRosters: {}, lvComment: {}, lvFilter: "pending", waNext: null, incidents: null, ir: null, irFiles: null, irRec: null, irFileCache: {}, irView: null, irFilter: "open", irNote: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, allot: null, leaves: {}, onleave: [], lv: null, lvRosters: {}, lvComment: {}, lvFilter: "pending", waNext: null, incidents: null, ir: null, irFiles: null, irRec: null, irFileCache: {}, irView: null, irFilter: "open", irNote: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -1509,8 +1515,8 @@ function render() {
   const inApp = app.sample || app.phase === "app";
   if (inApp && state.tab === "changes") ensureLog();
   if (inApp && !app.sample && (state.tab === "incident" || app.isAdmin)) ensureIncidents();
-  const wp = $("#wa-prompt"); if (wp) { const html = renderExtPrompt() || renderIcsPrompt() || renderWaPrompt(); if (wp.dataset.html !== html) { wp.dataset.html = html; wp.innerHTML = html; } }
-  renderSwapPopup(inApp && !state.waPrompt && !state.extPrompt && !state.icsPrompt);
+  const wp = $("#wa-prompt"); if (wp) { const html = renderExtPrompt() || renderIcsPrompt() || renderAllotPrompt() || renderWaPrompt(); if (wp.dataset.html !== html) { wp.dataset.html = html; wp.innerHTML = html; } }
+  renderSwapPopup(inApp && !state.waPrompt && !state.extPrompt && !state.icsPrompt && !state.allot);
   const large = !inApp || state.tab === "board";
   $("#masthead").classList.toggle("compact", !large);
   { const ann = $("#announce"), home = large ? $("#hero-copy") : $("#ann-slot"); if (ann.parentNode !== home) { home.insertBefore(ann, home.firstChild); annMeasure(); } }
@@ -1678,6 +1684,46 @@ function leaveCoverage(l) {
   }
   return { loading: false, rows, ok: rows.every(r => r.ok) };
 }
+/* HODs can fill an empty shift with someone from their team (doctors who chose them); only coordinators edit rosters. */
+const myTeam = dept => Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && myHodGroups().includes(x.hod) && (!dept || x.dept === dept));
+const hodDepts = () => [...new Set(myTeam().map(x => x.dept).filter(Boolean))];
+const canAllot = (dept, date) => !app.sample && !!dept && dept !== "all" && date >= todayKey && !isClosed(date.slice(0, 7)) && (app.isAdmin || hodDepts().includes(dept));
+/* Who could take a shift: free that day (no other duty, no Night before a Morning or Morning after a Night), on leave, or busy. */
+function slotStatus(id, date, c) {
+  if (onLeaveOn(id, date)) return "leave";
+  const M = m => (lvMonth(m) || { docs: {} }).docs[id] || {}, day = M(date.slice(0, 7));
+  if (hasDuty(day, date, c)) return "on";
+  const prev = isoAdd(date, -1), next = isoAdd(date, 1);
+  if (SHIFTS.some(x => hasDuty(day, date, x.code)) || (c === "M" && hasDuty(M(prev.slice(0, 7)), prev, "N")) || (c === "N" && hasDuty(M(next.slice(0, 7)), next, "M"))) return "busy";
+  return "free";
+}
+function renderAllotPrompt() {
+  const a = state.allot; if (!a) return "";
+  const pool = (app.isAdmin ? Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && x.dept === a.dept) : myTeam(a.dept)).map(x => ({ x, st: slotStatus(x.uid, a.date, a.shift) }));
+  const order = { free: 0, busy: 1, on: 2, leave: 3 }; pool.sort((p, q) => order[p.st] - order[q.st] || (p.x.name || "").localeCompare(q.x.name || ""));
+  const label = { free: "Free that day", busy: "Already has a duty that day (would be a long stretch)", on: "Already on this shift", leave: "On leave" };
+  return `<div class="pop-back" data-act="allot-close"></div><div class="pop" role="dialog" aria-modal="true" aria-labelledby="allot-title">
+    <div class="pop-icon" aria-hidden="true">${ic("user", 24)}</div>
+    <h2 id="allot-title">Allot ${esc(SHIFT[a.shift].name)}, ${esc(fmtDate(a.date))}</h2>
+    <p class="small muted">${esc(a.dept)} has no doctor on this shift. Choose someone ${app.isAdmin ? "from the department" : "from your team"}; it's added to their roster and WhatsApp opens to let them know.</p>
+    <div class="allot-list">${pool.length ? pool.map(({ x, st }) => `<button class="allot-opt ${st}" data-act="allot-do" data-id="${esc(x.uid)}" ${st === "leave" || st === "on" || app.busy ? "disabled" : ""}>${avatar(x.uid)}<span><b>${esc(x.name)}</b><span class="small">${esc(x.designation || "")} · ${label[st]}</span></span></button>`).join("")
+      : `<p class="small note">No one ${app.isAdmin ? "in this department" : "in your team"} works in ${esc(a.dept)}.</p>`}</div>
+    <div class="btns"><button class="btn" data-act="allot-close" id="allot-close">Cancel</button></div></div>`;
+}
+/* Add one duty to a doctor's roster (and, for leave cover, take it off the doctor going on leave), logged in the change log. */
+async function allotDuty(toId, date, c, dept, fromId) {
+  const m = date.slice(0, 7), docB = await store.getRosterDoc(m, toId);
+  const away = { ...docB.away }; if (dept && dept !== deptOfId(toId)) away[date + "|" + c] = dept;
+  await store.saveRoster(m, toId, withDuty(docB.shifts, date, c), away);
+  await store.addRequest({ type: "edit", status: "done", month: m, from: toId, added: 1, removed: 0, note: "Allotted " + SHIFT[c].name + ", " + fmtDate(date), decidedAt: Date.now() });
+  if (fromId) {
+    const docA = await store.getRosterDoc(m, fromId), sh = cloneShifts(docA.shifts);
+    if (hasDuty(sh, date, c)) { sh[date] = sh[date].filter(x => x !== c); if (!sh[date].length) delete sh[date];
+      await store.saveRoster(m, fromId, sh, docA.away);
+      await store.addRequest({ type: "edit", status: "done", month: m, from: fromId, added: 0, removed: 1, note: "Leave cover allotted to " + docName(toId), decidedAt: Date.now() }); }
+  }
+  delete state.lvRosters[m];
+}
 const leaveDays = l => datesBetween(l.from, l.to).length;
 const fmtRange = (a, b) => a === b ? fmtDate(a) : fmtDate(a) + " – " + fmtDate(b);
 /* Others in the same HOD group already away on any of these dates. */
@@ -1715,7 +1761,8 @@ function leaveCard(l, role) {
   const rows = cov && !cov.loading && cov.rows.length ? `<div class="lv-rows">${cov.rows.map(r => `<div class="lv-row ${r.ok ? "ok" : "bad"}"><span class="dchip s-${r.shift}">${esc(SHIFT[r.shift].name)} · ${esc(fmtDate(r.date))}</span><span class="muted small">${esc(r.dept)}</span>
       <span class="lv-st">${r.ok ? `${ic("check", 14)} Covered by ${r.others.map(id => esc(docName(id))).join(", ")}` : r.relief ? `${ic("clock", 14)} Waiting for ${esc(docName(r.relief))} to accept` : `${ic("alert", 14)} No one else on`}</span>
       ${!r.ok && role === "mine" && l.status === "pending" ? `<span class="lv-ask">${r.free.length ? r.free.map(id => `<button class="chip-btn" data-act="lv-ask" data-id="${esc(l.id)}" data-key="${esc(r.key)}" data-to="${esc(id)}" ${dis}>Ask ${esc(docName(id))}</button>`).join("") : `<span class="muted small">No free colleague found; use Swaps to ask someone.</span>`}</span>` : ""}
-      ${!r.ok && role !== "mine" && r.free.length ? `<span class="muted small">Free that day: ${r.free.map(id => esc(docName(id))).join(", ")}</span>` : ""}</div>`).join("")}</div>` : "";
+      ${!r.ok && role !== "mine" && l.status === "pending" ? (() => { const f = role === "hod" ? r.free.filter(id => myTeam().some(x => x.uid === id)) : r.free;
+        return f.length ? `<span class="lv-ask"><span class="muted small">Allot to:</span>${f.map(id => `<button class="chip-btn" data-act="lv-allot" data-id="${esc(l.id)}" data-key="${esc(r.key)}" data-to="${esc(id)}" ${dis}>${ic("user", 13)} ${esc(docName(id))}</button>`).join("")}</span>` : `<span class="muted small">No one ${role === "hod" ? "in your team " : ""}is free that day.</span>`; })() : ""}</div>`).join("")}</div>` : "";
   const overlap = role !== "mine" && l.status === "pending" ? leaveOverlap(l) : [];
   const canDecide = l.status === "pending" && (role === "hod" || (role === "admin" && (l.type === "emergency" || !l.hodUid)));
   const blocked = canDecide && cov && !cov.loading && bad.length && l.type !== "emergency";
@@ -2214,7 +2261,7 @@ function renderBoard() {
   const ids = Object.keys(docs).filter(id => !isOffRoster(id));
   const deptSel = seesAll() ? state.dept : (state.docDept || myDept() || "all");
   // Doctors can browse every department's rota, but coverage gaps and the over-12-hour marks are only shown to them for their own department.
-  const showGaps = seesAll() || deptSel === myDept();
+  const showGaps = seesAll() || deptSel === myDept() || hodDepts().includes(deptSel);
   const deptOk = id => deptSel === "all" || ((state.doctors[id] && state.doctors[id].dept) || "No department") === deptSel;
   const inDept = (id, date, code) => deptSel === "all" || dutyDept(id, date, code) === deptSel;
   const scopeIds = allRosterIds(month).filter(deptOk);
@@ -2259,7 +2306,7 @@ function renderBoard() {
       people = Object.keys(groups).sort((a, b) => DEPARTMENTS.indexOf(a) - DEPARTMENTS.indexOf(b)).map(g => `<div class="dgrp"><span class="dg">${esc(g)}</span>${groups[g].map(chip).join("")}</div>`).join("");
     } else people = on.map(chip).join("");
     const cby = gap && deptSel !== "all" ? coveredBy({ date, shift: s.code, dept: deptSel }) : null;
-    const inner = `${cby ? `<span class="covtag">Covered by ${esc(docName(cby))} (${esc(dutyDept(cby, date, s.code))})</span>` : gap ? `<span class="gaptag">Uncovered</span>` : ""}${people || (gap ? "" : `<span class="none" aria-label="No one">–</span>`)}`;
+    const inner = `${cby ? `<span class="covtag">Covered by ${esc(docName(cby))} (${esc(dutyDept(cby, date, s.code))})</span>` : gap ? `<span class="gaptag">Uncovered</span>${canAllot(deptSel, date) ? `<button class="chip-btn allot-btn" data-act="allot-open" data-date="${date}" data-shift="${s.code}" data-dept="${esc(deptSel)}">${ic("user", 13)} Allot</button>` : ""}` : ""}${people || (gap ? "" : `<span class="none" aria-label="No one">–</span>`)}`;
     return { on, gap, cby, inner };
   };
   if (boardView() === "week") return html + renderWeek(month, cellOf);
@@ -2736,6 +2783,22 @@ const actions = {
       const msa = { toId: null, href: "https://wa.me/" + n + "?text=" + encodeURIComponent("Assalam o Alaikum, I've approved " + (l.name || docName(l.uid)) + "'s " + lvText(l) + " (" + (l.dept || "") + ")." + (removed.length ? " " + removed.length + " dut" + (removed.length === 1 ? "y" : "ies") + " taken off the roster." : "") + "\n\n" + location.origin + location.pathname) };
       if (state.waPrompt) state.waNext = msa; else { state.waPrompt = msa; render(); }
     }
+  },
+  "allot-open"(b) { state.allot = { date: b.dataset.date, shift: b.dataset.shift, dept: b.dataset.dept }; render(); },
+  "allot-close"() { state.allot = null; render(); },
+  async "allot-do"(b) {
+    const a = state.allot, id = b.dataset.id; if (!a) return;
+    const win = waWindow();
+    const ok = await guarded(() => allotDuty(id, a.date, a.shift, a.dept, null), docName(id) + " now has " + SHIFT[a.shift].name + ", " + fmtDate(a.date) + ".");
+    state.allot = null; render();
+    if (ok) waSend(win, id, "Assalam o Alaikum " + docName(id) + ", you've been allotted the " + SHIFT[a.shift].name + " duty (" + SHIFT[a.shift].time + ") on " + fmtDate(a.date) + " in " + a.dept + " by " + docName(app.uid) + " on the Eastridge duty roster."); else waAbort(win);
+  },
+  async "lv-allot"(b) {
+    const l = state.leaves[b.dataset.id], [date, c] = b.dataset.key.split("|"), to = b.dataset.to; if (!l) return;
+    const row = (leaveCoverage(l).rows || []).find(r => r.key === b.dataset.key), dept = row ? row.dept : (l.dept || "");
+    const win = waWindow();
+    const ok = await guarded(() => allotDuty(to, date, c, dept, l.uid), docName(to) + " now covers " + SHIFT[c].name + ", " + fmtDate(date) + ".");
+    if (ok) waSend(win, to, "Assalam o Alaikum " + docName(to) + ", you've been allotted the " + SHIFT[c].name + " duty (" + SHIFT[c].time + ") on " + fmtDate(date) + " in " + dept + " to cover " + (l.name || docName(l.uid)) + "'s leave, by " + docName(app.uid) + " on the Eastridge duty roster."); else waAbort(win);
   },
   "show-past"() { state.showPast = !state.showPast; render(); },
   "ir-fill"(b) { const f = irState(); f[b.dataset.k] = b.dataset.v; irSaveDraft(); render(); },
