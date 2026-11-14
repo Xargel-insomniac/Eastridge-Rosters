@@ -72,6 +72,8 @@ await t("approved doctor locks their completed profile", as("ben").doc("doctors/
 await t("locked: doctor can't change own name directly", as("ben").doc("doctors/ben").set({ name: "Dr Benjamin" }, { merge: true }), false);
 await t("locked: doctor can't change own number directly", as("ben").doc("doctors/ben").set({ phone: "0300 0000000" }, { merge: true }), false);
 await t("locked: doctor can't unlock their profile", as("ben").doc("doctors/ben").set({ profileLocked: false }, { merge: true }), false);
+await env.withSecurityRulesDisabled(c => c.firestore().doc("doctors/carl2").set({ uid: "carl2", name: "Dr Carl Two", approved: true, profileLocked: true, phone: "" }));
+await t("locked profile with a missing number: the doctor can add one", as("carl2").doc("doctors/carl2").set({ phone: "0300 1112223" }, { merge: true }), true);
 await t("locked: doctor can still change department and designation", as("ben").doc("doctors/ben").set({ dept: "ICU / HDU", designation: "SMO" }, { merge: true }), true);
 await t("locked: doctor can ask for a name/number change", as("ben").doc("doctors/ben").set({ pendingChange: { name: "Dr Benjamin", at: 1 } }, { merge: true }), true);
 await t("doctor can't set someone else's email on their profile", as("ben").doc("doctors/ben").set({ email: "boss@x.test" }, { merge: true }), false);
@@ -102,6 +104,27 @@ await t("reporter reads their evidence", as("amy").doc("incidents/i1/files/f1").
 await t("colleague can't read the evidence", as("ben").doc("incidents/i1/files/f1").get(), false);
 await t("coordinator reads the evidence", as("boss").collection("incidents/i1/files").get(), true);
 await t("reporter can't change evidence", as("amy").doc("incidents/i1/files/f1").update({ data: "Zm9v" }), false);
+// ---- leave ----
+await env.withSecurityRulesDisabled(async c => { await c.firestore().doc("settings/contact").set({ hods: { medicine: "ben" } }, { merge: true }); await c.firestore().doc("doctors/carl").set({ uid: "carl", name: "Dr Carl", approved: true }); });
+const LV = (by, extra = {}) => ({ uid: by, name: "x", group: "medicine", hodUid: "ben", type: "casual", from: "2026-12-01", to: "2026-12-03", reason: "Wedding", status: "pending", relief: {}, createdAt: 1, ...extra });
+await t("doctor applies for leave to their HOD", as("amy").doc("leaves/l1").set(LV("amy")), true);
+await t("leave can't be sent to someone who isn't that HOD", as("amy").doc("leaves/l2").set(LV("amy", { hodUid: "carl" })), false);
+await t("leave can't be created already approved", as("amy").doc("leaves/l3").set(LV("amy", { status: "approved" })), false);
+await t("can't apply for leave as someone else", as("carl").doc("leaves/l4").set(LV("amy")), false);
+await t("leave to the MSA office (no HOD) is allowed", as("carl").doc("leaves/l5").set(LV("carl", { hodUid: "" })), true);
+await t("HOD reads the leave sent to them", as("ben").doc("leaves/l1").get(), true);
+await t("HOD lists their department's leave", as("ben").collection("leaves").where("hodUid", "==", "ben").get(), true);
+await t("another doctor can't read a leave (confidential)", as("carl").doc("leaves/l1").get(), false);
+await t("doctor records who they asked to cover", as("amy").doc("leaves/l1").update({ "relief.2026-12-01|M": "carl" }), true);
+await t("doctor can't approve their own leave", as("amy").doc("leaves/l1").update({ status: "approved", decidedBy: "amy" }), false);
+await t("another doctor can't approve the leave", as("carl").doc("leaves/l1").update({ status: "approved", decidedBy: "carl", decidedAt: 1, decidedRole: "hod", comment: "", removed: [] }), false);
+{ const db = as("ben"), b = db.batch(); b.update(db.doc("leaves/l1"), { status: "approved", decidedBy: "ben", decidedAt: 1, decidedRole: "hod", comment: "ok", removed: [] }); b.set(db.doc("onleave/l1"), { uid: "amy", from: "2026-12-01", to: "2026-12-03", dept: "ER", group: "medicine" });
+  await t("HOD approves and marks the doctor on leave together", b.commit(), true); }
+await t("an approved leave can't be changed by the HOD again", as("ben").doc("leaves/l1").update({ status: "rejected", decidedBy: "ben", decidedAt: 2, decidedRole: "hod", comment: "", removed: [] }), false);
+await t("doctors can read who is on leave (no reasons)", as("carl").doc("onleave/l1").get(), true);
+await t("a doctor can't mark someone on leave", as("carl").doc("onleave/l9").set({ uid: "amy", from: "2026-12-01", to: "2026-12-02" }), false);
+await t("coordinator approves emergency leave directly", as("boss").doc("leaves/l5").update({ status: "approved", decidedBy: "boss", decidedAt: 1, decidedRole: "msa" }), true);
+await t("doctor cancels a waiting leave", as("amy").doc("leaves/l6").set(LV("amy", { from: "2027-01-05", to: "2027-01-05" })).then(() => as("amy").doc("leaves/l6").update({ status: "cancelled", decidedAt: 1 })), true);
 await t("approved can't approve others", as("amy").doc("doctors/pat").update({ approved: true }), false);
 await t("approved can't read admins of others", as("amy").doc("admins/boss").get(), false);
 await t("admin reads own admin doc", as("boss").doc("admins/boss").get(), true);

@@ -94,6 +94,42 @@ service cloud.firestore {
       }
     }
 
+    // Leave: doctors apply to their head of department (HOD). Reasons are confidential: only the doctor, the HOD
+    // the request was sent to, and coordinators can read a request. The HOD decides; coordinators can decide any.
+    function hodOf(g) { return get(/databases/$(database)/documents/settings/contact).data.get('hods', {}).get(g, ''); }
+    match /leaves/{id} {
+      allow read: if isAdmin() || (isMember() && (resource.data.uid == uid() || resource.data.hodUid == uid()));
+      allow create: if isMember()
+        && request.resource.data.uid == uid()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.group in ['gynae', 'medicine', 'surgery', 'peds']
+        && request.resource.data.type in ['casual', 'sick', 'emergency', 'expak']
+        && request.resource.data.from is string && request.resource.data.to is string
+        && request.resource.data.from <= request.resource.data.to
+        && (request.resource.data.hodUid == '' || request.resource.data.hodUid == hodOf(request.resource.data.group))
+        && request.resource.data.hodUid != uid()
+        && !('decidedBy' in request.resource.data);
+      allow update: if isAdmin()
+        // the HOD it was sent to approves or declines it, once
+        || (isMember() && resource.data.hodUid == uid() && resource.data.uid != uid() && resource.data.status == 'pending'
+            && request.resource.data.status in ['approved', 'rejected'] && request.resource.data.decidedBy == uid()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'comment', 'decidedBy', 'decidedAt', 'decidedRole', 'removed']))
+        // the doctor cancels it, or records who they've asked to cover a duty, while it's waiting
+        || (isMember() && resource.data.uid == uid() && resource.data.status == 'pending'
+            && ((request.resource.data.status == 'cancelled' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedAt']))
+                || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['relief'])));
+      allow delete: if isAdmin();
+    }
+    // Approved leave without the reason, so everyone's roster can show who is away.
+    match /onleave/{id} {
+      allow read: if isMember();
+      allow create, update: if isAdmin()
+        || (isMember() && getAfter(/databases/$(database)/documents/leaves/$(id)).data.hodUid == uid()
+            && getAfter(/databases/$(database)/documents/leaves/$(id)).data.status == 'approved'
+            && request.resource.data.uid == getAfter(/databases/$(database)/documents/leaves/$(id)).data.uid);
+      allow delete: if isAdmin();
+    }
+
     match /admins/{userId} {
       allow get: if signedIn() && uid() == userId;
       allow list, write: if false;
@@ -116,6 +152,7 @@ service cloud.firestore {
             && request.resource.data.approved == resource.data.approved
             && validName()
             && (!(resource.data.get('profileLocked', false) == true && resource.data.approved == true)
+                || resource.data.get('phone', '') == ''   // a missing number can always be added
                 || (request.resource.data.name == resource.data.name
                     && request.resource.data.get('phone', '') == resource.data.get('phone', '')
                     && request.resource.data.get('profileLocked', false) == true))

@@ -202,6 +202,25 @@ h2.has-ic { display: flex; align-items: center; gap: 10px; }
 .av { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: .58rem; font-weight: 800; letter-spacing: .02em; color: #fff; background: hsl(var(--h) 52% 42%); margin-left: -4px; }
 .chip { padding-left: 6px; } .chip .cn { overflow: hidden; text-overflow: ellipsis; }
 .board .bc.today { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+.hodp-list { display: grid; gap: 10px; }
+.hodp-opt { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background-color .15s, transform .12s; }
+.hodp-opt:hover { border-color: var(--accent); background: var(--accent-soft); } .hodp-opt:active { transform: scale(.98); }
+.hodp-opt > span:last-child { display: grid; gap: 2px; } .hodp-opt b { font-size: 1.02rem; }
+.hodp-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.lv-list { display: grid; gap: 12px; }
+.lv-card { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px; background: var(--surface); }
+.lv-card.pending { border-left: 4px solid var(--warn); }
+.lv-card .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.lv-card p { margin: 0; }
+.lv-reason { display: flex; gap: 6px; align-items: flex-start; color: var(--muted); } .lv-reason .ic { margin-top: 3px; }
+.lv-verdict { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; font-weight: 700; font-size: .9rem; }
+.lv-verdict.ok { background: var(--ok-bg); color: var(--ok); } .lv-verdict.bad { background: var(--bad-bg); color: var(--bad); }
+.lv-rows { display: grid; gap: 6px; }
+.lv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border-radius: 10px; background: var(--sunk); }
+.lv-row.bad { box-shadow: inset 3px 0 0 var(--bad); }
+.lv-st { font-size: .85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; } .lv-row.ok .lv-st { color: var(--ok); } .lv-row.bad .lv-st { color: var(--bad); }
+.lv-ask { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.lvtag { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: .68rem; font-weight: 600; color: var(--muted); line-height: 1.25; }
 .panel.mynext { margin-bottom: 14px; display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-left: 4px solid var(--accent); }
 .mynext.s-M { border-left-color: var(--m); } .mynext.s-E { border-left-color: var(--e); } .mynext.s-N { border-left-color: var(--n); }
 .mynext.on { background: color-mix(in srgb, var(--ok-bg) 60%, var(--surface)); }
@@ -1141,7 +1160,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, incidents: null, ir: null, irFiles: null, irRec: null, irFileCache: {}, irView: null, irFilter: "open", irNote: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, leaves: {}, onleave: [], lv: null, lvRosters: {}, lvComment: {}, lvFilter: "pending", waNext: null, incidents: null, ir: null, irFiles: null, irRec: null, irFileCache: {}, irView: null, irFilter: "open", irNote: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -1497,15 +1516,16 @@ function render() {
   { const ann = $("#announce"), home = large ? $("#hero-copy") : $("#ann-slot"); if (ann.parentNode !== home) { home.insertBefore(ann, home.firstChild); annMeasure(); } }
   $("#who").innerHTML = renderWho();
   $("#banner").innerHTML = renderBanner();
-  $("#bar").hidden = !inApp || mustCompleteProfile();
+  $("#bar").hidden = !inApp || mustCompleteProfile() || needHodChoice();
   $("#month-label").textContent = monthLabel(state.month);
   { const vs = $("#view-seg"), html = inApp && !app.loading && state.tab === "board" && !mustCompleteProfile() ? renderViewSeg() : ""; if (vs.dataset.html !== html) { vs.dataset.html = html; vs.innerHTML = html; } }
   $("#tabs").innerHTML = inApp ? renderTabs() : "";
   if (mustCompleteProfile() && !state.profileOpen) { state.profile = { name: app.myDoc.name || "", dept: app.myDoc.dept || "", designation: app.myDoc.designation || "", phone: app.myDoc.phone || "" }; state.profileOpen = true; }
-  if (mustCompleteProfile()) $("#tabs").innerHTML = "";
-  $("#main").innerHTML = !inApp ? renderGate() : mustCompleteProfile() ? "" : app.loading ? `<div class="skel" aria-label="Loading the roster" role="status"><span class="sk sk-h"></span><span class="sk"></span><span class="sk"></span><span class="sk sk-s"></span><div class="sk-grid">${"<span class=\"sk\"></span>".repeat(12)}</div></div>` :
+  if (mustCompleteProfile() || needHodChoice()) $("#tabs").innerHTML = "";
+  if (inApp && !app.sample && app.phase === "app" && leaveTabOn()) subscribeLeaves();
+  $("#main").innerHTML = !inApp ? renderGate() : mustCompleteProfile() ? "" : needHodChoice() ? renderHodPrompt() : app.loading ? `<div class="skel" aria-label="Loading the roster" role="status"><span class="sk sk-h"></span><span class="sk"></span><span class="sk"></span><span class="sk sk-s"></span><div class="sk-grid">${"<span class=\"sk\"></span>".repeat(12)}</div></div>` :
     state.tab === "board" ? renderBoard() : state.tab === "mine" ? renderMine() : state.tab === "changes" ? renderChanges() :
-    state.tab === "consultants" ? renderConsultants() : state.tab === "incident" && !app.sample ? renderIncident() : state.tab === "team" && app.isAdmin && !app.sample ? renderTeam() : app.canEdit || app.sample ? renderChecks() : renderBoard();
+    state.tab === "consultants" ? renderConsultants() : state.tab === "incident" && !app.sample ? renderIncident() : state.tab === "leave" && leaveTabOn() ? renderLeave() : state.tab === "team" && app.isAdmin && !app.sample ? renderTeam() : app.canEdit || app.sample ? renderChecks() : renderBoard();
   decorate($("#main"));
   if (inApp && state.tab !== lastTab) { const m = $("#main"); m.classList.remove("tab-in"); void m.offsetWidth; m.classList.add("tab-in"); lastTab = state.tab; }
   updateJumpToday();
@@ -1525,6 +1545,8 @@ function renderBanner() {
   out += renderInstall();
   if (app.sample) out += `<div class="banner warn"><p><b>Example roster.</b> ${esc(app.sampleReason || "")} These doctors are made up and nothing you change here is saved.</p><button class="btn" data-act="sample-off" id="sample-off">${app.phase === "app" ? "Back to the real roster" : "Close the example"}</button></div>`;
   if (!state.profileOpen && app.phase === "app" && !app.sample && needsDesignation(app.myDoc)) out += `<div class="banner warn"><p><b>Add your designation.</b> Every doctor needs to choose MO, SMO, Registrar or Senior Registrar in their profile.</p><button class="btn" data-act="profile-open" id="desig-add">Add designation</button></div>`;
+  { const w = leaveList().filter(l => l.status === "pending" && l.uid !== app.uid && myHodGroups().includes(l.group) && l.hodUid === app.uid).length;
+    if (w && !app.sample && app.phase === "app" && state.tab !== "leave") out += `<div class="banner"><p><b>${w} leave request${w === 1 ? "" : "s"} waiting for your decision.</b></p><button class="btn" data-act="tab" data-tab="leave" id="lv-review-btn">Review</button></div>`; }
   if (app.isAdmin && !app.sample && app.phase === "app" && state.tab !== "team" && changeRequests().length) out += `<div class="banner"><p><b>${changeRequests().length} name/number change${changeRequests().length === 1 ? "" : "s"} waiting for your approval.</b></p><button class="btn" data-act="tab" data-tab="team" id="pc-review">Review</button></div>`;
   if (state.profileOpen && (app.phase === "app" || app.sample)) out += renderProfileForm();
   return out;
@@ -1566,6 +1588,154 @@ function renderAuth() {
 <p class="auth-foot">${ic("shield", 15)} Only approved Eastridge staff can see the roster.</p>
   </form>`;
 }
+/* ---------- leave: doctors apply, their head of department approves once every duty is covered ----------
+   Leaves live in leaves/ (reasons are confidential: only the doctor, their HOD and coordinators can read them).
+   Approved leave is also written to onleave/ without the reason, so the roster can show who is away. */
+const HOD_GROUPS = [
+  { key: "gynae", label: "Gynaecology", name: "Dr Madiha Sadiq" },
+  { key: "medicine", label: "Medicine (incl. ICU / HDU)", name: "Dr Mahek" },
+  { key: "surgery", label: "Surgery", name: "Dr Saeed" },
+  { key: "peds", label: "Paediatrics", name: "Dr Anum Hina Azam" },
+];
+const HOD_BY = Object.fromEntries(HOD_GROUPS.map(g => [g.key, g]));
+const LEAVE_TYPES = { casual: "Casual (annual)", sick: "Sick", emergency: "Emergency", expak: "Ex-Pakistan" };
+const LEAVE_STATUS = { pending: "Waiting for approval", approved: "Approved", rejected: "Not approved", cancelled: "Cancelled" };
+const LEAVE_OUT = ["Radiology", "Anaesthesia", "MSA"]; // not part of leave management yet
+const hodUidOf = g => ((state.contact && state.contact.hods) || {})[g] || "";
+const myHodGroups = () => HOD_GROUPS.filter(g => app.uid && hodUidOf(g.key) === app.uid).map(g => g.key);
+/* Everyone on the roster (except departments not in leave management yet) picks their HOD once. */
+const needHodChoice = () => app.phase === "app" && !app.sample && !!app.myDoc && app.myDoc.approved === true && !app.myDoc.offRoster
+  && !LEAVE_OUT.includes(app.myDoc.dept) && !HOD_BY[app.myDoc.hod];
+const canApplyLeave = () => !app.sample && !!me() && !!app.myDoc && !LEAVE_OUT.includes(app.myDoc.dept) && !!HOD_BY[app.myDoc.hod];
+const leaveTabOn = () => !app.sample && (canApplyLeave() || myHodGroups().length > 0 || app.isAdmin);
+function renderHodPrompt() {
+  return `<section class="panel hodp" style="max-width:640px;justify-self:center"><h2>Who is your Head of Department?</h2>
+    <p class="muted">Leave requests now go to your HOD in the app. Choose yours once to carry on; you can change it later in Edit profile.</p>
+    <div class="hodp-list">${HOD_GROUPS.map(g => `<button class="hodp-opt" data-act="hod-pick" data-g="${g.key}" id="hod-${g.key}" ${app.busy ? "disabled" : ""}>
+      <span class="hodp-ic">${ic("steth", 20)}</span><span><b>${esc(g.name)}</b><span class="muted small">${esc(g.label)}</span></span></button>`).join("")}</div>
+    <p class="muted small">ER doctors: pick the HOD of the specialty you belong to. ICU / HDU comes under Medicine.</p></section>`;
+}
+function renderHodAssign() {
+  const hods = (state.contact && state.contact.hods) || {}, d = state.hodDraft || hods;
+  const docs = Object.values(app.allDoctors || {}).filter(x => x.approved === true).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const count = g => Object.values(app.allDoctors || {}).filter(x => x.hod === g && x.approved === true).length;
+  return `<section class="panel" style="grid-column:1/-1"><h2>Heads of department</h2>
+    <p class="muted small">Link each HOD to their account. They then see and decide their department's leave requests. Doctors choose their HOD themselves when they open the app.</p>
+    <div class="cg-grid">${HOD_GROUPS.map(g => `<label class="field"><span class="lab">${esc(g.name)} · ${esc(g.label)} <span class="muted">(${count(g.key)} doctor${count(g.key) === 1 ? "" : "s"})</span></span>
+      <select data-hod-assign="${g.key}"><option value="">Not linked yet</option>${docs.map(x => `<option value="${esc(x.uid)}" ${d[g.key] === x.uid ? "selected" : ""}>${esc(x.name || "No name")} · ${esc(x.dept || "")}</option>`).join("")}</select></label>`).join("")}</div>
+    <div class="btns"><button class="btn primary" data-act="hod-save" id="hod-save" ${app.busy || !state.hodDraft ? "disabled" : ""}>Save heads of department</button></div>
+    ${Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && !LEAVE_OUT.includes(x.dept) && !HOD_BY[x.hod]).length ? `<p class="muted small">${Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && !LEAVE_OUT.includes(x.dept) && !HOD_BY[x.hod]).length} doctor(s) haven't chosen their HOD yet; they'll be asked next time they open the app.</p>` : ""}
+  </section>`;
+}
+/* ---- data ---- */
+let unsubLeaves = [], unsubOnleave = null, leavesKey = "";
+function subscribeLeaves() {
+  if (!app.db || !app.uid || app.sample) return;
+  const key = app.uid + "|" + (app.isAdmin ? "a" : "") + myHodGroups().join(); // resubscribe if someone becomes (or stops being) an HOD
+  if (key === leavesKey) return;
+  unsubLeaves.forEach(u => u()); unsubLeaves = []; if (unsubOnleave) unsubOnleave(); unsubOnleave = null; leavesKey = key;
+  const put = snap => { snap.docChanges().forEach(ch => { if (ch.type === "removed") delete state.leaves[ch.doc.id]; else state.leaves[ch.doc.id] = { id: ch.doc.id, ...ch.doc.data() }; }); render(); };
+  const col = app.db.collection("leaves");
+  if (app.isAdmin) unsubLeaves.push(col.orderBy("createdAt", "desc").limit(300).onSnapshot(put, () => {}));
+  else {
+    unsubLeaves.push(col.where("uid", "==", app.uid).limit(100).onSnapshot(put, () => {}));
+    if (myHodGroups().length) unsubLeaves.push(col.where("hodUid", "==", app.uid).limit(300).onSnapshot(put, () => {}));
+  }
+  const from = addMonths(currentMonthKey(), -1) + "-01";
+  unsubOnleave = app.db.collection("onleave").where("to", ">=", from).limit(500).onSnapshot(snap => { state.onleave = snap.docs.map(x => ({ id: x.id, ...x.data() })); render(); }, () => {});
+}
+function stopLeaves() { leavesKey = ""; unsubLeaves.forEach(u => u()); unsubLeaves = []; if (unsubOnleave) unsubOnleave(); unsubOnleave = null; state.leaves = {}; state.onleave = []; state.lvRosters = {}; }
+const leaveList = () => Object.values(state.leaves).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+const datesBetween = (a, b) => { const out = []; for (let d = a; d <= b && out.length < 120; d = isoAdd(d, 1)) out.push(d); return out; };
+const onLeaveOn = (id, date) => state.onleave.some(x => x.uid === id && x.from <= date && date <= x.to);
+/* Rosters for a month: the live copy when it's loaded, otherwise fetched once (and refreshed every few minutes). */
+function lvMonth(m) {
+  if (rosterMonths().includes(m) && state.rosters[m]) return { docs: state.rosters[m], away: state.away[m] || {} };
+  const c = state.lvRosters[m];
+  if ((!c || Date.now() - c.at > 180000) && app.db && !(c && c.loading)) {
+    state.lvRosters[m] = { ...(c || { docs: {}, away: {} }), loading: true, at: c ? c.at : 0 };
+    app.db.collection("rosters").where("month", "==", m).get().then(snap => {
+      const docs = {}, away = {}; snap.docs.forEach(d => { const x = d.data(); if (x && x.doctorId) { docs[x.doctorId] = x.shifts || {}; if (x.away) away[x.doctorId] = x.away; } });
+      state.lvRosters[m] = { docs, away, at: Date.now() }; render();
+    }).catch(() => { state.lvRosters[m] = { docs: {}, away: {}, at: Date.now() }; });
+  }
+  return c && c.at ? c : null;
+}
+/* Every duty the doctor still has during the leave, and whether that station stays covered without them. */
+function leaveCoverage(l) {
+  const months = [...new Set(datesBetween(l.from, l.to).map(d => d.slice(0, 7)))], rows = [];
+  for (const m of months) {
+    const R = lvMonth(m); if (!R) return { loading: true, rows: [] };
+    const mine = R.docs[l.uid] || {}, deptAt = (id, d, c) => ((R.away[id] || {})[d + "|" + c]) || deptOfId(id) || "No department";
+    for (const d of datesBetween(l.from, l.to).filter(x => x.slice(0, 7) === m)) for (const c of sortCodes((mine[d] || []).slice())) {
+      const dept = deptAt(l.uid, d, c), key = d + "|" + c;
+      const others = Object.keys(R.docs).filter(id => id !== l.uid && hasDuty(R.docs[id], d, c) && deptAt(id, d, c) === dept && !onLeaveOn(id, d));
+      const relief = (l.relief || {})[key];
+      const busy = id => hasDuty(R.docs[id], d, "M") || hasDuty(R.docs[id], d, "E") || hasDuty(R.docs[id], d, "N") || (c === "M" && hasDuty((lvMonth(isoAdd(d, -1).slice(0, 7)) || R).docs[id] || {}, isoAdd(d, -1), "N")) || (c === "N" && hasDuty((lvMonth(isoAdd(d, 1).slice(0, 7)) || R).docs[id] || {}, isoAdd(d, 1), "M"));
+      const free = Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && x.uid !== l.uid && x.dept === dept && !onLeaveOn(x.uid, d) && !busy(x.uid)).map(x => x.uid).slice(0, 4);
+      rows.push({ date: d, shift: c, key, dept, month: m, others, relief, free, ok: others.length > 0 });
+    }
+  }
+  return { loading: false, rows, ok: rows.every(r => r.ok) };
+}
+const leaveDays = l => datesBetween(l.from, l.to).length;
+const fmtRange = (a, b) => a === b ? fmtDate(a) : fmtDate(a) + " – " + fmtDate(b);
+/* Others in the same HOD group already away on any of these dates. */
+const leaveOverlap = l => leaveList().filter(x => x.id !== l.id && x.group === l.group && (x.status === "approved" || x.status === "pending") && x.from <= l.to && l.from <= x.to);
+/* ---- screens ---- */
+function renderLeave() {
+  const f = state.lv || (state.lv = { type: "casual", from: todayKey, to: todayKey, reason: "" });
+  const mine = leaveList().filter(l => l.uid === app.uid), groups = myHodGroups();
+  const forMe = leaveList().filter(l => l.uid !== app.uid && (app.isAdmin || groups.includes(l.group) && l.hodUid === app.uid));
+  const shown = forMe.filter(l => state.lvFilter === "all" || (state.lvFilter === "pending" ? l.status === "pending" : l.status === state.lvFilter));
+  const preview = canApplyLeave() && f.from && f.to && f.from <= f.to ? leaveCoverage({ uid: app.uid, from: f.from, to: f.to }) : null;
+  const hod = canApplyLeave() ? HOD_BY[app.myDoc.hod] : null, iAmMyHod = hod && hodUidOf(hod.key) === app.uid;
+  return `<div class="grid2">
+  ${groups.length || app.isAdmin ? `<section class="panel" style="grid-column:1/-1" id="lv-review"><h2>${app.isAdmin ? "Leave requests (all departments)" : "Leave requests for " + groups.map(g => HOD_BY[g].label).join(", ")}</h2>
+    <div class="btns"><label class="check">Show <select data-bind="lvFilter">${[["pending", "Waiting for a decision"], ["approved", "Approved"], ["rejected", "Not approved"], ["all", "All"]].map(([v, t]) => `<option value="${v}" ${state.lvFilter === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+    ${shown.length ? `<div class="lv-list">${shown.map(l => leaveCard(l, app.isAdmin && !(groups.includes(l.group) && l.hodUid === app.uid) ? "admin" : "hod")).join("")}</div>` : `<div class="empty sm" data-icon="roster"><p>${state.lvFilter === "pending" ? "No leave requests waiting for you." : "Nothing here."}</p></div>`}
+  </section>` : ""}
+  ${canApplyLeave() ? `<form class="panel" id="lv-form" novalidate><h2>Apply for leave</h2>
+    <p class="muted small">Goes to ${iAmMyHod ? "the MSA office (you're the HOD)" : `<b>${esc(hod.name)}</b> (${esc(hod.label)})`}${!iAmMyHod && !hodUidOf(hod.key) ? `. <span class="note">${esc(hod.name)} hasn't been linked to an account yet, so the MSA office will see it first.</span>` : ""}. Your reason is confidential: only you, your HOD and the MSA office can read it.</p>
+    <div class="field"><span class="lab">Type of leave</span><div class="ir-radios">${Object.entries(LEAVE_TYPES).map(([k, t]) => `<label class="check"><input type="radio" name="lv-type" data-bind="lv.type" value="${k}" ${f.type === k ? "checked" : ""}> ${t}</label>`).join("")}</div></div>
+    <div class="ir-grid"><div class="field"><label for="lv-from">From</label><input type="date" id="lv-from" data-bind="lv.from" value="${esc(f.from)}"></div><div class="field"><label for="lv-to">To (last day of leave)</label><input type="date" id="lv-to" data-bind="lv.to" value="${esc(f.to)}" min="${esc(f.from)}"></div></div>
+    <div class="field"><label for="lv-reason">Reason</label><textarea class="plain" id="lv-reason" data-bind="lv.reason" rows="3" maxlength="1000" placeholder="Kept confidential">${esc(f.reason)}</textarea></div>
+    ${preview ? (preview.loading ? `<p class="muted small">Checking your duties…</p>` : preview.rows.length ? `<div class="note">You have <b>${preview.rows.length}</b> dut${preview.rows.length === 1 ? "y" : "ies"} in this period. ${preview.rows.filter(r => !r.ok).length ? `<b>${preview.rows.filter(r => !r.ok).length}</b> would leave the station without a doctor, so after you apply, ask colleagues to cover them below.${f.type === "emergency" ? " (Emergency leave can be approved before cover is arranged.)" : ""}` : "Each one still has a colleague from the station on duty."}</div>` : `<p class="muted small">You have no duties in this period.</p>`) : ""}
+    <div class="btns"><button class="btn primary" type="button" data-act="lv-submit" id="lv-submit" ${app.busy ? "disabled" : ""}>Apply for leave</button></div>
+  </form>` : !app.isAdmin && !groups.length ? `<section class="panel"><h2>Leave</h2><p class="muted">${LEAVE_OUT.includes((app.myDoc || {}).dept) ? "Leave management for your department is coming soon." : "You're not on the duty roster, so there's nothing to apply for here."}</p></section>` : ""}
+  ${canApplyLeave() ? `<section class="panel" id="lv-mine"><h2>My leave</h2>${mine.length ? `<div class="lv-list">${mine.map(l => leaveCard(l, "mine")).join("")}</div>` : `<div class="empty sm" data-icon="roster"><p>No leave requests yet. Requests you send appear here with their status.</p></div>`}</section>` : ""}
+  </div>`;
+}
+function leaveCard(l, role) {
+  const cov = l.status === "pending" ? leaveCoverage(l) : null, n = leaveDays(l), dis = app.busy ? "disabled" : "";
+  const st = `<span class="pill ${l.status === "approved" ? "done" : l.status === "pending" ? "warn" : "declined"}">${esc(LEAVE_STATUS[l.status] || l.status)}</span>`;
+  const bad = cov && !cov.loading ? cov.rows.filter(r => !r.ok) : [];
+  const verdict = !cov ? "" : cov.loading ? `<p class="muted small">Checking the roster…</p>` : !cov.rows.length ? `<div class="lv-verdict ok">${ic("check", 16)} No duties during this leave.</div>`
+    : bad.length ? `<div class="lv-verdict bad">${ic("alert", 16)} ${bad.length} of ${cov.rows.length} dut${cov.rows.length === 1 ? "y" : "ies"} would leave the station without a doctor.</div>` : `<div class="lv-verdict ok">${ic("check", 16)} All ${cov.rows.length} dut${cov.rows.length === 1 ? "y" : "ies"} stay covered.</div>`;
+  const rows = cov && !cov.loading && cov.rows.length ? `<div class="lv-rows">${cov.rows.map(r => `<div class="lv-row ${r.ok ? "ok" : "bad"}"><span class="dchip s-${r.shift}">${esc(SHIFT[r.shift].name)} · ${esc(fmtDate(r.date))}</span><span class="muted small">${esc(r.dept)}</span>
+      <span class="lv-st">${r.ok ? `${ic("check", 14)} Covered by ${r.others.map(id => esc(docName(id))).join(", ")}` : r.relief ? `${ic("clock", 14)} Waiting for ${esc(docName(r.relief))} to accept` : `${ic("alert", 14)} No one else on`}</span>
+      ${!r.ok && role === "mine" && l.status === "pending" ? `<span class="lv-ask">${r.free.length ? r.free.map(id => `<button class="chip-btn" data-act="lv-ask" data-id="${esc(l.id)}" data-key="${esc(r.key)}" data-to="${esc(id)}" ${dis}>Ask ${esc(docName(id))}</button>`).join("") : `<span class="muted small">No free colleague found; use Swaps to ask someone.</span>`}</span>` : ""}
+      ${!r.ok && role !== "mine" && r.free.length ? `<span class="muted small">Free that day: ${r.free.map(id => esc(docName(id))).join(", ")}</span>` : ""}</div>`).join("")}</div>` : "";
+  const overlap = role !== "mine" && l.status === "pending" ? leaveOverlap(l) : [];
+  const canDecide = l.status === "pending" && (role === "hod" || (role === "admin" && (l.type === "emergency" || !l.hodUid)));
+  const blocked = canDecide && cov && !cov.loading && bad.length && l.type !== "emergency";
+  const c = state.lvComment[l.id] || "";
+  return `<article class="lv-card${l.status === "pending" ? " pending" : ""}">
+    <div class="head"><b>${esc(role === "mine" ? LEAVE_TYPES[l.type] + " leave" : l.name || docName(l.uid))}</b>${st}</div>
+    <p class="small">${role === "mine" ? "" : `<span class="pill">${esc(LEAVE_TYPES[l.type])}</span> `}<b>${esc(fmtRange(l.from, l.to))}</b> · ${n} day${n === 1 ? "" : "s"}${role !== "mine" ? " · " + esc(l.dept || "") : ""}</p>
+    ${l.reason ? `<p class="small lv-reason">${ic("lock", 13)} <span>${esc(l.reason)}</span></p>` : ""}
+    ${verdict}${rows}
+    ${overlap.length ? `<p class="small note">Also away in ${esc(HOD_BY[l.group] ? HOD_BY[l.group].label : "this department")} on some of these days: ${overlap.map(x => esc(x.name || docName(x.uid)) + " (" + esc(fmtRange(x.from, x.to)) + (x.status === "pending" ? ", waiting" : "") + ")").join("; ")}</p>` : ""}
+    ${l.comment ? `<p class="small"><b>${l.decidedRole === "msa" ? "MSA office" : "HOD"}:</b> ${esc(l.comment)}</p>` : ""}
+    ${l.status !== "pending" && l.decidedAt ? `<p class="muted small">${esc(LEAVE_STATUS[l.status])} ${l.decidedBy ? "by " + esc(docName(l.decidedBy)) + " " : ""}on ${esc(new Date(l.decidedAt).toLocaleDateString("en-GB", { timeZone: "Asia/Karachi" }))}${(l.removed || []).length ? ` · ${l.removed.length} dut${l.removed.length === 1 ? "y" : "ies"} taken off the roster` : ""}</p>` : ""}
+    ${canDecide ? `<div class="field"><label for="lvc-${esc(l.id)}">Comment (optional)</label><input type="text" id="lvc-${esc(l.id)}" data-lv-comment="${esc(l.id)}" value="${esc(c)}" maxlength="300"></div>
+      ${blocked ? `<p class="small note">Cover must be arranged before this can be approved. ${l.type === "emergency" ? "" : "The doctor can ask colleagues from their Leave tab."}</p>` : cov && bad.length && l.type === "emergency" ? `<p class="small note">${ic("alert", 13)} Emergency leave: you can approve now, but ${bad.length} shift${bad.length === 1 ? "" : "s"} will show as Uncovered until someone picks ${bad.length === 1 ? "it" : "them"} up.</p>` : ""}
+      <div class="btns"><button class="btn primary" data-act="lv-decide" data-id="${esc(l.id)}" data-d="approved" id="lva-${esc(l.id)}" ${dis} ${blocked || (cov && cov.loading) ? "disabled" : ""}>Approve</button><button class="btn" data-act="lv-decide" data-id="${esc(l.id)}" data-d="rejected" id="lvr-${esc(l.id)}" ${dis}>Don't approve</button></div>`
+      : role === "admin" && l.status === "pending" ? `<p class="muted small">Waiting for the HOD${l.type === "emergency" ? "" : " (the MSA office can approve emergency leave directly)"}.</p>` : ""}
+    ${role === "mine" && l.status === "pending" ? `<div class="btns"><button class="btn ghost" data-act="lv-cancel" data-id="${esc(l.id)}" id="lvx-${esc(l.id)}" ${dis}>Cancel request</button></div>` : ""}
+  </article>`;
+}
+const lvText = l => LEAVE_TYPES[l.type] + " leave, " + fmtRange(l.from, l.to) + " (" + leaveDays(l) + " day" + (leaveDays(l) === 1 ? "" : "s") + ")";
 /* ---------- icons: one line-icon set used across the app (stroke follows the text colour) ---------- */
 const ICON_PATHS = {
   roster: '<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M7.5 13.5h3M13.5 13.5h3M7.5 17h3"/>',
@@ -1592,6 +1762,7 @@ const ICON_PATHS = {
   shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
   phone: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/>',
   megaphone: '<path d="M3 10v4a1 1 0 0 0 1 1h3l6 4V5L7 9H4a1 1 0 0 0-1 1zM17 9a4 4 0 0 1 0 6"/>',
+  leave: '<path d="M3 21h18M6 21V10l6-6 6 6v11"/><path d="M10 21v-5h4v5"/>',
   week: '<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M8.5 9.5v11M15.5 9.5v11"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
@@ -1600,7 +1771,7 @@ const ICON_PATHS = {
 const HEAD_ICONS = [["On duty now", "clock"], ["Waiting for your answer", "inbox"], ["Sent and waiting", "clock"], ["Ask for a change", "swap"], ["Change log", "file"],
   ["Extended duties", "clock"], ["Uncovered shifts", "alert"], ["Rosters not uploaded", "upload"], ["Your roster", "roster"], ["Upload from a file", "upload"], ["Upload a department rota", "upload"],
   ["Can't upload", "phone"], ["Add my duties", "roster"], ["Add these duties", "roster"], ["Incident report", "alert"], ["Report an incident online", "file"], ["My incident reports", "inbox"], ["All incident reports", "inbox"],
-  ["Expected staff", "team"], ["Name and number changes", "user"], ["Waiting for approval", "team"], ["On the duty roster", "team"], ["Staff not on the duty roster", "team"],
+  ["Expected staff", "team"], ["Heads of department", "team"], ["Leave requests", "inbox"], ["Apply for leave", "leave"], ["My leave", "leave"], ["Who is your Head", "team"], ["Name and number changes", "user"], ["Waiting for approval", "team"], ["On the duty roster", "team"], ["Staff not on the duty roster", "team"],
   ["Announcement banner", "megaphone"], ["Rota by WhatsApp", "phone"], ["Station cover groups", "layers"], ["Consultants", "steth"], ["Edit your profile", "user"], ["Complete your profile", "user"], ["Set up your doctor profile", "user"]];
 function decorate(root) {
   root.querySelectorAll(".panel > h2:first-child, form.panel > h2:first-child").forEach(h => {
@@ -1933,6 +2104,7 @@ function renderTeam() {
     ${changeRequests().length ? `<section class="panel" style="grid-column:1/-1" id="pc-list"><h2>Name and number changes to approve (${changeRequests().length})</h2><div class="list">${changeRequests().map(d => { const pc = d.pendingChange; return `<div class="item"><div class="head"><b>${esc(d.name)}</b><span class="muted small">${esc(d.dept || "")}</span></div>
       ${pc.name ? `<p class="small">Name: ${esc(d.name)} → <b>${esc(pc.name)}</b></p>` : ""}${pc.phone ? `<p class="small">WhatsApp: ${esc(d.phone || "none")} → <b>${esc(pc.phone)}</b></p>` : ""}
       <div class="btns"><button class="btn primary" data-act="pc-approve" data-id="${esc(d.uid)}" id="pca-${esc(d.uid)}" ${app.busy ? "disabled" : ""}>Approve</button><button class="btn" data-act="pc-decline" data-id="${esc(d.uid)}" id="pcd-${esc(d.uid)}" ${app.busy ? "disabled" : ""}>Decline</button></div></div>`; }).join("")}</div></section>` : ""}
+    ${renderHodAssign()}
     ${renderStaff()}
     ${renderAnnForm()}
     ${renderMsaForm()}
@@ -1962,6 +2134,7 @@ function renderProfileForm() {
         : `${nameIn("pf-name", "Full name as it should appear", p.name, "profile.name")}${phoneIn("pf-phone", "WhatsApp number", p.phone, "profile.phone")}`}
       <div class="field"><span class="lab">Email</span><div class="locked-val"><b>${esc(email || "No email on this account")}</b><span class="muted small">From your sign-in</span></div></div>
       <div class="field"><label for="pf-dept">Department</label><select id="pf-dept" data-bind="profile.dept"><option value="">Choose your department</option>${DEPARTMENTS.map(x => `<option value="${esc(x)}" ${p.dept === x ? "selected" : ""}>${esc(x)}</option>`).join("")}${p.dept && !DEPARTMENTS.includes(p.dept) ? `<option value="${esc(p.dept)}" selected>${esc(p.dept)} (old name, please change)</option>` : ""}</select></div>
+      ${d && !LEAVE_OUT.includes(p.dept) && (d.approved === true || app.sample) ? `<div class="field"><label for="pf-hod">Head of department (for leave)</label><select id="pf-hod" data-bind="profile.hod"><option value="">Choose your HOD</option>${HOD_GROUPS.map(g => `<option value="${g.key}" ${(p.hod || d.hod) === g.key ? "selected" : ""}>${esc(g.name)} · ${esc(g.label)}</option>`).join("")}</select></div>` : ""}
       <div class="field"><label for="pf-desig">Designation${p.dept === "MSA" ? " (not needed for MSA)" : ""}</label><select id="pf-desig" data-bind="profile.designation"><option value="">Choose your designation</option>${DESIGNATIONS.map(x => `<option value="${esc(x)}" ${p.designation === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
     </div>
     ${locked ? (pc ? `<div class="note">Waiting for the coordinator to approve: ${pc.name ? `name → <b>${esc(pc.name)}</b>` : ""}${pc.name && pc.phone ? ", " : ""}${pc.phone ? `number → <b>${esc(pc.phone)}</b>` : ""}. <button class="btn ghost" type="button" data-act="pc-cancel" id="pc-cancel">Cancel request</button></div>`
@@ -1976,6 +2149,7 @@ function renderTabs() {
   const pend = pendingForMe().length, badge = (n, soft) => n ? `<span class="count${soft ? " soft" : ""}">${n > 99 ? "99+" : n}</span>` : "";
   const t = [["board", "Hospital roster", "Roster", "roster", ""], ["mine", me() || !app.canEdit ? "My roster" : "Edit rosters", me() || !app.canEdit ? "Mine" : "Edit", "user", unsavedCount() ? `<span class="count soft" title="Unsaved changes">•</span>` : ""],
     ["changes", "Swaps & changes", "Swaps", "swap", badge(pend)], ["consultants", "Consultants", "OPD", "steth", ""]];
+  if (leaveTabOn()) { const waiting = leaveList().filter(l => l.status === "pending" && l.uid !== app.uid && ((myHodGroups().includes(l.group) && l.hodUid === app.uid) || (app.isAdmin && (l.type === "emergency" || !l.hodUid)))).length; t.push(["leave", "Leave", "Leave", "leave", badge(waiting)]); }
   if (!app.sample) { const nNew = app.isAdmin && state.incidents ? state.incidents.filter(x => x.status === "new").length : 0; t.push(["incident", "Incident report", "Incident", "alert", badge(nNew)]); }
   if (app.canEdit || app.sample) t.push(["checks", "Checks", "Checks", "checks", badge(issues)]);
   if (app.isAdmin && !app.sample) t.push(["team", "Team", "Team", "team", badge(pendingDoctors().length)]);
@@ -2026,7 +2200,7 @@ function renderWeek(month, cellOf) {
       <div class="wk-title"><b>${label(days[0])} – ${label(days[6])}</b>${thisWeek ? `<span class="muted small">${thisWeek}</span>` : ""}</div>
       <button class="iconbtn" data-act="week-step" data-d="7" aria-label="Next week">›</button></div>
     <div class="wk-strip" role="group" aria-label="Days of the week">${strip}</div>
-    <h3 class="wk-day">${esc(fmtDate(sel))}${sel === todayKey ? ` <span class="pill done">Today</span>` : ""}${hol ? ` <span class="hname"><span class="hdot" aria-hidden="true"></span>${esc(hol)}</span>` : ""}</h3>
+    <h3 class="wk-day">${esc(fmtDate(sel))}${(() => { const a = state.onleave.filter(x => x.from <= sel && sel <= x.to); return a.length ? ` <span class="lvtag">${ic("leave", 12)} On leave: ${a.map(x => esc(docName(x.uid))).join(", ")}</span>` : ""; })()}${sel === todayKey ? ` <span class="pill done">Today</span>` : ""}${hol ? ` <span class="hname"><span class="hdot" aria-hidden="true"></span>${esc(hol)}</span>` : ""}</h3>
     <div class="wk-shifts">${shifts}</div>
   </div>`;
 }
@@ -2100,7 +2274,8 @@ function renderBoard() {
     const we = dow(date) === 0 || dow(date) === 6 ? " we" : "";
     const [, , d] = date.split("-");
     const hol = holidayOf(date);
-    html += `<div role="row" class="brow"><div class="bd${we}${date === todayKey ? " today" : ""}${hol ? " hol" : ""}" role="rowheader"${hol ? ` title="${esc(hol)}"` : ""}><b>${+d}</b><span class="muted">${DOW[dow(date)]}</span>${hol ? `<span class="hname"><span class="hdot" aria-hidden="true"></span>${esc(hol)}</span>` : ""}</div>`;
+    const away = state.onleave.filter(x => x.from <= date && date <= x.to && (deptSel === "all" || x.dept === deptSel));
+    html += `<div role="row" class="brow"><div class="bd${we}${date === todayKey ? " today" : ""}${hol ? " hol" : ""}" role="rowheader"${hol ? ` title="${esc(hol)}"` : ""}><b>${+d}</b><span class="muted">${DOW[dow(date)]}</span>${hol ? `<span class="hname"><span class="hdot" aria-hidden="true"></span>${esc(hol)}</span>` : ""}${away.length ? `<span class="lvtag" title="On leave">${ic("leave", 11)} ${away.map(x => esc(docName(x.uid))).join(", ")}</span>` : ""}</div>`;
     for (const s of SHIFTS) { const c = cellOf(date, s); html += `<div class="bc s-${s.code}${we}${date === todayKey ? " today" : ""}${c.gap && !c.cby ? " gap" : ""}${c.cby ? " covered" : ""}" role="cell" data-label="${s.name} · ${s.time}">${c.inner}</div>`; }
     html += `</div>`;
   }
@@ -2483,6 +2658,85 @@ const actions = {
     if (m !== state.month) { state.month = m; state.upload = null; if (app.sample) { const sm = buildSample(); state.rosters = sm.rosters; state.requests = sm.requests; } else subscribeMonth(); resetForm(); }
     state.weekDay = to; render();
   },
+  async "hod-pick"(b) {
+    const g = b.dataset.g; if (!HOD_BY[g]) return;
+    await guarded(() => dbCall(() => app.db.collection("doctors").doc(app.uid).update({ hod: g, updatedAt: Date.now() })), "Thanks. Your HOD is " + HOD_BY[g].name + ".");
+  },
+  async "hod-save"() {
+    const v = state.hodDraft; if (!v) return;
+    const clean = {}; HOD_GROUPS.forEach(g => { if (v[g.key]) clean[g.key] = v[g.key]; });
+    const ok = await guarded(() => dbCall(() => app.db.collection("settings").doc("contact").set({ hods: clean, updatedAt: Date.now(), updatedBy: app.uid }, { merge: true })), "Heads of department saved.");
+    if (ok) state.hodDraft = null;
+  },
+  async "lv-submit"() {
+    const f = state.lv || {};
+    if (!LEAVE_TYPES[f.type]) { toast("Choose the type of leave."); return; }
+    if (!f.from || !f.to) { toast("Choose the dates."); return; }
+    if (f.to < f.from) { toast("The last day can't be before the first day."); return; }
+    if (datesBetween(f.from, f.to).length > 90) { toast("Leave can be at most 90 days in one request."); return; }
+    if (f.from < todayKey && f.type !== "sick" && f.type !== "emergency") { toast("Casual and Ex-Pakistan leave can't start in the past."); return; }
+    if (!String(f.reason || "").trim()) { toast("Add a reason (it stays confidential)."); return; }
+    const g = app.myDoc.hod, hodUid = hodUidOf(g) === app.uid ? "" : hodUidOf(g);
+    const clash = leaveList().find(l => l.uid === app.uid && (l.status === "pending" || l.status === "approved") && l.from <= f.to && f.from <= l.to);
+    if (clash) { toast("You already have leave on some of these days (" + fmtRange(clash.from, clash.to) + ")."); return; }
+    const doc = { uid: app.uid, name: docName(app.uid), dept: app.myDoc.dept || "", group: g, hodUid, type: f.type, from: f.from, to: f.to, reason: String(f.reason).trim(), status: "pending", relief: {}, createdAt: Date.now() };
+    const to = hodUid ? hodUid : null, n = to ? 0 : waNumber(state.contact && state.contact.msaWhatsApp), win = to || n ? waWindow() : null;
+    const ok = await guarded(() => dbCall(() => app.db.collection("leaves").add(doc)), "Leave request sent to " + (hodUid ? HOD_BY[g].name : "the MSA office") + ".");
+    if (!ok) { waAbort(win); return; }
+    state.lv = { type: "casual", from: todayKey, to: todayKey, reason: "" }; render();
+    const text = "Assalam o Alaikum, this is " + docName(app.uid) + " (" + (app.myDoc.dept || "") + "). I've applied for " + lvText(doc) + " on the Eastridge duty roster. Please review it in the Leave tab:";
+    if (to) waSend(win, to, text); else if (n) waGo(win, "https://wa.me/" + n + "?text=" + encodeURIComponent(text + "\n\n" + location.origin + location.pathname)); else waAbort(win);
+  },
+  async "lv-cancel"(b) {
+    if (!confirm("Cancel this leave request?")) return;
+    await guarded(() => dbCall(() => app.db.collection("leaves").doc(b.dataset.id).update({ status: "cancelled", decidedAt: Date.now() })), "Leave request cancelled.");
+  },
+  async "lv-ask"(b) {
+    const l = state.leaves[b.dataset.id], [date, shift] = b.dataset.key.split("|"), to = b.dataset.to; if (!l) return;
+    const month = date.slice(0, 7), win = waWindow();
+    const req = { type: "cover", month, from: app.uid, to, give: { date, shift }, giveDept: dutyDept(app.uid, date, shift), note: "Cover for my " + LEAVE_TYPES[l.type].toLowerCase() + " leave (" + fmtRange(l.from, l.to) + ")" };
+    const ok = await guarded(async () => {
+      await store.addRequest({ ...req, status: "pending" });
+      await dbCall(() => app.db.collection("leaves").doc(l.id).update({ ["relief." + b.dataset.key]: to }));
+    }, "Asked " + docName(to) + " to cover " + fmtDuty(req.give) + ".");
+    if (ok) waSend(win, to, reqText(req)); else waAbort(win);
+  },
+  async "lv-decide"(b) {
+    const l = state.leaves[b.dataset.id]; if (!l || l.status !== "pending") return;
+    const approve = b.dataset.d === "approved", role = myHodGroups().includes(l.group) && l.hodUid === app.uid ? "hod" : "msa";
+    if (approve) { const cov = leaveCoverage(l); if (cov.loading) { toast("Still checking the roster. Try again in a moment."); return; }
+      if (cov.rows.some(r => !r.ok) && l.type !== "emergency") { toast("Cover must be arranged for every duty before approving."); return; }
+      if (cov.rows.some(r => !r.ok) && !confirm("Some shifts will be left without a doctor. Approve this emergency leave anyway?")) return; }
+    const win = waWindow(), comment = String(state.lvComment[l.id] || "").trim();
+    let removed = [];
+    const ok = await guarded(async () => {
+      const batch = app.db.batch();
+      if (approve) {
+        // take the doctor's remaining duties during the leave off the roster, and record it in the change log
+        for (const m of [...new Set(datesBetween(l.from, l.to).map(d => d.slice(0, 7)))]) {
+          const docA = await store.getRosterDoc(m, l.uid), shifts = cloneShifts(docA.shifts), gone = [];
+          for (const d of datesBetween(l.from, l.to).filter(x => x.slice(0, 7) === m)) if ((shifts[d] || []).length) { shifts[d].forEach(c => gone.push({ date: d, shift: c })); delete shifts[d]; }
+          if (!gone.length) continue;
+          removed = removed.concat(gone);
+          const kept = {}; for (const k in docA.away) { const [d, c] = k.split("|"); if (hasDuty(shifts, d, c)) kept[k] = docA.away[k]; }
+          batch.set(app.db.collection("rosters").doc(m + "_" + safeId(l.uid)), { month: m, doctorId: l.uid, shifts: onlyMonth(shifts, m), away: kept, updatedAt: Date.now(), updatedBy: app.uid });
+          batch.set(app.db.collection("requests").doc(), { type: "edit", status: "done", month: m, from: l.uid, added: 0, removed: gone.length, note: "Leave approved", by: app.uid, createdAt: Date.now(), decidedAt: Date.now() });
+        }
+        batch.set(app.db.collection("onleave").doc(l.id), { uid: l.uid, from: l.from, to: l.to, dept: l.dept || "", group: l.group, createdAt: Date.now() });
+      }
+      batch.update(app.db.collection("leaves").doc(l.id), { status: approve ? "approved" : "rejected", comment, decidedBy: app.uid, decidedAt: Date.now(), decidedRole: role, removed });
+      await dbCall(() => batch.commit());
+    }, approve ? "Leave approved." + (removed.length ? " " + removed.length + " dut" + (removed.length === 1 ? "y was" : "ies were") + " taken off the roster." : "") : "Leave not approved.");
+    if (!ok) { waAbort(win); return; }
+    delete state.lvComment[l.id];
+    const text = "Assalam o Alaikum " + docName(l.uid) + ", your " + lvText(l) + " has been " + (approve ? "approved" : "not approved") + (role === "msa" ? " by the MSA office" : "") + "." + (comment ? " Comment: " + comment : "");
+    waSend(win, l.uid, text);
+    const n = waNumber(state.contact && state.contact.msaWhatsApp);
+    if (approve && role === "hod" && n) {
+      const msa = { toId: null, href: "https://wa.me/" + n + "?text=" + encodeURIComponent("Assalam o Alaikum, I've approved " + (l.name || docName(l.uid)) + "'s " + lvText(l) + " (" + (l.dept || "") + ")." + (removed.length ? " " + removed.length + " dut" + (removed.length === 1 ? "y" : "ies") + " taken off the roster." : "") + "\n\n" + location.origin + location.pathname) };
+      if (state.waPrompt) state.waNext = msa; else { state.waPrompt = msa; render(); }
+    }
+  },
   "show-past"() { state.showPast = !state.showPast; render(); },
   "ir-fill"(b) { const f = irState(); f[b.dataset.k] = b.dataset.v; irSaveDraft(); render(); },
   "ir-clear"() { if (!confirm("Clear everything you've typed in this form?")) return; state.ir = irBlank(); state.irFiles = []; irSaveDraft(); irSaveFiles(); render(); },
@@ -2761,7 +3015,7 @@ const actions = {
     const ok = await guarded(() => store.updateRequest(id, { status: "declined", decidedAt: Date.now(), decidedBy: app.uid }), "Declined.");
     if (ok && r && !app.sample) waSend(win, r.from, answerText({ ...r, status: "declined" })); else waAbort(win);
   },
-  "wa-prompt-close"() { state.waPrompt = null; render(); },
+  "wa-prompt-close"() { state.waPrompt = state.waNext || null; state.waNext = null; render(); },
   async "cancel-req"(b) { const id = b.dataset.id; await guarded(() => store.updateRequest(id, { status: "cancelled", decidedAt: Date.now(), decidedBy: app.uid }), "Request cancelled."); },
 };
 async function saveRosterNow(id, month, need, reason, approved, win) {
@@ -2794,13 +3048,14 @@ document.addEventListener("keydown", e => {
   if ($("#popup") && $("#popup").innerHTML) { actions["ext-pop-later"](); actions["popup-later"](); }
 });
 document.addEventListener("toggle", e => { if (e.target.id === "staff-add-box") state.staffAdd = e.target.open; }, true); // keep "Add names" open across live updates
-document.addEventListener("click", e => { if (e.target.closest("#wa-prompt-go")) setTimeout(() => { state.waPrompt = null; render(); }, 300); });
+document.addEventListener("click", e => { if (e.target.closest("#wa-prompt-go")) setTimeout(() => { state.waPrompt = state.waNext || null; state.waNext = null; render(); }, 300); });
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
 });
-const LIVE_BINDS = new Set([...IR_TEXT.map(x => "ir." + x[0]), "ir.involvesOther", "irNote.comments", "csQ", "extPrompt.reason", "staffPaste", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
+const LIVE_BINDS = new Set(["lv.reason", ...IR_TEXT.map(x => "ir." + x[0]), "ir.involvesOther", "irNote.comments", "csQ", "extPrompt.reason", "staffPaste", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
 document.addEventListener("input", e => {
+  if (e.target.dataset && e.target.dataset.lvComment) { state.lvComment[e.target.dataset.lvComment] = e.target.value; return; }
   const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;
   if (path.startsWith("irNote.")) irNoteInit();
   setBind(path, el.value);
@@ -2814,6 +3069,8 @@ document.addEventListener("change", async e => {
   if (el.id === "file-in") { if (el.files && el.files[0]) await readFile(el.files[0]); return; }
   if (el.dataset && el.dataset.irJci !== undefined) { const f = irState(), i = +el.dataset.irJci; f.jci = el.checked ? [...new Set([...f.jci, i])].sort((a, b) => a - b) : f.jci.filter(x => x !== i); irSaveDraft(); render(); return; }
   if (el.dataset && el.dataset.bind && el.dataset.bind.startsWith("irNote.")) irNoteInit();
+  if (el.dataset && el.dataset.hodAssign) { state.hodDraft = { ...((state.contact && state.contact.hods) || {}), ...(state.hodDraft || {}), [el.dataset.hodAssign]: el.value }; render(); return; }
+  if (el.dataset && el.dataset.lvComment) { state.lvComment[el.dataset.lvComment] = el.value; return; }
   if (el.dataset && el.dataset.staffLink !== undefined) { const l = (state.staff || []).map(x => ({ ...x })), e = l[+el.dataset.staffLink]; if (e) { if (el.value) e.uid = el.value; else delete e.uid; await saveStaff(l, el.value ? "Linked." : "Link removed."); } return; }
   if (el.dataset && el.dataset.actCg) { state.cgDraft = { ...((state.contact && state.contact.coverGroups) || DEFAULT_COVER_GROUPS), ...(state.cgDraft || {}), [el.dataset.dept]: el.value }; render(); return; }
   if (el.id === "ir-photo-in") { if (el.files && el.files.length) await irAddPhotos(el.files); el.value = ""; return; }
@@ -2847,6 +3104,7 @@ document.addEventListener("submit", async e => {
     if (nn !== d.name || np !== d.phone) { pending = { at: Date.now() }; if (nn !== d.name) pending.name = nn; if (np !== d.phone) pending.phone = np; }
   }
   const data = { name, dept: p.dept.trim(), designation: DESIGNATIONS.includes(p.designation) ? p.designation : "", phone };
+  if (HOD_BY[p.hod]) data.hod = p.hod;
   if (!d || !d.email) data.email = app.email || "";
   if (d && d.approved === true) data.profileLocked = true; // complete from now on: further name/number changes go through the coordinator
   if (pending) data.pendingChange = pending;
@@ -3450,6 +3708,7 @@ function stopLive() {
   [unsubDoctors, unsubRosters, unsubRequests, unsubContact, unsubPending, unsubPrevOwn, unsubExt, unsubCover].forEach(u => u && u()); unsubCover = null; state.cover = {};
   if (unsubStaff) unsubStaff(); unsubStaff = null; state.staff = null;
   if (unsubIncidents) unsubIncidents(); unsubIncidents = null; state.incidents = null; state.irView = null;
+  stopLeaves();
   unsubDoctors = unsubRosters = unsubRequests = unsubContact = unsubPending = unsubPrevOwn = unsubExt = null; state.contact = null; state.extended = {};
   state.pending = []; logMonth = null; rosterSnap = {}; prevOwn = null;
   state.doctors = {}; state.rosters = {}; state.requests = []; state.drafts = {}; state.upload = null; state.editFor = null;
