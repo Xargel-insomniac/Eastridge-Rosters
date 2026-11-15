@@ -1696,6 +1696,8 @@ const myHodGroups = () => HOD_GROUPS.filter(g => app.uid && hodUidOf(g.key) === 
 /* HODs don't choose an HOD: their own leave goes straight to the MSA office (coordinator). Wait until the HOD list has loaded,
    so an HOD never sees the question while the app is still finding out they're an HOD. */
 const isHod = () => myHodGroups().length > 0;
+const groupOf = id => { const h = HOD_GROUPS.find(g => hodUidOf(g.key) === id); if (h) return h.key; const d = (app.allDoctors || {})[id]; return d && HOD_BY[d.hod] ? d.hod : ""; };
+const groupName = g => HOD_BY[g] ? HOD_BY[g].label : "your department";
 const needHodChoice = () => app.phase === "app" && !app.sample && state.contactLoaded && !!app.myDoc && app.myDoc.approved === true && !app.myDoc.offRoster
   && !LEAVE_OUT.includes(app.myDoc.dept) && !HOD_BY[app.myDoc.hod] && !isHod();
 const canApplyLeave = () => !app.sample && !!me() && !!app.myDoc && !LEAVE_OUT.includes(app.myDoc.dept) && (!!HOD_BY[app.myDoc.hod] || isHod());
@@ -1755,20 +1757,22 @@ function lvMonth(m) {
 }
 /* Every duty the doctor still has during the leave, and whether that station stays covered without them. */
 function leaveCoverage(l) {
+  const grp = l.group || groupOf(l.uid); // relievers must be from the leave-taker's own department (same HOD), never another one
   const months = [...new Set(datesBetween(l.from, l.to).map(d => d.slice(0, 7)))], rows = [];
   for (const m of months) {
     const R = lvMonth(m); if (!R) return { loading: true, rows: [] };
     const mine = R.docs[l.uid] || {}, deptAt = (id, d, c) => ((R.away[id] || {})[d + "|" + c]) || deptOfId(id) || "No department";
     for (const d of datesBetween(l.from, l.to).filter(x => x.slice(0, 7) === m)) for (const c of sortCodes((mine[d] || []).slice())) {
       const dept = deptAt(l.uid, d, c), key = d + "|" + c;
-      const others = Object.keys(R.docs).filter(id => id !== l.uid && hasDuty(R.docs[id], d, c) && deptAt(id, d, c) === dept && !onLeaveOn(id, d));
+      const others = Object.keys(R.docs).filter(id => id !== l.uid && hasDuty(R.docs[id], d, c) && deptAt(id, d, c) === dept && groupOf(id) === grp && !onLeaveOn(id, d));
       const relief = (l.relief || {})[key];
       const busy = id => hasDuty(R.docs[id], d, "M") || hasDuty(R.docs[id], d, "E") || hasDuty(R.docs[id], d, "N") || (c === "M" && hasDuty((lvMonth(isoAdd(d, -1).slice(0, 7)) || R).docs[id] || {}, isoAdd(d, -1), "N")) || (c === "N" && hasDuty((lvMonth(isoAdd(d, 1).slice(0, 7)) || R).docs[id] || {}, isoAdd(d, 1), "M"));
-      const free = Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && x.uid !== l.uid && x.dept === dept && !onLeaveOn(x.uid, d) && !busy(x.uid)).map(x => x.uid).slice(0, 4);
-      rows.push({ date: d, shift: c, key, dept, month: m, others, relief, free, ok: others.length > 0 });
+      const free = Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && x.uid !== l.uid && groupOf(x.uid) === grp && !onLeaveOn(x.uid, d) && !busy(x.uid))
+        .sort((a, b) => (a.dept === dept ? 0 : 1) - (b.dept === dept ? 0 : 1) || (a.name || "").localeCompare(b.name || "")).map(x => x.uid).slice(0, 5); // same station first
+      rows.push({ date: d, shift: c, key, dept, month: m, others, relief, free, grp, ok: others.length > 0 });
     }
   }
-  return { loading: false, rows, ok: rows.every(r => r.ok) };
+  return { loading: false, rows, grp, ok: rows.every(r => r.ok) };
 }
 /* HODs can fill an empty shift with someone from their team (doctors who chose them); only coordinators edit rosters. */
 const myTeam = dept => Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && myHodGroups().includes(x.hod) && (!dept || x.dept === dept));
@@ -1836,7 +1840,7 @@ function renderLeave() {
     <div class="field"><span class="lab">Type of leave</span><div class="ir-radios">${Object.entries(LEAVE_TYPES).map(([k, t]) => `<label class="check"><input type="radio" name="lv-type" data-bind="lv.type" value="${k}" ${f.type === k ? "checked" : ""}> ${t}${TYPE_HINT[k] ? ` <span class="muted small">(${TYPE_HINT[k]})</span>` : ""}</label>`).join("")}</div></div>
     <div class="ir-grid"><div class="field"><label for="lv-from">From</label><input type="date" id="lv-from" data-bind="lv.from" value="${esc(f.from)}"></div><div class="field"><label for="lv-to">To (last day of leave)</label><input type="date" id="lv-to" data-bind="lv.to" value="${esc(f.to)}" min="${esc(f.from)}"></div></div>
     <div class="field"><label for="lv-reason">Reason</label><textarea class="plain" id="lv-reason" data-bind="lv.reason" rows="3" maxlength="1000" placeholder="Kept confidential">${esc(f.reason)}</textarea></div>
-    ${preview ? (preview.loading ? `<p class="muted small">Checking your duties…</p>` : preview.rows.length ? `<div class="note">You have <b>${preview.rows.length}</b> dut${preview.rows.length === 1 ? "y" : "ies"} in this period. ${preview.rows.filter(r => !r.ok).length ? `<b>${preview.rows.filter(r => !r.ok).length}</b> would leave the station without a doctor, so after you apply, ask colleagues to cover them below.${f.type === "emergency" ? " (Emergency leave can be approved before cover is arranged.)" : ""}` : "Each one still has a colleague from the station on duty."}</div>` : `<p class="muted small">You have no duties in this period.</p>`) : ""}
+    ${preview ? (preview.loading ? `<p class="muted small">Checking your duties…</p>` : preview.rows.length ? `<div class="note">You have <b>${preview.rows.length}</b> dut${preview.rows.length === 1 ? "y" : "ies"} in this period. ${preview.rows.filter(r => !r.ok).length ? `<b>${preview.rows.filter(r => !r.ok).length}</b> ${preview.rows.filter(r => !r.ok).length === 1 ? "has" : "have"} no other <b>${esc(groupName(preview.grp))}</b> doctor on that shift, so after you apply, ask ${esc(groupName(preview.grp))} colleagues to cover them below.${f.type === "emergency" ? " (Emergency leave can be approved before cover is arranged.)" : ""}` : "Each one still has another " + esc(groupName(preview.grp)) + " doctor on that shift."}</div>` : `<p class="muted small">You have no duties in this period.</p>`) : ""}
     ${chk.length ? `<div class="note${chk.some(x => x.over) ? " bad" : " ok"}" id="lv-balnote">This uses ${balLine(chk, "")}.${chk.some(x => x.over) ? " You can still apply; your HOD will see that it's over your balance." : ""}</div>` : ""}
     <div class="btns"><button class="btn primary" type="button" data-act="lv-submit" id="lv-submit" ${app.busy ? "disabled" : ""}>Apply for leave</button></div>
   </form>` : !app.isAdmin && !groups.length ? `<section class="panel"><h2>Leave</h2><p class="muted">${LEAVE_OUT.includes((app.myDoc || {}).dept) ? "Leave management for your department is coming soon." : "You're not on the duty roster, so there's nothing to apply for here."}</p></section>` : ""}
@@ -1849,10 +1853,10 @@ function leaveCard(l, role) {
   const st = `<span class="pill ${l.status === "approved" ? "done" : l.status === "pending" ? "warn" : "declined"}">${esc(LEAVE_STATUS[l.status] || l.status)}</span>`;
   const bad = cov && !cov.loading ? cov.rows.filter(r => !r.ok) : [];
   const verdict = !cov ? "" : cov.loading ? `<p class="muted small">Checking the roster…</p>` : !cov.rows.length ? `<div class="lv-verdict ok">${ic("check", 16)} No duties during this leave.</div>`
-    : bad.length ? `<div class="lv-verdict bad">${ic("alert", 16)} ${bad.length} of ${cov.rows.length} dut${cov.rows.length === 1 ? "y" : "ies"} would leave the station without a doctor.</div>` : `<div class="lv-verdict ok">${ic("check", 16)} All ${cov.rows.length} dut${cov.rows.length === 1 ? "y" : "ies"} stay covered.</div>`;
+    : bad.length ? `<div class="lv-verdict bad">${ic("alert", 16)} ${bad.length} of ${cov.rows.length} dut${cov.rows.length === 1 ? "y has" : "ies have"} no other ${esc(groupName(cov.grp))} doctor on that shift.</div>` : `<div class="lv-verdict ok">${ic("check", 16)} All ${cov.rows.length} dut${cov.rows.length === 1 ? "y" : "ies"} stay covered.</div>`;
   const rows = cov && !cov.loading && cov.rows.length ? `<div class="lv-rows">${cov.rows.map(r => `<div class="lv-row ${r.ok ? "ok" : "bad"}"><span class="dchip s-${r.shift}">${esc(SHIFT[r.shift].name)} · ${esc(fmtDate(r.date))}</span><span class="muted small">${esc(r.dept)}</span>
-      <span class="lv-st">${r.ok ? `${ic("check", 14)} Covered by ${r.others.map(id => esc(docName(id))).join(", ")}` : r.relief ? `${ic("clock", 14)} Waiting for ${esc(docName(r.relief))} to accept` : `${ic("alert", 14)} No one else on`}</span>
-      ${!r.ok && role === "mine" && l.status === "pending" ? `<span class="lv-ask">${r.free.length ? r.free.map(id => `<button class="chip-btn" data-act="lv-ask" data-id="${esc(l.id)}" data-key="${esc(r.key)}" data-to="${esc(id)}" ${dis}>Ask ${esc(docName(id))}</button>`).join("") : `<span class="muted small">No free colleague found; use Swaps to ask someone.</span>`}</span>` : ""}
+      <span class="lv-st">${r.ok ? `${ic("check", 14)} Covered by ${r.others.map(id => esc(docName(id))).join(", ")}` : r.relief ? `${ic("clock", 14)} Waiting for ${esc(docName(r.relief))} to accept` : `${ic("alert", 14)} No other ${esc(groupName(r.grp))} doctor on`}</span>
+      ${!r.ok && role === "mine" && l.status === "pending" ? `<span class="lv-ask">${r.free.length ? r.free.map(id => `<button class="chip-btn" data-act="lv-ask" data-id="${esc(l.id)}" data-key="${esc(r.key)}" data-to="${esc(id)}" ${dis}>Ask ${esc(docName(id))}</button>`).join("") : `<span class="muted small">No free ${esc(groupName(r.grp))} colleague found; use Swaps to ask someone from ${esc(groupName(r.grp))}.</span>`}</span>` : ""}
       ${!r.ok && role !== "mine" && l.status === "pending" ? (() => { const f = role === "hod" ? r.free.filter(id => myTeam().some(x => x.uid === id)) : r.free;
         return f.length ? `<span class="lv-ask"><span class="muted small">Allot to:</span>${f.map(id => `<button class="chip-btn" data-act="lv-allot" data-id="${esc(l.id)}" data-key="${esc(r.key)}" data-to="${esc(id)}" ${dis}>${ic("user", 13)} ${esc(docName(id))}</button>`).join("")}</span>` : `<span class="muted small">No one ${role === "hod" ? "in your team " : ""}is free that day.</span>`; })() : ""}</div>`).join("")}</div>` : "";
   const overlap = role !== "mine" && l.status === "pending" ? leaveOverlap(l) : [];
