@@ -1789,15 +1789,18 @@ function slotStatus(id, date, c) {
 }
 function renderAllotPrompt() {
   const a = state.allot; if (!a) return "";
-  const pool = (app.isAdmin ? Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && x.dept === a.dept) : myTeam(a.dept)).map(x => ({ x, st: slotStatus(x.uid, a.date, a.shift) }));
+  const lv = a.leaveId ? state.leaves[a.leaveId] : null;
+  const pool = (lv ? Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && x.uid !== lv.uid && groupOf(x.uid) === a.grp)
+    : app.isAdmin ? Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && x.dept === a.dept) : myTeam(a.dept)).map(x => ({ x, st: slotStatus(x.uid, a.date, a.shift) }));
   const order = { free: 0, busy: 1, on: 2, leave: 3 }; pool.sort((p, q) => order[p.st] - order[q.st] || (p.x.name || "").localeCompare(q.x.name || ""));
   const label = { free: "Free that day", busy: "Already has a duty that day (would be a long stretch)", on: "Already on this shift", leave: "On leave" };
   return `<div class="pop-back" data-act="allot-close"></div><div class="pop" role="dialog" aria-modal="true" aria-labelledby="allot-title">
     <div class="pop-icon" aria-hidden="true">${ic("user", 24)}</div>
-    <h2 id="allot-title">Allot ${esc(SHIFT[a.shift].name)}, ${esc(fmtDate(a.date))}</h2>
-    <p class="small muted">${esc(a.dept)} has no doctor on this shift. Choose someone ${app.isAdmin ? "from the department" : "from your team"}; it's added to their roster and WhatsApp opens to let them know.</p>
-    <div class="allot-list">${pool.length ? pool.map(({ x, st }) => `<button class="allot-opt ${st}" data-act="allot-do" data-id="${esc(x.uid)}" ${st === "leave" || st === "on" || app.busy ? "disabled" : ""}>${avatar(x.uid)}<span><b>${esc(x.name)}</b><span class="small">${esc(x.designation || "")} · ${label[st]}</span></span></button>`).join("")
-      : `<p class="small note">No one ${app.isAdmin ? "in this department" : "in your team"} works in ${esc(a.dept)}.</p>`}</div>
+    <h2 id="allot-title">${lv ? `Cover ${esc(lv.name || docName(lv.uid))}'s ${esc(SHIFT[a.shift].name)}, ${esc(fmtDate(a.date))}` : `Allot ${esc(SHIFT[a.shift].name)}, ${esc(fmtDate(a.date))}`}</h2>
+    <p class="small muted">${lv ? `Choose any <b>${esc(groupName(a.grp))}</b> doctor (${pool.length}). The duty in ${esc(a.dept)} moves from ${esc(lv.name || docName(lv.uid))} to them, and WhatsApp opens to let them know.`
+      : `${esc(a.dept)} has no doctor on this shift. Choose someone ${app.isAdmin ? "from the department" : "from your team"}; it's added to their roster and WhatsApp opens to let them know.`}</p>
+    <div class="allot-list">${pool.length ? pool.map(({ x, st }) => `<button class="allot-opt ${st}" data-act="allot-do" data-id="${esc(x.uid)}" ${st === "leave" || st === "on" || app.busy ? "disabled" : ""}>${avatar(x.uid)}<span><b>${esc(x.name)}</b><span class="small">${esc(x.designation || "")}${lv && x.dept ? " · " + esc(x.dept) : ""} · ${label[st]}</span></span></button>`).join("")
+      : `<p class="small note">${lv ? `No other ${esc(groupName(a.grp))} doctors found.` : `No one ${app.isAdmin ? "in this department" : "in your team"} works in ${esc(a.dept)}.`}</p>`}</div>
     <div class="btns"><button class="btn" data-act="allot-close" id="allot-close">Cancel</button></div></div>`;
 }
 /* Add one duty to a doctor's roster (and, for leave cover, take it off the doctor going on leave), logged in the change log. */
@@ -1857,8 +1860,10 @@ function leaveCard(l, role) {
   const rows = cov && !cov.loading && cov.rows.length ? `<div class="lv-rows">${cov.rows.map(r => `<div class="lv-row ${r.ok ? "ok" : "bad"}"><span class="dchip s-${r.shift}">${esc(SHIFT[r.shift].name)} · ${esc(fmtDate(r.date))}</span><span class="muted small">${esc(r.dept)}</span>
       <span class="lv-st">${r.ok ? `${ic("check", 14)} Covered by ${r.others.map(id => esc(docName(id))).join(", ")}` : r.relief ? `${ic("clock", 14)} Waiting for ${esc(docName(r.relief))} to accept` : `${ic("alert", 14)} No other ${esc(groupName(r.grp))} doctor on`}</span>
       ${!r.ok && role === "mine" && l.status === "pending" ? `<span class="lv-ask">${r.free.length ? r.free.map(id => `<button class="chip-btn" data-act="lv-ask" data-id="${esc(l.id)}" data-key="${esc(r.key)}" data-to="${esc(id)}" ${dis}>Ask ${esc(docName(id))}</button>`).join("") : `<span class="muted small">No free ${esc(groupName(r.grp))} colleague found; use Swaps to ask someone from ${esc(groupName(r.grp))}.</span>`}</span>` : ""}
-      ${!r.ok && role !== "mine" && l.status === "pending" ? (() => { const f = role === "hod" ? r.free.filter(id => myTeam().some(x => x.uid === id)) : r.free;
-        return f.length ? `<span class="lv-ask"><span class="muted small">Allot to:</span>${f.map(id => `<button class="chip-btn" data-act="lv-allot" data-id="${esc(l.id)}" data-key="${esc(r.key)}" data-to="${esc(id)}" ${dis}>${ic("user", 13)} ${esc(docName(id))}</button>`).join("")}</span>` : `<span class="muted small">No one ${role === "hod" ? "in your team " : ""}is free that day.</span>`; })() : ""}</div>`).join("")}</div>` : "";
+      ${!r.ok && role !== "mine" && l.status === "pending" ? (() => { const f = r.free; // already only free doctors from the leave-taker's department (the HOD's team)
+        const all = Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && x.uid !== l.uid && groupOf(x.uid) === r.grp).length;
+        return `<span class="lv-ask"><span class="muted small">${f.length ? "Free: allot to" : "No one in " + esc(groupName(r.grp)) + " is free that day."}</span>${f.slice(0, 3).map(id => `<button class="chip-btn" data-act="lv-allot" data-id="${esc(l.id)}" data-key="${esc(r.key)}" data-to="${esc(id)}" ${dis}>${ic("user", 13)} ${esc(docName(id))}</button>`).join("")}`
+          + (all ? `<button class="chip-btn allot-btn" data-act="lv-allot-open" data-id="${esc(l.id)}" data-key="${esc(r.key)}" ${dis}>${ic("team", 13)} All ${esc(groupName(r.grp))} doctors (${all})…</button>` : "") + `</span>`; })() : ""}</div>`).join("")}</div>` : "";
   const overlap = role !== "mine" && l.status === "pending" ? leaveOverlap(l) : [];
   const canDecide = l.status === "pending" && (role === "hod" || (role === "admin" && (l.type === "emergency" || !l.hodUid)));
   const blocked = canDecide && cov && !cov.loading && bad.length && l.type !== "emergency";
@@ -2887,8 +2892,18 @@ const actions = {
   },
   "allot-open"(b) { state.allot = { date: b.dataset.date, shift: b.dataset.shift, dept: b.dataset.dept }; render(); },
   "allot-close"() { state.allot = null; render(); },
+  "lv-allot-open"(b) {
+    const l = state.leaves[b.dataset.id]; if (!l) return; const [date, shift] = b.dataset.key.split("|");
+    const row = (leaveCoverage(l).rows || []).find(r => r.key === b.dataset.key);
+    state.allot = { date, shift, dept: row ? row.dept : (l.dept || ""), leaveId: l.id, grp: row ? row.grp : (l.group || groupOf(l.uid)) }; render();
+  },
   async "allot-do"(b) {
     const a = state.allot, id = b.dataset.id; if (!a) return;
+    if (a.leaveId) { const l = state.leaves[a.leaveId]; if (!l) return; const win = waWindow(); // cover for someone's leave
+      const ok = await guarded(() => allotDuty(id, a.date, a.shift, a.dept, l.uid), docName(id) + " now covers " + SHIFT[a.shift].name + ", " + fmtDate(a.date) + ".");
+      state.allot = null; render();
+      if (ok) waSend(win, id, "Assalam o Alaikum " + docName(id) + ", you've been allotted the " + SHIFT[a.shift].name + " duty (" + SHIFT[a.shift].time + ") on " + fmtDate(a.date) + " in " + a.dept + " to cover " + (l.name || docName(l.uid)) + "'s leave, by " + docName(app.uid) + " on the Eastridge duty roster."); else waAbort(win);
+      return; }
     const win = waWindow();
     const ok = await guarded(() => allotDuty(id, a.date, a.shift, a.dept, null), docName(id) + " now has " + SHIFT[a.shift].name + ", " + fmtDate(a.date) + ".");
     state.allot = null; render();
