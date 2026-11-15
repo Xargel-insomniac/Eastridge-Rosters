@@ -110,10 +110,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .who .pill.done { background: var(--brand-red); color: #ffffff; border-color: transparent; } /* HOD badge: red */
 /* Coordinator badge: glowing gold with a crown and a shine that sweeps across (still, for people who turn off motion) */
 .who .pill.done.coord-badge { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(180deg, #ffe27a 0%, #ffc61a 55%, #e9a500 100%); color: #241800; font-weight: 800; letter-spacing: .06em;
-  box-shadow: 0 0 0 1px rgba(140, 90, 0, .45) inset, 0 0 8px 1px rgba(255, 196, 30, .7); animation: coord-glow 2.2s ease-in-out infinite; }
+  box-shadow: 0 0 0 1px rgba(140, 90, 0, .45) inset, 0 0 8px 1px rgba(170, 0, 0, .75); animation: coord-glow 2.2s ease-in-out infinite; }
 .coord-badge .crown { flex: none; filter: drop-shadow(0 0 2px rgba(255, 255, 255, .8)); animation: coord-crown 2.2s ease-in-out infinite; }
 .coord-badge::after { content: ""; position: absolute; top: -20%; left: -70%; width: 45%; height: 140%; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .95), transparent); transform: skewX(-20deg); animation: coord-shine 3s ease-in-out infinite; pointer-events: none; }
-@keyframes coord-glow { 0%, 100% { box-shadow: 0 0 0 1px rgba(140, 90, 0, .45) inset, 0 0 6px 1px rgba(255, 196, 30, .55); } 50% { box-shadow: 0 0 0 1px rgba(140, 90, 0, .45) inset, 0 0 14px 4px rgba(255, 200, 40, .95), 0 0 28px 6px rgba(255, 160, 0, .45); } }
+@keyframes coord-glow { 0%, 100% { box-shadow: 0 0 0 1px rgba(140, 90, 0, .45) inset, 0 0 6px 1px rgba(170, 0, 0, .6); } 50% { box-shadow: 0 0 0 1px rgba(140, 90, 0, .45) inset, 0 0 14px 4px rgba(200, 0, 0, .95), 0 0 30px 8px rgba(120, 0, 0, .65); } } /* blood-red glow */
 @keyframes coord-shine { 0%, 50% { left: -70%; } 100% { left: 140%; } }
 @keyframes coord-crown { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-1px) rotate(-8deg); } }
 .hero-copy { align-self: end; padding-block: 8px 32px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; max-width: 1080px; animation: rise .8s .15s cubic-bezier(.2,.7,.2,1) both; }
