@@ -210,6 +210,22 @@ h2.has-ic { display: flex; align-items: center; gap: 10px; }
 .av { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: .58rem; font-weight: 800; letter-spacing: .02em; color: #fff; background: hsl(var(--h) 52% 42%); margin-left: -4px; }
 .chip { padding-left: 6px; } .chip .cn { overflow: hidden; text-overflow: ellipsis; }
 .board .bc.today { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+.cs-phone { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: -2px; }
+.cs-num { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: .86rem; color: var(--ink); text-decoration: none; }
+.cs-links { display: inline-flex; gap: 6px; } .cs-links .icon-link { width: 30px; height: 30px; }
+.cs-card.dir { border-style: dashed; }
+details.cs-group > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
+details.cs-group > summary::-webkit-details-marker { display: none; } details.cs-group > summary h3 { margin: 0; }
+details.cs-group[open] > summary { margin-bottom: 10px; } .cs-sum { display: inline-flex; align-items: center; gap: 8px; }
+.cs-chev { width: 9px; height: 9px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .2s; margin: 0 4px 3px 0; }
+details.cs-group[open] .cs-chev { transform: rotate(-135deg); margin-bottom: -3px; }
+.cs-fold-all { float: right; }
+.cp-prev { display: flex; flex-wrap: wrap; gap: 6px; } .cp-row { font-size: .82rem; padding: 3px 8px; border-radius: 8px; background: var(--sunk); }
+.cp-row.unmatched { background: var(--warn-bg); } .cp-row.bad { background: var(--bad-bg); color: var(--bad); } .bad-t { color: var(--bad); }
+.cp-edit summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
+.cp-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 8px; margin: 8px 0; }
+.cp-item { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 12px; }
+.cp-item > span { display: grid; min-width: 0; } .cp-item b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lv-bal { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .lv-tile { border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 4px; background: var(--surface); min-width: 0; }
 .lv-tile .lab { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
@@ -2271,6 +2287,7 @@ function renderTeam() {
     ${renderAnnForm()}
     ${renderMsaForm()}
     ${renderOpdForm()}
+    ${renderConsultantPhones()}
     ${renderCoverGroups()}
     <section class="panel"><h2>Waiting for approval</h2>${pend.length ? `<div class="list">${pend.map(d => row(d, `<button class="btn primary" data-act="approve" data-id="${esc(d.uid)}" id="ap-${esc(d.uid)}" ${dis}>Approve</button><button class="btn danger" data-act="reject-doc" data-id="${esc(d.uid)}" id="rj-${esc(d.uid)}" ${dis}>Reject</button>`)).join("")}</div>` : `<p class="muted">No one is waiting. New sign-ups appear here.</p>`}
       <p class="muted small">Only approve people you recognise. Approved doctors see the full roster and can change duties.</p></section>
@@ -3063,6 +3080,26 @@ const actions = {
     const ok = await guarded(() => dbCall(() => app.db.collection("settings").doc("contact").set({ consultants: u.list, consultantsSource: u.fileName, consultantsUpdatedAt: Date.now(), updatedBy: app.uid }, { merge: true })), "Done. Doctors can now see " + u.list.length + " consultants under the Consultants tab.");
     if (ok) state.opdUpload = null;
   },
+  "cp-read"() { if (!String(state.cpPaste || "").trim()) { toast("Paste names and numbers first, one consultant per line.", "bad"); return; } state.cpParsed = cpPreview(parsePhoneRows(pastedRows(state.cpPaste))); if (!state.cpParsed.length) { state.cpParsed = null; toast("No names with numbers found. Put one consultant per line: name, number.", "bad"); } render(); },
+  "cp-drop"() { state.cpParsed = null; render(); },
+  "cp-toggle"(b, e) { e.preventDefault(); state.cpOpen = !state.cpOpen; render(); },
+  "cs-group"(b, e) { e.preventDefault(); const g = b.dataset.g, o = state.csOpenGroups ||= {}; const isOpen = b.parentElement.open; if (state.csAllOpen && isOpen) { state.csAllOpen = false; document.querySelectorAll("details.cs-group[open] summary").forEach(x => { o[x.dataset.g] = true; }); } o[g] = !isOpen; render(); },
+  "cs-fold-all"() { state.csAllOpen = !state.csAllOpen; state.csOpenGroups = {}; render(); },
+  "cp-paste-toggle"(b, e) { e.preventDefault(); state.cpPasteOpen = !state.cpPasteOpen; render(); },
+  async "cp-save"() {
+    const good = (state.cpParsed || []).filter(x => x.ok); if (!good.length) return;
+    const merged = { ...csPhones() }; good.forEach(x => { merged[x.key] = { phone: x.phone, name: x.name, specialty: x.specialty || "", opd: x.opd || "", rank: x.rank || "" }; });
+    const ok = await guarded(() => dbCall(() => app.db.collection("settings").doc("contact").set({ consultantPhones: merged, consultantPhonesUpdatedAt: Date.now(), updatedBy: app.uid }, { mergeFields: ["consultantPhones", "consultantPhonesUpdatedAt", "updatedBy"] })), "Saved " + good.length + " consultant number" + (good.length === 1 ? "" : "s") + ".");
+    if (ok) { state.cpParsed = null; state.cpPaste = ""; render(); }
+  },
+  async "cp-save-edits"() {
+    const edits = state.cpEdits || {}, bad = Object.entries(edits).filter(([, v]) => String(v).trim() && !waNumber(v));
+    if (bad.length) { toast(bad.length + " number" + (bad.length === 1 ? " doesn't" : "s don't") + " look valid. Use e.g. 0300 1234567.", "bad"); return; }
+    const merged = { ...csPhones() }; Object.entries(edits).forEach(([k, v]) => { const t = String(v).trim(), old = merged[k];
+      if (!t) delete merged[k]; else merged[k] = old && typeof old === "object" ? { ...old, phone: t } : t; });
+    const ok = await guarded(() => dbCall(() => app.db.collection("settings").doc("contact").set({ consultantPhones: merged, consultantPhonesUpdatedAt: Date.now(), updatedBy: app.uid }, { mergeFields: ["consultantPhones", "consultantPhonesUpdatedAt", "updatedBy"] })), "Consultant numbers saved.");
+    if (ok) { state.cpEdits = {}; render(); }
+  },
   async "opd-clear"() { await guarded(() => dbCall(() => app.db.collection("settings").doc("contact").set({ consultants: [], consultantsSource: "", consultantsUpdatedAt: Date.now(), updatedBy: app.uid }, { merge: true })), "Consultant schedule removed."); },
   async "ext-decide"(b) {
     const uid = b.dataset.uid, key = b.dataset.key, approve = b.dataset.decision === "approved", month = b.dataset.month || state.month;
@@ -3256,8 +3293,9 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
 });
-const LIVE_BINDS = new Set(["lv.reason", ...IR_TEXT.map(x => "ir." + x[0]), "ir.involvesOther", "irNote.comments", "csQ", "extPrompt.reason", "staffPaste", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
+const LIVE_BINDS = new Set(["cpPaste", "lv.reason", ...IR_TEXT.map(x => "ir." + x[0]), "ir.involvesOther", "irNote.comments", "csQ", "extPrompt.reason", "staffPaste", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
 document.addEventListener("input", e => {
+  if (e.target.dataset && e.target.dataset.cp !== undefined) { (state.cpEdits ||= {})[e.target.dataset.cp] = e.target.value; return; }
   if (e.target.dataset && e.target.dataset.lvComment) { state.lvComment[e.target.dataset.lvComment] = e.target.value; return; }
   const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;
   if (path.startsWith("irNote.")) irNoteInit();
@@ -3287,6 +3325,7 @@ document.addEventListener("change", async e => {
   if (el.id === "ir-photo-in") { if (el.files && el.files.length) await irAddPhotos(el.files); el.value = ""; return; }
   if (el.id === "ir-audio-in") { if (el.files && el.files[0]) await irAddAudio(el.files[0], el.files[0].name); el.value = ""; return; }
   if (el.id === "staff-file") { if (el.files && el.files[0]) await readStaffDocx(el.files[0]); el.value = ""; return; }
+  if (el.id === "cp-file") { if (el.files && el.files[0]) { try { const f = el.files[0]; state.cpParsed = cpPreview(parsePhoneRows(/\.(md|txt)$/i.test(f.name) ? pastedRows((await f.text()).split(/\r?\n/).filter(l => l.trim().startsWith("|")).join("\n")) : await fileRows(f))); if (!state.cpParsed.length) { state.cpParsed = null; toast("No names with numbers found in that file.", "bad"); } } catch (err) { toast("Couldn't read the file: " + (err.message || "unknown error"), "bad"); } render(); } return; }
   if (el.id === "opd-file") { if (el.files && el.files[0]) await readOpdFile(el.files[0]); return; }
   if (el.id === "dept-file") { if (el.files && el.files[0]) await readDeptFile(el.files[0]); return; }
   const path = el.dataset && el.dataset.bind; if (!path) return;
@@ -3632,7 +3671,11 @@ function onDutyIds(slot, dept) {
 function contactLinks(id) {
   const d = state.doctors[id], n = waNumber(d && d.phone);
   if (!n || id === app.uid) return "";
-  return `<a class="icon-link wa" href="https://wa.me/${n}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(docName(id))}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm4.5 12.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg></a><a class="icon-link" href="tel:+${n}" aria-label="Call ${esc(docName(id))}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.2 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .6 3.6 1 1 0 0 1-.3 1z"/></svg></a>`;
+  return phoneLinks(n, docName(id));
+}
+function phoneLinks(n, who) {
+  if (!n) return "";
+  return `<a class="icon-link wa" href="https://wa.me/${n}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(who)}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm4.5 12.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg></a><a class="icon-link" href="tel:+${n}" aria-label="Call ${esc(who)}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.2 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .6 3.6 1 1 0 0 1-.3 1z"/></svg></a>`;
 }
 function dutyPeople(ids, slot, dept) {
   if (ids === null) return `<span class="muted small">Next month's roster opens on the 1st</span>`;
@@ -3720,6 +3763,61 @@ function subscribeAnnouncement() {
   app.db.collection("public").doc("announcement").onSnapshot(snap => { state.ann = snap.exists ? snap.data() : null; updateAnnouncement(); if (state.tab === "team" && app.phase === "app") render(); }, () => {});
 }
 /* ---------- consultants' OPD directory ---------- */
+/* Names are matched ignoring titles and ranks ("Brig (Retd) Dr", "Prof", "Consultant") and with "M"/"Muhammad" treated alike. */
+const CS_DROP = new Set("dr prof professor mr mrs ms miss brig brigadier maj major gen general lt col colonel capt retd consultant sqn ldr cdre surg".split(" "));
+const csTokens = n => String(n || "").toLowerCase().replace(/\([^)]*\)/g, " ").split(/[^a-z]+/).filter(t => t && t.length > 0 && !CS_DROP.has(t)).map(t => /^(m|muhammad|mohammad|muhammed|mohammed|mohd|md)$/.test(t) ? "m" : t);
+const csKey = n => csTokens(n).join("");
+const csPhones = () => (state.contact && state.contact.consultantPhones) || {};
+/* Every saved number as { key, phone, name, specialty, opd }; old entries are just a number keyed by name. */
+const csEntries = () => Object.entries(csPhones()).map(([key, v]) => typeof v === "string" ? { key, phone: v, name: "", specialty: "", opd: "", rank: "" } : { key, phone: v.phone || "", name: v.name || "", specialty: v.specialty || "", opd: v.opd || "", rank: v.rank || "" });
+/* Show the rank with the name ("Brig (Retd) Dr Aamer Malak"), without repeating it if the name already has it. */
+const withRank = (name, rank) => { const r = String(rank || "").trim(); if (!r || r === "—" || r === "-") return name; const norm = x => x.toLowerCase().replace(/[^a-z]/g, ""); return norm(name).includes(norm(r)) ? name : r + " " + name; };
+/* Find the saved number for an OPD consultant: same name, or (if unique) all the words of one name inside the other. */
+function csMatcher() {
+  const list = csEntries(), byKey = Object.fromEntries(list.map(e => [e.key, e]));
+  return name => { const k = csKey(name); if (byKey[k]) return byKey[k]; const t = csTokens(name); if (t.length < 2) return null;
+    const hits = list.filter(e => { const u = csTokens(e.name); if (u.length < 2) return false; const [a, b] = u.length <= t.length ? [u, t] : [t, u]; return a.every(x => b.includes(x)); });
+    return hits.length === 1 ? hits[0] : null; };
+}
+/* Rows from Excel/CSV or pasted text → [{ name, phone, specialty, opd }]; understands headers like Name / Mobile / Speciality / OPD days / Time slot. */
+function parsePhoneRows(rows) {
+  const out = [], isNum = v => String(v).replace(/\D/g, "").length >= 7, col = (h, re) => h.findIndex(x => re.test(x));
+  let ni = -1, pi = -1, si = -1, di = -1, ti = -1, ri = -1; const head = (rows[0] || []).map(x => String(x).toLowerCase());
+  if (head.some(h => /name|consultant|saved as/.test(h)) && head.some(h => /phone|mobile|cell|number|contact|whatsapp/.test(h))) {
+    ni = col(head, /saved as|name|consultant/); pi = col(head, /mobile|phone|cell|whatsapp|contact|number/); si = col(head, /special/); di = col(head, /opd|days?/); ti = col(head, /time|slot/); ri = col(head, /rank|title/); rows = rows.slice(1); }
+  for (const r of rows) { const cells = r.map(x => String(x == null ? "" : x).trim());
+    const phone = pi >= 0 ? cells[pi] || "" : (cells.find(isNum) || ""), name = ni >= 0 ? cells[ni] || "" : cells.filter(x => x && x !== phone && /[a-z]/i.test(x)).join(" ");
+    const sp = si >= 0 ? cells[si] || "" : ((name.match(/\(([^)]+)\)\s*$/) || [])[1] || ""), clean = v => (v && v !== "—" && v !== "-" ? v : "");
+    const opd = [clean(di >= 0 ? cells[di] : ""), clean(ti >= 0 ? cells[ti] : "")].filter(Boolean).join(" · ");
+    if (name && phone) out.push({ name: name.replace(/^consultant\s+/i, "").replace(/\s*\([^)]*\)\s*$/, "").trim(), phone, specialty: clean(sp), opd, rank: clean(ri >= 0 ? cells[ri] : "") }); }
+  return out;
+}
+const pastedRows = t => String(t || "").split(/\r?\n/).map(l => l.trim()).filter(l => l && !/^\|?\s*-{3}/.test(l)).map(l => l.includes("\t") ? l.split("\t") : l.startsWith("|") ? l.replace(/^\||\|$/g, "").split("|") : l.split(/\s*[,;]\s*|\s{2,}/));
+function cpPreview(list) {
+  const opd = (state.contact && state.contact.consultants) || [], known = new Set(opd.map(c => csKey(c.name)));
+  const fuzzy = name => { const t = csTokens(name); if (known.has(csKey(name))) return true; if (t.length < 2) return false; return opd.some(c => { const u = csTokens(c.name); if (u.length < 2) return false; const [a, b] = u.length <= t.length ? [u, t] : [t, u]; return a.every(x => b.includes(x)); }); };
+  return list.map(x => ({ ...x, key: csKey(x.name), ok: !!waNumber(x.phone), matched: fuzzy(x.name) }));
+}
+function renderConsultantPhones() {
+  const cons = (state.contact && state.contact.consultants) || [], find = csMatcher(), entries = csEntries(), prev = state.cpParsed, good = prev ? prev.filter(x => x.ok) : [];
+  const used = new Set(), opdRows = cons.slice().sort((a, b) => (a.specialty || "").localeCompare(b.specialty || "") || a.name.localeCompare(b.name)).map(c => { const e = find(c.name); if (e) used.add(e.key); return { name: withRank(c.name, e && e.rank), specialty: c.specialty, key: e ? e.key : csKey(c.name), phone: e ? e.phone : "" }; });
+  const extra = entries.filter(e => !used.has(e.key) && e.name).sort((a, b) => (a.specialty || "").localeCompare(b.specialty || "") || a.name.localeCompare(b.name)).map(e => ({ name: withRank(e.name, e.rank), specialty: (e.specialty || "") + " · not in OPD schedule", key: e.key, phone: e.phone }));
+  const rows = opdRows.concat(extra), withNo = rows.filter(r => r.phone).length;
+  return `<section class="panel" style="grid-column:1/-1" id="cp-panel"><h2>Consultants' phone numbers</h2>
+    <p class="muted small">Doctors see each number with <b>Call</b> and <b>WhatsApp</b> buttons on the Consultants tab. Numbers are matched to the OPD schedule by name (ranks and titles ignored) and stay when you upload a new OPD report. Consultants with a number but no OPD slot are shown under their speciality. <b>${withNo}</b> saved${cons.length ? `, ${opdRows.filter(r => r.phone).length} of ${cons.length} OPD consultants matched` : ""}.</p>
+    <div class="row"><div class="field"><label for="cp-file">Upload Excel / CSV (columns: Name, Mobile, and optionally Speciality, OPD days, Time slot)</label><input type="file" id="cp-file" accept=".xlsx,.xls,.csv,.txt,.md" ${app.busy ? "disabled" : ""}></div></div>
+    <details class="cp-edit" ${state.cpPasteOpen ? "open" : ""}><summary data-act="cp-paste-toggle">…or paste names and numbers</summary>
+      <div class="field"><label for="cp-paste" class="sr-only">Paste names and numbers</label><textarea class="plain" id="cp-paste" data-bind="cpPaste" rows="4" placeholder="One consultant per line, e.g.&#10;Dr. Ayesha Khan, 0300 1234567&#10;(or copy the name and number columns from Excel)">${esc(state.cpPaste || "")}</textarea></div>
+      <div class="btns"><button class="btn" data-act="cp-read" id="cp-read">Check pasted list</button></div></details>
+    ${prev ? `<div class="item" id="cp-preview"><div class="head"><b>${prev.length} found</b><span class="muted small">${good.filter(x => x.matched).length} match a consultant in the OPD list${good.some(x => !x.matched) ? ` · ${good.filter(x => !x.matched).length} not in the OPD list (shown under their speciality)` : ""}${prev.some(x => !x.ok) ? ` · <span class="bad-t">${prev.filter(x => !x.ok).length} number${prev.filter(x => !x.ok).length === 1 ? "" : "s"} not valid, skipped</span>` : ""}</span></div>
+      <div class="cp-prev">${prev.slice(0, 80).map(x => `<span class="cp-row${x.ok ? "" : " bad"}${x.matched ? "" : " unmatched"}"><b>${esc(withRank(x.name, x.rank))}</b> ${esc(x.phone)}${!x.ok ? " · not a valid number" : !x.matched ? " · no OPD slot" : ""}</span>`).join("")}${prev.length > 80 ? `<span class="muted small">…and ${prev.length - 80} more</span>` : ""}</div>
+      <div class="btns"><button class="btn primary" data-act="cp-save" id="cp-save" ${app.busy || !good.length ? "disabled" : ""}>Save ${good.length} number${good.length === 1 ? "" : "s"}</button><button class="btn ghost" data-act="cp-drop" id="cp-drop">Discard</button></div></div>` : ""}
+    ${rows.length ? `<details class="cp-edit" ${state.cpOpen ? "open" : ""}><summary data-act="cp-toggle">Edit numbers one by one (${rows.length})</summary>
+      <div class="cp-list">${rows.map(r => { const v = state.cpEdits && r.key in state.cpEdits ? state.cpEdits[r.key] : r.phone;
+        return `<label class="cp-item"><span><b>${esc(r.name)}</b><span class="muted small">${esc(r.specialty || "")}</span></span><input type="tel" data-cp="${esc(r.key)}" value="${esc(v)}" placeholder="No number" maxlength="20"></label>`; }).join("")}</div>
+      <div class="btns"><button class="btn primary" data-act="cp-save-edits" id="cp-save-edits" ${app.busy ? "disabled" : ""}>Save changes</button><span class="muted small">Clear a box to remove that number.</span></div></details>` : ""}
+  </section>`;
+}
 function opdNow() { const t = new Date(Date.now() + 5 * 3600e3); return { day: DAY_NAMES[(t.getUTCDay() + 6) % 7], hour: t.getUTCHours() + t.getUTCMinutes() / 60 }; }
 function consultantState(c) {
   const n = opdNow(), today = c.days.includes(n.day);
@@ -3727,30 +3825,41 @@ function consultantState(c) {
   return { today, inNow };
 }
 function renderConsultants() {
-  const data = state.contact && state.contact.consultants;
-  if (!data || !data.length) return `<div class="empty"><h2>Consultants' OPD schedule</h2><p>${app.canEdit ? "Upload the daily OPD report in the Team tab and the consultants' clinics, times and days will appear here for every doctor." : "The MSA office hasn't added the consultants' OPD schedule yet."}</p>${app.canEdit ? `<button class="btn primary" data-act="tab" data-tab="team" id="cs-team">Open the Team tab</button>` : ""}</div>`;
+  const data = (state.contact && state.contact.consultants) || [], find = csMatcher(), used = new Set();
+  const opd = data.map(c => { const e = find(c.name); if (e) used.add(e.key); return { ...c, name: withRank(c.name, e && e.rank), phone: e ? e.phone : "" }; });
+  // consultants who only have a number (on call, OT, no OPD slot): shown under their speciality
+  const specOf = sp => { const l = String(sp || "").toLowerCase(); return (data.find(c => (c.specialty || "").toLowerCase() === l) || {}).specialty || sp || "Other"; };
+  const dir = csEntries().filter(e => !used.has(e.key) && e.name).map(e => ({ name: withRank(/^(dr|prof)\b/i.test(e.name) ? e.name : "Dr " + e.name, e.rank), specialty: specOf(e.specialty), clinic: "", days: [], slots: [], daysText: "", note: "", phone: e.phone, opdText: e.opd, dir: true }));
+  const all = opd.concat(dir);
+  if (!all.length) return `<div class="empty"><h2>Consultants' OPD schedule</h2><p>${app.canEdit ? "Upload the daily OPD report in the Team tab and the consultants' clinics, times and days will appear here for every doctor." : "The MSA office hasn't added the consultants' OPD schedule yet."}</p>${app.canEdit ? `<button class="btn primary" data-act="tab" data-tab="team" id="cs-team">Open the Team tab</button>` : ""}</div>`;
   const q = state.csQ.trim().toLowerCase(), n = opdNow();
-  const specs = [...new Set(data.map(c => c.specialty))].sort();
-  const shown = data.filter(c => (!q || (c.name + " " + c.specialty + " clinic " + c.clinic).toLowerCase().includes(q)) && (!state.csSpec || c.specialty === state.csSpec)
-    && (state.csMode === "all" || (state.csMode === "today" ? consultantState(c).today : consultantState(c).inNow)));
+  const specs = [...new Set(all.map(c => c.specialty))].sort();
+  const shown = all.filter(c => (!q || (c.name + " " + c.specialty + " clinic " + c.clinic + " " + String(c.phone).replace(/\D/g, "")).toLowerCase().includes(q)) && (!state.csSpec || c.specialty === state.csSpec)
+    && (state.csMode === "all" || (!c.dir && (state.csMode === "today" ? consultantState(c).today : consultantState(c).inNow))));
   const groups = {}; shown.forEach(c => (groups[c.specialty || "Other"] ||= []).push(c));
-  const card = c => { const st = consultantState(c);
+  // long lists fold up by speciality; searching, picking a speciality or "today"/"now" opens what matches
+  const folds = all.length > 12 && !q && !state.csSpec && state.csMode === "all", foldOpen = g => !folds || state.csAllOpen || (state.csOpenGroups || {})[g];
+  const phoneRow = c => c.phone ? `<div class="cs-phone"><a class="cs-num" href="tel:+${waNumber(c.phone)}">${ic("phone", 13)} ${esc(c.phone)}</a><span class="cs-links">${phoneLinks(waNumber(c.phone), c.name)}</span></div>` : "";
+  const card = c => { if (c.dir) return `<div class="cs-card dir"><div class="cs-head"><b>${esc(c.name)}</b><span class="cs-clinic">${c.opdText && /on ?call/i.test(c.opdText) ? "On call" : c.opdText ? "Not in OPD list" : "No OPD slot"}</span></div>${phoneRow(c)}${c.opdText ? `<div class="cs-foot"><span class="muted small">${esc(c.opdText)}</span></div>` : ""}</div>`;
+    const st = consultantState(c);
     return `<div class="cs-card${st.inNow ? " now" : ""}">
       <div class="cs-head"><b>${esc(c.name)}</b>${c.clinic ? `<span class="cs-clinic">Clinic ${esc(c.clinic)}</span>` : ""}</div>
+      ${phoneRow(c)}
       <div class="cs-days" aria-label="OPD days: ${esc(c.daysText || "not set")}">${DAY_NAMES.map(d => `<span class="${c.days.includes(d) ? "on" : ""}${d === n.day ? " today" : ""}" title="${d}">${d.slice(0, 2)}</span>`).join("")}</div>
       ${c.slots.length ? `<div class="cs-slots">${c.slots.map(sl => `<span class="cs-slot">${esc(sl.replace(/\s+/g, " "))}</span>`).join("")}</div>` : ""}
       <div class="cs-foot">${st.inNow ? `<span class="pill done">In clinic now</span>` : st.today ? `<span class="pill cs-today">OPD today</span>` : ""}${c.note ? `<span class="pill pending">${esc(c.note)}</span>` : ""}${c.daysText ? `<span class="muted small">${esc(c.daysText)}</span>` : ""}</div>
     </div>`; };
-  const upd = state.contact.consultantsUpdatedAt;
+  const upd = state.contact && state.contact.consultantsUpdatedAt, withNo = all.filter(c => c.phone).length;
   return `<section class="panel">
-    <div class="bar"><div><h2>Consultants' OPD</h2><p class="muted small">${data.length} consultants · from the OPD schedule${upd ? " updated " + esc(when(upd)) : ""}. Today is ${n.day}.</p></div></div>
+    <div class="bar">${all.length > 12 ? `<button class="btn ghost cs-fold-all" data-act="cs-fold-all" id="cs-fold-all">${state.csAllOpen ? "Close all" : "Open all"}</button>` : ""}<div><h2>Consultants</h2><p class="muted small">${data.length} in the OPD schedule${upd ? " (updated " + esc(when(upd)) + ")" : ""}${dir.length ? ` · ${dir.length} on call / no OPD slot` : ""}${withNo ? ` · ${withNo} with a phone number` : ""}. Today is ${n.day}.</p></div></div>
     <div class="row">
-      <div class="field"><label for="cs-q">Search</label><input type="text" id="cs-q" data-bind="csQ" value="${esc(state.csQ)}" placeholder="Name, speciality or clinic number"></div>
+      <div class="field"><label for="cs-q">Search</label><input type="text" id="cs-q" data-bind="csQ" value="${esc(state.csQ)}" placeholder="Name, speciality, clinic or number"></div>
       <div class="field"><label for="cs-spec">Speciality</label><select id="cs-spec" data-bind="csSpec"><option value="">All specialities</option>${specs.map(x => `<option ${state.csSpec === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
     </div>
     <div class="seg" role="group" aria-label="Show">${[["all", "Everyone"], ["today", "In OPD today"], ["now", "In clinic now"]].map(([k, l]) => `<button data-act="cs-mode" data-mode="${k}" aria-pressed="${state.csMode === k}" id="cs-${k}">${l}</button>`).join("")}</div>
   </section>
-  ${shown.length ? Object.keys(groups).sort().map(g => `<section class="panel cs-group"><h3>${esc(g)} <span class="muted small">(${groups[g].length})</span></h3><div class="cs-grid">${groups[g].map(card).join("")}</div></section>`).join("") : `<div class="empty"><p>No consultants match. ${state.csMode !== "all" ? "Try “Everyone”." : ""}</p></div>`}`;
+  ${shown.length ? Object.keys(groups).sort().map(g => { const L = groups[g], today = L.filter(c => !c.dir && consultantState(c).today).length, now = L.filter(c => !c.dir && consultantState(c).inNow).length;
+    return `<details class="panel cs-group" ${foldOpen(g) ? "open" : ""}><summary data-act="cs-group" data-g="${esc(g)}"><h3>${esc(g)} <span class="muted small">(${L.length})</span></h3><span class="cs-sum">${now ? `<span class="pill done">${now} in clinic now</span>` : today ? `<span class="pill cs-today">${today} in OPD today</span>` : ""}<span class="cs-chev" aria-hidden="true"></span></span></summary><div class="cs-grid">${L.map(card).join("")}</div></details>`; }).join("") : `<div class="empty"><p>No consultants match. ${state.csMode !== "all" ? "Try “Everyone”." : ""}</p></div>`}`;
 }
 function renderCoverGroups() {
   const cur = (state.contact && state.contact.coverGroups) || DEFAULT_COVER_GROUPS, d = state.cgDraft || cur;
