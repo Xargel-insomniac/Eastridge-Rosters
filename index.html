@@ -3793,18 +3793,23 @@ function nameFit(n1, n2) {
 }
 /* Pair OPD consultants with saved numbers, one to one. A pair needs matching names AND specialities that agree (or one unknown, and then
    only for exact or word-for-word names). Returns pairs, plus near misses (same-looking name, different speciality) for the audit list. */
+const specGroup = (sp, cons) => { const hit = (cons || []).find(c => c.specialty && specFit(c.specialty, sp) === "same"); return hit ? hit.specialty : sp; };
+/* The speciality to show for an OPD consultant: the directory's when the report's is missing or (for the same person) different. */
+const specShown = (c, e, cons) => e && e.specialty && (!c.specialty || specFit(c.specialty, e.specialty) === "conflict") ? specGroup(e.specialty, cons) : c.specialty;
 function csAssign(cons, entries) {
   const cand = [], near = [];
   cons.forEach((c, i) => entries.forEach(e => { if (!e.name && csKey(c.name) !== e.key) return;
     const nf = e.name ? nameFit(c.name, e.name) : 3; if (!nf) return; const sf = specFit(c.specialty, e.specialty);
+    if (sf === "conflict" && nf >= 2) { cand.push({ i, e, score: nf * 10 - 1, moved: true }); return; } // same full name: trust the directory's speciality
     if (sf === "conflict") { near.push({ c, e, why: "speciality differs" }); return; }
     if (sf === "unknown" && nf === 1) { near.push({ c, e, why: "spelling differs and no speciality to confirm" }); return; }
     cand.push({ i, e, score: nf * 10 + (sf === "same" ? 2 : 0) }); }));
   cand.sort((a, b) => b.score - a.score);
   const pair = new Map(), taken = new Set();
   for (const x of cand) { if (pair.has(x.i) || taken.has(x.e.key)) continue; pair.set(x.i, x.e); taken.add(x.e.key); }
-  const fuzzy = new Set(cand.filter(x => pair.get(x.i) === x.e && x.score < 30).map(x => x.i));
-  return { pair, taken, fuzzy, near: near.filter(n => !taken.has(n.e.key)) };
+  const fuzzy = new Set(cand.filter(x => pair.get(x.i) === x.e && x.score < 30 && !x.moved).map(x => x.i));
+  const moved = new Set(cand.filter(x => pair.get(x.i) === x.e && x.moved).map(x => x.i));
+  return { pair, taken, fuzzy, moved, near: near.filter(n => !taken.has(n.e.key)) };
 }
 /* Rows from Excel/CSV or pasted text → [{ name, phone, specialty, opd }]; understands headers like Name / Mobile / Speciality / OPD days / Time slot. */
 function parsePhoneRows(rows) {
@@ -3828,7 +3833,7 @@ function cpPreview(list) {
 function renderConsultantPhones() {
   const cons = (state.contact && state.contact.consultants) || [], entries = csEntries(), prev = state.cpParsed, good = prev ? prev.filter(x => x.ok) : [];
   const A = csAssign(cons, entries), used = A.taken, bySpec = (a, b) => (a.specialty || "").localeCompare(b.specialty || "") || a.name.localeCompare(b.name);
-  const opdRows = cons.map((c, i) => { const e = A.pair.get(i); return { name: withRank(c.name, e && e.rank), specialty: c.specialty, key: e ? e.key : csKey(c.name), phone: e ? e.phone : "", c, e, fuzzy: A.fuzzy.has(i) }; }).sort(bySpec);
+  const opdRows = cons.map((c, i) => { const e = A.pair.get(i); return { name: withRank(c.name, e && e.rank), specialty: specShown(c, e, cons), key: e ? e.key : csKey(c.name), phone: e ? e.phone : "", c, e, fuzzy: A.fuzzy.has(i), moved: A.moved.has(i) }; }).sort(bySpec);
   const extra = entries.filter(e => !used.has(e.key) && e.name).sort((a, b) => (a.specialty || "").localeCompare(b.specialty || "") || a.name.localeCompare(b.name)).map(e => ({ name: withRank(e.name, e.rank), specialty: (e.specialty || "") + " · not in OPD schedule", key: e.key, phone: e.phone }));
   const rows = opdRows.concat(extra), withNo = rows.filter(r => r.phone).length;
   return `<section class="panel" style="grid-column:1/-1" id="cp-panel"><h2>Consultants' phone numbers</h2>
@@ -3840,10 +3845,10 @@ function renderConsultantPhones() {
     ${prev ? `<div class="item" id="cp-preview"><div class="head"><b>${prev.length} found</b><span class="muted small">${good.filter(x => x.matched).length} match a consultant in the OPD list${good.some(x => !x.matched) ? ` · ${good.filter(x => !x.matched).length} not in the OPD list (shown under their speciality)` : ""}${prev.some(x => !x.ok) ? ` · <span class="bad-t">${prev.filter(x => !x.ok).length} number${prev.filter(x => !x.ok).length === 1 ? "" : "s"} not valid, skipped</span>` : ""}</span></div>
       <div class="cp-prev">${prev.slice(0, 80).map(x => `<span class="cp-row${x.ok ? "" : " bad"}${x.matched ? "" : " unmatched"}"><b>${esc(withRank(x.name, x.rank))}</b> ${esc(x.phone)}${!x.ok ? " · not a valid number" : !x.matched ? " · no OPD slot" : ""}</span>`).join("")}${prev.length > 80 ? `<span class="muted small">…and ${prev.length - 80} more</span>` : ""}</div>
       <div class="btns"><button class="btn primary" data-act="cp-save" id="cp-save" ${app.busy || !good.length ? "disabled" : ""}>Save ${good.length} number${good.length === 1 ? "" : "s"}</button><button class="btn ghost" data-act="cp-drop" id="cp-drop">Discard</button></div></div>` : ""}
-    ${cons.length && entries.length ? `<details class="cp-edit" ${state.cpAuditOpen ? "open" : ""} id="cp-audit"><summary data-act="cp-audit-toggle">Check matches (${opdRows.filter(r => r.e).length} linked · ${A.near.length} to check · ${opdRows.filter(r => !r.e).length} OPD without a number · ${extra.length} not in OPD)</summary>
+    ${cons.length && entries.length ? `<details class="cp-edit" ${state.cpAuditOpen ? "open" : ""} id="cp-audit"><summary data-act="cp-audit-toggle">Check matches (${opdRows.filter(r => r.e).length} linked · ${A.near.length + opdRows.filter(r => r.moved).length} to check · ${opdRows.filter(r => !r.e).length} OPD without a number · ${extra.length} not in OPD)</summary>
       <div class="cp-audit">
       ${A.near.length ? `<h4 class="bad-t">Not linked: same-looking name, but check (${A.near.length})</h4>${A.near.map(n => `<p class="small">OPD: <b>${esc(n.c.name)}</b> (${esc(n.c.specialty || "no speciality")}) · Directory: <b>${esc(withRank(n.e.name, n.e.rank))}</b> (${esc(n.e.specialty || "no speciality")}) · ${esc(n.why)}</p>`).join("")}` : ""}
-      <h4>Linked (${opdRows.filter(r => r.e).length})</h4>${opdRows.filter(r => r.e).map(r => `<p class="small${r.fuzzy ? " warn-t" : ""}">OPD: <b>${esc(r.c.name)}</b> (${esc(r.c.specialty || "")}) ⇄ <b>${esc(withRank(r.e.name || r.c.name, r.e.rank))}</b>${r.e.specialty ? " (" + esc(r.e.specialty) + ")" : ""} · ${esc(r.phone)}${r.fuzzy ? " · <b>spelling differs, please confirm</b>" : ""}</p>`).join("") || `<p class="small muted">None yet.</p>`}
+      <h4>Linked (${opdRows.filter(r => r.e).length})</h4>${opdRows.filter(r => r.e).map(r => `<p class="small${r.fuzzy ? " warn-t" : ""}">OPD: <b>${esc(r.c.name)}</b> (${esc(r.c.specialty || "")}) ⇄ <b>${esc(withRank(r.e.name || r.c.name, r.e.rank))}</b>${r.e.specialty ? " (" + esc(r.e.specialty) + ")" : ""} · ${esc(r.phone)}${r.fuzzy ? " · <b>spelling differs, please confirm</b>" : ""}${r.moved ? ` · <b class="bad-t">OPD report says ${esc(r.c.specialty)}, directory says ${esc(r.e.specialty)}: shown under ${esc(r.specialty)}. Please correct the OPD report.</b>` : ""}</p>`).join("") || `<p class="small muted">None yet.</p>`}
       <h4>OPD consultants without a number (${opdRows.filter(r => !r.e).length})</h4><p class="small">${opdRows.filter(r => !r.e).map(r => esc(r.c.name) + " (" + esc(r.c.specialty || "") + ")").join(" · ") || "None."}</p>
       <h4>Numbers not in the OPD schedule (${extra.length})</h4><p class="small muted">Shown to doctors under their speciality as on call / no OPD slot.</p><p class="small">${extra.map(r => esc(r.name)).join(" · ") || "None."}</p>
       </div></details>` : ""}
@@ -3861,7 +3866,7 @@ function consultantState(c) {
 }
 function renderConsultants() {
   const data = (state.contact && state.contact.consultants) || [], A = csAssign(data, csEntries()), used = A.taken;
-  const opd = data.map((c, i) => { const e = A.pair.get(i); return { ...c, name: withRank(c.name, e && e.rank), phone: e ? e.phone : "" }; });
+  const opd = data.map((c, i) => { const e = A.pair.get(i); return { ...c, name: withRank(c.name, e && e.rank), specialty: specShown(c, e, data), phone: e ? e.phone : "" }; });
   // consultants who only have a number (on call, OT, no OPD slot): shown under their speciality
   const specOf = sp => { const l = String(sp || "").toLowerCase(); return (data.find(c => (c.specialty || "").toLowerCase() === l) || {}).specialty || sp || "Other"; };
   const dir = csEntries().filter(e => !used.has(e.key) && e.name).map(e => ({ name: withRank(/^(dr|prof)\b/i.test(e.name) ? e.name : "Dr " + e.name, e.rank), specialty: specOf(e.specialty), clinic: "", days: [], slots: [], daysText: "", note: "", phone: e.phone, opdText: e.opd, dir: true }));
