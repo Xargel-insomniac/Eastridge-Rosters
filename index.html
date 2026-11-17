@@ -214,6 +214,7 @@ h2.has-ic { display: flex; align-items: center; gap: 10px; }
 .cs-num { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: .86rem; color: var(--ink); text-decoration: none; }
 .cs-links { display: inline-flex; gap: 6px; } .cs-links .icon-link { width: 30px; height: 30px; }
 .cs-card.dir { border-style: dashed; }
+.cp-audit { display: grid; gap: 4px; margin: 6px 0 10px; } .cp-audit h4 { margin: 10px 0 2px; font-size: .92rem; } .warn-t { color: var(--warn); }
 details.cs-group > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
 details.cs-group > summary::-webkit-details-marker { display: none; } details.cs-group > summary h3 { margin: 0; }
 details.cs-group[open] > summary { margin-bottom: 10px; } .cs-sum { display: inline-flex; align-items: center; gap: 8px; }
@@ -3085,6 +3086,7 @@ const actions = {
   "cp-toggle"(b, e) { e.preventDefault(); state.cpOpen = !state.cpOpen; render(); },
   "cs-group"(b, e) { e.preventDefault(); const g = b.dataset.g, o = state.csOpenGroups ||= {}; const isOpen = b.parentElement.open; if (state.csAllOpen && isOpen) { state.csAllOpen = false; document.querySelectorAll("details.cs-group[open] summary").forEach(x => { o[x.dataset.g] = true; }); } o[g] = !isOpen; render(); },
   "cs-fold-all"() { state.csAllOpen = !state.csAllOpen; state.csOpenGroups = {}; render(); },
+  "cp-audit-toggle"(b, e) { e.preventDefault(); state.cpAuditOpen = !state.cpAuditOpen; render(); },
   "cp-paste-toggle"(b, e) { e.preventDefault(); state.cpPasteOpen = !state.cpPasteOpen; render(); },
   async "cp-save"() {
     const good = (state.cpParsed || []).filter(x => x.ok); if (!good.length) return;
@@ -3773,11 +3775,36 @@ const csEntries = () => Object.entries(csPhones()).map(([key, v]) => typeof v ==
 /* Show the rank with the name ("Brig (Retd) Dr Aamer Malak"), without repeating it if the name already has it. */
 const withRank = (name, rank) => { const r = String(rank || "").trim(); if (!r || r === "—" || r === "-") return name; const norm = x => x.toLowerCase().replace(/[^a-z]/g, ""); return norm(name).includes(norm(r)) ? name : r + " " + name; };
 /* Find the saved number for an OPD consultant: same name, or (if unique) all the words of one name inside the other. */
-function csMatcher() {
-  const list = csEntries(), byKey = Object.fromEntries(list.map(e => [e.key, e]));
-  return name => { const k = csKey(name); if (byKey[k]) return byKey[k]; const t = csTokens(name); if (t.length < 2) return null;
-    const hits = list.filter(e => { const u = csTokens(e.name); if (u.length < 2) return false; const [a, b] = u.length <= t.length ? [u, t] : [t, u]; return a.every(x => b.includes(x)); });
-    return hits.length === 1 ? hits[0] : null; };
+/* Specialities written different ways ("Obs & Gynae" / "Gynaecology", "Paeds" / "Paediatrics") reduced to one word each. */
+const SPEC_CANON = [[/neuro ?surg/, "neurosurgery"], [/plastic/, "plasticsurgery"], [/urolog/, "urology"], [/ortho/, "orthopaedics"], [/general surg|^surg|surgery$/, "generalsurgery"], [/anaes|anesth/, "anaesthesia"], [/cardio/, "cardiology"],
+  [/\bent\b|e\.n\.t|otolaryn|\bear\b/, "ent"], [/gastro|hepat/, "gastroenterology"], [/neurolog/, "neurology"], [/gyn|obs/, "gynae"], [/paed|\bped/, "paeds"], [/nephro|renal/, "nephrology"], [/rheum/, "rheumatology"], [/radio|imaging/, "radiology"],
+  [/derma|cosmet|skin/, "dermatology"], [/rehab|physical med/, "rehab"], [/\bpain/, "pain"], [/intensiv|\bicu\b|critical/, "intensive"], [/pulmo|chest/, "pulmonology"], [/psych/, "psychiatry"], [/eye|ophth/, "eye"], [/dent/, "dental"],
+  [/endocr|diabet/, "endocrinology"], [/oncol/, "oncology"], [/haemat|hemat/, "haematology"], [/intern|general med|^medicine/, "medicine"]];
+const specSet = sp => { const l = String(sp || "").toLowerCase(); return new Set(SPEC_CANON.filter(([re]) => re.test(l)).map(([, k]) => k)); };
+const specFit = (a, b) => { const x = specSet(a), y = specSet(b); if (!x.size || !y.size) return "unknown"; return [...x].some(k => y.has(k)) ? "same" : "conflict"; };
+const lev1 = (a, b) => { if (Math.abs(a.length - b.length) > 1) return false; let i = 0, j = 0, d = 0; while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue; } if (++d > 1) return false; if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; } } return d + (a.length - i) + (b.length - j) <= 1; };
+/* How alike two names are: 3 same name, 2 one name's words all inside the other, 1 the same but for a one-letter spelling slip, 0 different. */
+function nameFit(n1, n2) {
+  if (csKey(n1) && csKey(n1) === csKey(n2)) return 3;
+  const t = csTokens(n1), u = csTokens(n2); if (t.length < 2 || u.length < 2) return 0;
+  const [a, b] = u.length <= t.length ? [u, t] : [t, u]; let slip = false;
+  for (const x of a) { if (b.includes(x)) continue; const y = b.find(y => x.length >= 4 && y.length >= 4 && lev1(x, y)); if (!y) return 0; slip = true; }
+  return slip ? 1 : 2;
+}
+/* Pair OPD consultants with saved numbers, one to one. A pair needs matching names AND specialities that agree (or one unknown, and then
+   only for exact or word-for-word names). Returns pairs, plus near misses (same-looking name, different speciality) for the audit list. */
+function csAssign(cons, entries) {
+  const cand = [], near = [];
+  cons.forEach((c, i) => entries.forEach(e => { if (!e.name && csKey(c.name) !== e.key) return;
+    const nf = e.name ? nameFit(c.name, e.name) : 3; if (!nf) return; const sf = specFit(c.specialty, e.specialty);
+    if (sf === "conflict") { near.push({ c, e, why: "speciality differs" }); return; }
+    if (sf === "unknown" && nf === 1) { near.push({ c, e, why: "spelling differs and no speciality to confirm" }); return; }
+    cand.push({ i, e, score: nf * 10 + (sf === "same" ? 2 : 0) }); }));
+  cand.sort((a, b) => b.score - a.score);
+  const pair = new Map(), taken = new Set();
+  for (const x of cand) { if (pair.has(x.i) || taken.has(x.e.key)) continue; pair.set(x.i, x.e); taken.add(x.e.key); }
+  const fuzzy = new Set(cand.filter(x => pair.get(x.i) === x.e && x.score < 30).map(x => x.i));
+  return { pair, taken, fuzzy, near: near.filter(n => !taken.has(n.e.key)) };
 }
 /* Rows from Excel/CSV or pasted text → [{ name, phone, specialty, opd }]; understands headers like Name / Mobile / Speciality / OPD days / Time slot. */
 function parsePhoneRows(rows) {
@@ -3794,13 +3821,14 @@ function parsePhoneRows(rows) {
 }
 const pastedRows = t => String(t || "").split(/\r?\n/).map(l => l.trim()).filter(l => l && !/^\|?\s*-{3}/.test(l)).map(l => l.includes("\t") ? l.split("\t") : l.startsWith("|") ? l.replace(/^\||\|$/g, "").split("|") : l.split(/\s*[,;]\s*|\s{2,}/));
 function cpPreview(list) {
-  const opd = (state.contact && state.contact.consultants) || [], known = new Set(opd.map(c => csKey(c.name)));
-  const fuzzy = name => { const t = csTokens(name); if (known.has(csKey(name))) return true; if (t.length < 2) return false; return opd.some(c => { const u = csTokens(c.name); if (u.length < 2) return false; const [a, b] = u.length <= t.length ? [u, t] : [t, u]; return a.every(x => b.includes(x)); }); };
-  return list.map(x => ({ ...x, key: csKey(x.name), ok: !!waNumber(x.phone), matched: fuzzy(x.name) }));
+  const opd = (state.contact && state.contact.consultants) || [];
+  const { taken } = csAssign(opd, list.map(x => ({ key: csKey(x.name), name: x.name, specialty: x.specialty || "", phone: x.phone })));
+  return list.map(x => ({ ...x, key: csKey(x.name), ok: !!waNumber(x.phone), matched: taken.has(csKey(x.name)) }));
 }
 function renderConsultantPhones() {
-  const cons = (state.contact && state.contact.consultants) || [], find = csMatcher(), entries = csEntries(), prev = state.cpParsed, good = prev ? prev.filter(x => x.ok) : [];
-  const used = new Set(), opdRows = cons.slice().sort((a, b) => (a.specialty || "").localeCompare(b.specialty || "") || a.name.localeCompare(b.name)).map(c => { const e = find(c.name); if (e) used.add(e.key); return { name: withRank(c.name, e && e.rank), specialty: c.specialty, key: e ? e.key : csKey(c.name), phone: e ? e.phone : "" }; });
+  const cons = (state.contact && state.contact.consultants) || [], entries = csEntries(), prev = state.cpParsed, good = prev ? prev.filter(x => x.ok) : [];
+  const A = csAssign(cons, entries), used = A.taken, bySpec = (a, b) => (a.specialty || "").localeCompare(b.specialty || "") || a.name.localeCompare(b.name);
+  const opdRows = cons.map((c, i) => { const e = A.pair.get(i); return { name: withRank(c.name, e && e.rank), specialty: c.specialty, key: e ? e.key : csKey(c.name), phone: e ? e.phone : "", c, e, fuzzy: A.fuzzy.has(i) }; }).sort(bySpec);
   const extra = entries.filter(e => !used.has(e.key) && e.name).sort((a, b) => (a.specialty || "").localeCompare(b.specialty || "") || a.name.localeCompare(b.name)).map(e => ({ name: withRank(e.name, e.rank), specialty: (e.specialty || "") + " · not in OPD schedule", key: e.key, phone: e.phone }));
   const rows = opdRows.concat(extra), withNo = rows.filter(r => r.phone).length;
   return `<section class="panel" style="grid-column:1/-1" id="cp-panel"><h2>Consultants' phone numbers</h2>
@@ -3812,6 +3840,13 @@ function renderConsultantPhones() {
     ${prev ? `<div class="item" id="cp-preview"><div class="head"><b>${prev.length} found</b><span class="muted small">${good.filter(x => x.matched).length} match a consultant in the OPD list${good.some(x => !x.matched) ? ` · ${good.filter(x => !x.matched).length} not in the OPD list (shown under their speciality)` : ""}${prev.some(x => !x.ok) ? ` · <span class="bad-t">${prev.filter(x => !x.ok).length} number${prev.filter(x => !x.ok).length === 1 ? "" : "s"} not valid, skipped</span>` : ""}</span></div>
       <div class="cp-prev">${prev.slice(0, 80).map(x => `<span class="cp-row${x.ok ? "" : " bad"}${x.matched ? "" : " unmatched"}"><b>${esc(withRank(x.name, x.rank))}</b> ${esc(x.phone)}${!x.ok ? " · not a valid number" : !x.matched ? " · no OPD slot" : ""}</span>`).join("")}${prev.length > 80 ? `<span class="muted small">…and ${prev.length - 80} more</span>` : ""}</div>
       <div class="btns"><button class="btn primary" data-act="cp-save" id="cp-save" ${app.busy || !good.length ? "disabled" : ""}>Save ${good.length} number${good.length === 1 ? "" : "s"}</button><button class="btn ghost" data-act="cp-drop" id="cp-drop">Discard</button></div></div>` : ""}
+    ${cons.length && entries.length ? `<details class="cp-edit" ${state.cpAuditOpen ? "open" : ""} id="cp-audit"><summary data-act="cp-audit-toggle">Check matches (${opdRows.filter(r => r.e).length} linked · ${A.near.length} to check · ${opdRows.filter(r => !r.e).length} OPD without a number · ${extra.length} not in OPD)</summary>
+      <div class="cp-audit">
+      ${A.near.length ? `<h4 class="bad-t">Not linked: same-looking name, but check (${A.near.length})</h4>${A.near.map(n => `<p class="small">OPD: <b>${esc(n.c.name)}</b> (${esc(n.c.specialty || "no speciality")}) · Directory: <b>${esc(withRank(n.e.name, n.e.rank))}</b> (${esc(n.e.specialty || "no speciality")}) · ${esc(n.why)}</p>`).join("")}` : ""}
+      <h4>Linked (${opdRows.filter(r => r.e).length})</h4>${opdRows.filter(r => r.e).map(r => `<p class="small${r.fuzzy ? " warn-t" : ""}">OPD: <b>${esc(r.c.name)}</b> (${esc(r.c.specialty || "")}) ⇄ <b>${esc(withRank(r.e.name || r.c.name, r.e.rank))}</b>${r.e.specialty ? " (" + esc(r.e.specialty) + ")" : ""} · ${esc(r.phone)}${r.fuzzy ? " · <b>spelling differs, please confirm</b>" : ""}</p>`).join("") || `<p class="small muted">None yet.</p>`}
+      <h4>OPD consultants without a number (${opdRows.filter(r => !r.e).length})</h4><p class="small">${opdRows.filter(r => !r.e).map(r => esc(r.c.name) + " (" + esc(r.c.specialty || "") + ")").join(" · ") || "None."}</p>
+      <h4>Numbers not in the OPD schedule (${extra.length})</h4><p class="small muted">Shown to doctors under their speciality as on call / no OPD slot.</p><p class="small">${extra.map(r => esc(r.name)).join(" · ") || "None."}</p>
+      </div></details>` : ""}
     ${rows.length ? `<details class="cp-edit" ${state.cpOpen ? "open" : ""}><summary data-act="cp-toggle">Edit numbers one by one (${rows.length})</summary>
       <div class="cp-list">${rows.map(r => { const v = state.cpEdits && r.key in state.cpEdits ? state.cpEdits[r.key] : r.phone;
         return `<label class="cp-item"><span><b>${esc(r.name)}</b><span class="muted small">${esc(r.specialty || "")}</span></span><input type="tel" data-cp="${esc(r.key)}" value="${esc(v)}" placeholder="No number" maxlength="20"></label>`; }).join("")}</div>
@@ -3825,8 +3860,8 @@ function consultantState(c) {
   return { today, inNow };
 }
 function renderConsultants() {
-  const data = (state.contact && state.contact.consultants) || [], find = csMatcher(), used = new Set();
-  const opd = data.map(c => { const e = find(c.name); if (e) used.add(e.key); return { ...c, name: withRank(c.name, e && e.rank), phone: e ? e.phone : "" }; });
+  const data = (state.contact && state.contact.consultants) || [], A = csAssign(data, csEntries()), used = A.taken;
+  const opd = data.map((c, i) => { const e = A.pair.get(i); return { ...c, name: withRank(c.name, e && e.rank), phone: e ? e.phone : "" }; });
   // consultants who only have a number (on call, OT, no OPD slot): shown under their speciality
   const specOf = sp => { const l = String(sp || "").toLowerCase(); return (data.find(c => (c.specialty || "").toLowerCase() === l) || {}).specialty || sp || "Other"; };
   const dir = csEntries().filter(e => !used.has(e.key) && e.name).map(e => ({ name: withRank(/^(dr|prof)\b/i.test(e.name) ? e.name : "Dr " + e.name, e.rank), specialty: specOf(e.specialty), clinic: "", days: [], slots: [], daysText: "", note: "", phone: e.phone, opdText: e.opd, dir: true }));
