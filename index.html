@@ -1696,6 +1696,7 @@ const myHodGroups = () => HOD_GROUPS.filter(g => app.uid && hodUidOf(g.key) === 
 /* HODs don't choose an HOD: their own leave goes straight to the MSA office (coordinator). Wait until the HOD list has loaded,
    so an HOD never sees the question while the app is still finding out they're an HOD. */
 const isHod = () => myHodGroups().length > 0;
+const isHodUid = id => HOD_GROUPS.some(g => hodUidOf(g.key) === id);
 const groupOf = id => { const h = HOD_GROUPS.find(g => hodUidOf(g.key) === id); if (h) return h.key; const d = (app.allDoctors || {})[id]; return d && HOD_BY[d.hod] ? d.hod : ""; };
 const groupName = g => HOD_BY[g] ? HOD_BY[g].label : "your department";
 const needHodChoice = () => app.phase === "app" && !app.sample && state.contactLoaded && !!app.myDoc && app.myDoc.approved === true && !app.myDoc.offRoster
@@ -2247,6 +2248,16 @@ async function saveStaff(list, msg) {
 }
 function changeRequests() { return Object.values(app.allDoctors || {}).filter(d => d.pendingChange && (d.pendingChange.name || d.pendingChange.phone)); }
 function pendingDoctors() { return Object.values(app.allDoctors || {}).filter(d => d.approved !== true).sort((a, b) => (a.name || "").localeCompare(b.name || "")); }
+/* Coordinator only: everyone who has registered (made a profile), with their email, as an Excel file or a copyable list. */
+const registered = () => Object.values(app.allDoctors || {}).filter(d => d.uid).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+const regStatus = d => d.approved === true ? (d.offRoster ? "Approved (not on duty roster)" : "Approved") : "Waiting for approval";
+function renderRegistered() {
+  const list = registered(), withEmail = list.filter(d => d.email);
+  return `<section class="panel" style="grid-column:1/-1" id="reg-list"><h2>Everyone who has registered (${list.length})</h2>
+    <p class="muted small">${withEmail.length} with an email address. Includes people waiting for approval and staff not on the duty roster. Only you (coordinators) can see this.</p>
+    <div class="btns"><button class="btn primary" data-act="reg-xlsx" id="reg-xlsx" ${app.busy || !list.length ? "disabled" : ""}>${ic("download", 16)} Download staff list (Excel)</button>
+      <button class="btn" data-act="reg-copy" id="reg-copy" ${!withEmail.length ? "disabled" : ""}>Copy all emails</button></div></section>`;
+}
 function renderTeam() {
   const pend = pendingDoctors(), ok = sortedDoctors(), dis = app.busy ? "disabled" : "";
   const row = (d, btns) => `<div class="item"><div class="head"><b>${esc(d.name || "No name")}</b><span class="muted small">${d.designation ? esc(d.designation) + " · " : ""}${esc(d.dept || "No department")}</span></div>${d.email || d.phone ? `<p class="small muted">${esc(d.email || "")}${d.email && d.phone ? " · " : ""}${esc(d.phone || "")}</p>` : ""}<div class="btns">${btns}</div></div>`;
@@ -2254,6 +2265,7 @@ function renderTeam() {
     ${changeRequests().length ? `<section class="panel" style="grid-column:1/-1" id="pc-list"><h2>Name and number changes to approve (${changeRequests().length})</h2><div class="list">${changeRequests().map(d => { const pc = d.pendingChange; return `<div class="item"><div class="head"><b>${esc(d.name)}</b><span class="muted small">${esc(d.dept || "")}</span></div>
       ${pc.name ? `<p class="small">Name: ${esc(d.name)} → <b>${esc(pc.name)}</b></p>` : ""}${pc.phone ? `<p class="small">WhatsApp: ${esc(d.phone || "none")} → <b>${esc(pc.phone)}</b></p>` : ""}
       <div class="btns"><button class="btn primary" data-act="pc-approve" data-id="${esc(d.uid)}" id="pca-${esc(d.uid)}" ${app.busy ? "disabled" : ""}>Approve</button><button class="btn" data-act="pc-decline" data-id="${esc(d.uid)}" id="pcd-${esc(d.uid)}" ${app.busy ? "disabled" : ""}>Decline</button></div></div>`; }).join("")}</div></section>` : ""}
+    ${renderRegistered()}
     ${renderHodAssign()}
     ${renderStaff()}
     ${renderAnnForm()}
@@ -3136,6 +3148,18 @@ const actions = {
       await dbCall(() => app.db.collection("public").doc("announcement").set({ active: false, text: "", level: "info", until: "", updatedAt: Date.now(), updatedBy: app.uid }));
       state.annDraft = null;
     }, "Banner removed.");
+  },
+  async "reg-xlsx"() {
+    await guarded(async () => {
+      const XLSX = await loadXLSX(), hodOf = d => { const g = groupOf(d.uid); return g ? HOD_BY[g].name + " (" + HOD_BY[g].label + ")" : ""; };
+      const rows = registered().map(d => ({ Name: d.name || "", Email: d.email || "", WhatsApp: d.phone || "", Department: d.dept || "", Designation: d.designation || "", HOD: isHodUid(d.uid) ? "Is HOD of " + HOD_GROUPS.filter(g => hodUidOf(g.key) === d.uid).map(g => g.label).join(", ") : hodOf(d), Status: regStatus(d) }));
+      const ws = XLSX.utils.json_to_sheet(rows); ws["!cols"] = [{ wch: 26 }, { wch: 32 }, { wch: 16 }, { wch: 26 }, { wch: 16 }, { wch: 32 }, { wch: 28 }];
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Registered staff"); XLSX.writeFile(wb, "Eastridge-Registered-Staff-" + todayKey + ".xlsx");
+    }, "Staff list downloaded.");
+  },
+  async "reg-copy"() {
+    const text = registered().map(d => d.email).filter(Boolean).join(", ");
+    try { await navigator.clipboard.writeText(text); toast("Copied " + text.split(", ").length + " email addresses.", "ok"); } catch (_) { prompt("Copy these email addresses:", text); }
   },
   async export() {
     try { await exportMonth(); toast("Downloaded the " + monthLabel(state.month) + " roster."); }
