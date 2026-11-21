@@ -107,6 +107,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .who b { font-weight: 600; }
 .masthead:not(.compact) .who .btn.ghost { color: #ffffff; }
 .masthead:not(.compact) .who .btn.ghost:hover { border-color: rgba(255,255,255,.4); }
+.hod-badge .hb-short { display: none; }
+@media (max-width: 640px) { .masthead.compact .hod-badge .hb-full, .hod-badge:not(:only-of-type) .hb-full { display: none; } .masthead.compact .hod-badge .hb-short, .hod-badge:not(:only-of-type) .hb-short { display: inline; } }
 .who .pill.done { background: var(--brand-red); color: #ffffff; border-color: transparent; } /* HOD badge: red */
 /* Coordinator badge: glowing gold with a crown and a shine that sweeps across (still, for people who turn off motion) */
 .who .pill.done.coord-badge { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(180deg, #ffe27a 0%, #ffc61a 55%, #e9a500 100%); color: #241800; font-weight: 800; letter-spacing: .06em;
@@ -1609,7 +1611,7 @@ function renderWho() {
   if (app.sample || !app.uid || app.phase === "setup") return "";
   const d = app.myDoc;
   const hod = myHodGroups(); // HODs get a badge like the coordinator's: "HOD · Medicine"
-  const role = (app.isAdmin ? `<span class="pill done coord-badge" id="coord-badge"><svg class="crown" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 7.5l4.5 3.5L12 4l4.5 7L21 7.5 19 18H5zM5 19.5h14V21H5z"/></svg>Coordinator</span> ` : "") + (hod.length ? `<span class="pill done hod-badge" id="hod-badge">HOD · ${hod.map(g => esc(HOD_BY[g].label)).join(", ")}</span> ` : "");
+  const role = (app.isAdmin ? `<span class="pill done coord-badge" id="coord-badge"><svg class="crown" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 7.5l4.5 3.5L12 4l4.5 7L21 7.5 19 18H5zM5 19.5h14V21H5z"/></svg>Coordinator</span> ` : "") + (hod.length ? `<span class="pill done hod-badge" id="hod-badge" title="HOD · ${hod.map(g => esc(HOD_BY[g].label)).join(", ")}"><span class="hb-full">HOD · ${hod.map(g => esc(HOD_BY[g].label)).join(", ")}</span><span class="hb-short" aria-hidden="true">HOD</span></span> ` : "");
   const name = d ? `<b>${esc(d.name)}</b>${d.designation ? " · " + esc(d.designation) : ""}${d.dept ? " · " + esc(d.dept) : ""}` : esc(app.email || "Signed in");
   return `<span>${role}${name}</span>${d && app.phase === "app" ? `<button class="btn ghost" data-act="profile-open" id="who-edit">Edit profile</button>` : ""}<button class="btn ghost" data-act="signout" id="who-out">Sign out</button>`;
 }
@@ -1672,7 +1674,14 @@ const HOD_GROUPS = [
   { key: "surgery", label: "Surgery", name: "Dr Saeed" },
   { key: "peds", label: "Paediatrics", name: "Dr Anum Hina Azam" },
 ];
-const HOD_BY = Object.fromEntries(HOD_GROUPS.map(g => [g.key, g]));
+/* Departments whose HOD is the coordinator (MSA office): their doctors don't choose an HOD, and their leave comes to the coordinator. */
+const FIXED_GROUPS = [
+  { key: "radiology", label: "Radiology", name: "the MSA office", dept: "Radiology" },
+  { key: "anaesthesia", label: "Anaesthesia", name: "the MSA office", dept: "Anaesthesia" },
+  { key: "msa", label: "MSA", name: "the MSA office", dept: "MSA" },
+];
+const FIXED_BY_DEPT = Object.fromEntries(FIXED_GROUPS.map(g => [g.dept, g.key]));
+const HOD_BY = Object.fromEntries([...HOD_GROUPS, ...FIXED_GROUPS].map(g => [g.key, g]));
 const LEAVE_TYPES = { casual: "Casual", annual: "Annual", sick: "Sick", emergency: "Emergency", expak: "Ex-Pakistan" };
 /* HR policy: yearly allowances (1 Jan to 31 Dec, every calendar day counts). Emergency leave uses Casual days, Ex-Pakistan uses Annual days. */
 const LEAVE_POOLS = { casual: { label: "Casual", days: 10 }, annual: { label: "Annual", days: 14 }, sick: { label: "Sick", days: 10 } };
@@ -1712,19 +1721,19 @@ function renderBalanceTable(list, year, title) {
   return `<section class="panel" style="grid-column:1/-1" id="lv-balances"><h2>${title} · ${year}</h2><p class="muted small">Days used out of each allowance (approved leave). Emergency counts as Casual, Ex-Pakistan as Annual. Every calendar day counts; resets on 1 January.</p><div class="lvb-list">${rows}</div></section>`;
 }
 const LEAVE_STATUS = { pending: "Waiting for approval", approved: "Approved", rejected: "Not approved", cancelled: "Cancelled" };
-const LEAVE_OUT = ["Radiology", "Anaesthesia", "MSA"]; // not part of leave management yet
+const LEAVE_OUT = []; // every department is now in leave management (Radiology, Anaesthesia and MSA under the coordinator)
 const hodUidOf = g => ((state.contact && state.contact.hods) || {})[g] || "";
-const myHodGroups = () => HOD_GROUPS.filter(g => app.uid && hodUidOf(g.key) === app.uid).map(g => g.key);
+const myHodGroups = () => [...HOD_GROUPS.filter(g => app.uid && hodUidOf(g.key) === app.uid).map(g => g.key), ...(app.isAdmin && !app.sample ? FIXED_GROUPS.map(g => g.key) : [])];
 /* Everyone on the roster (except departments not in leave management yet) picks their HOD once. */
 /* HODs don't choose an HOD: their own leave goes straight to the MSA office (coordinator). Wait until the HOD list has loaded,
    so an HOD never sees the question while the app is still finding out they're an HOD. */
 const isHod = () => myHodGroups().length > 0;
 const isHodUid = id => HOD_GROUPS.some(g => hodUidOf(g.key) === id);
-const groupOf = id => { const h = HOD_GROUPS.find(g => hodUidOf(g.key) === id); if (h) return h.key; const d = (app.allDoctors || {})[id]; return d && HOD_BY[d.hod] ? d.hod : ""; };
+const groupOf = id => { const h = HOD_GROUPS.find(g => hodUidOf(g.key) === id); if (h) return h.key; const d = (app.allDoctors || {})[id]; if (!d) return ""; if (FIXED_BY_DEPT[d.dept]) return FIXED_BY_DEPT[d.dept]; return HOD_BY[d.hod] && !FIXED_GROUPS.some(g => g.key === d.hod) ? d.hod : ""; };
 const groupName = g => HOD_BY[g] ? HOD_BY[g].label : "your department";
 const needHodChoice = () => app.phase === "app" && !app.sample && state.contactLoaded && !!app.myDoc && app.myDoc.approved === true && !app.myDoc.offRoster
-  && !LEAVE_OUT.includes(app.myDoc.dept) && !HOD_BY[app.myDoc.hod] && !isHod();
-const canApplyLeave = () => !app.sample && !!me() && !!app.myDoc && !LEAVE_OUT.includes(app.myDoc.dept) && (!!HOD_BY[app.myDoc.hod] || isHod());
+  && !LEAVE_OUT.includes(app.myDoc.dept) && !FIXED_BY_DEPT[app.myDoc.dept] && !HOD_BY[app.myDoc.hod] && !isHod();
+const canApplyLeave = () => !app.sample && !!me() && !!app.myDoc && !LEAVE_OUT.includes(app.myDoc.dept) && (!!HOD_BY[app.myDoc.hod] || isHod() || !!FIXED_BY_DEPT[app.myDoc.dept]);
 const leaveTabOn = () => !app.sample && (canApplyLeave() || myHodGroups().length > 0 || app.isAdmin);
 function renderHodPrompt() {
   return `<section class="panel hodp" style="max-width:640px;justify-self:center"><h2>Who is your Head of Department?</h2>
@@ -1741,8 +1750,9 @@ function renderHodAssign() {
     <p class="muted small">Link each HOD to their account. They then see and decide their department's leave requests. Doctors choose their HOD themselves when they open the app.</p>
     <div class="cg-grid">${HOD_GROUPS.map(g => `<label class="field"><span class="lab">${esc(g.name)} · ${esc(g.label)} <span class="muted">(${count(g.key)} doctor${count(g.key) === 1 ? "" : "s"})</span></span>
       <select data-hod-assign="${g.key}"><option value="">Not linked yet</option>${docs.map(x => `<option value="${esc(x.uid)}" ${d[g.key] === x.uid ? "selected" : ""}>${esc(x.name || "No name")} · ${esc(x.dept || "")}</option>`).join("")}</select></label>`).join("")}</div>
+    <p class="small">${FIXED_GROUPS.map(g => `<b>${esc(g.label)}</b>`).join(", ")}: the coordinator (MSA office) is HOD. Their doctors don't choose an HOD; their leave comes to you.</p>
     <div class="btns"><button class="btn primary" data-act="hod-save" id="hod-save" ${app.busy || !state.hodDraft ? "disabled" : ""}>Save heads of department</button></div>
-    ${Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && !LEAVE_OUT.includes(x.dept) && !HOD_BY[x.hod]).length ? `<p class="muted small">${Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && !LEAVE_OUT.includes(x.dept) && !HOD_BY[x.hod]).length} doctor(s) haven't chosen their HOD yet; they'll be asked next time they open the app.</p>` : ""}
+    ${Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && !LEAVE_OUT.includes(x.dept) && !FIXED_BY_DEPT[x.dept] && !HOD_BY[x.hod]).length ? `<p class="muted small">${Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && !LEAVE_OUT.includes(x.dept) && !HOD_BY[x.hod]).length} doctor(s) haven't chosen their HOD yet; they'll be asked next time they open the app.</p>` : ""}
   </section>`;
 }
 /* ---- data ---- */
@@ -1804,7 +1814,7 @@ function leaveCoverage(l) {
   return { loading: false, rows, grp, ok: rows.every(r => r.ok) };
 }
 /* HODs can fill an empty shift with someone from their team (doctors who chose them); only coordinators edit rosters. */
-const myTeam = dept => Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && myHodGroups().includes(x.hod) && (!dept || x.dept === dept));
+const myTeam = dept => Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && x.uid !== app.uid && myHodGroups().includes(groupOf(x.uid)) && (!dept || x.dept === dept));
 const hodDepts = () => [...new Set(myTeam().map(x => x.dept).filter(Boolean))];
 const canAllot = (dept, date) => !app.sample && !!dept && dept !== "all" && date >= todayKey && !isClosed(date.slice(0, 7)) && (app.isAdmin || hodDepts().includes(dept));
 /* Who could take a shift: free that day (no other duty, no Night before a Morning or Morning after a Night), on leave, or busy. */
@@ -1911,7 +1921,8 @@ function renderLeave() {
   const forMe = leaveList().filter(l => l.uid !== app.uid && (app.isAdmin || groups.includes(l.group) && l.hodUid === app.uid));
   const shown = forMe.filter(l => state.lvFilter === "all" || (state.lvFilter === "pending" ? l.status === "pending" : l.status === state.lvFilter));
   const preview = canApplyLeave() && f.from && f.to && f.from <= f.to ? leaveCoverage({ uid: app.uid, from: f.from, to: f.to }) : null;
-  const hod = canApplyLeave() ? (isHod() ? HOD_BY[myHodGroups()[0]] : HOD_BY[app.myDoc.hod]) : null, iAmMyHod = isHod();
+  const fixedG = canApplyLeave() && !isHod() ? FIXED_BY_DEPT[app.myDoc.dept] : "";
+  const hod = canApplyLeave() ? (isHod() ? HOD_BY[myHodGroups()[0]] : fixedG ? HOD_BY[fixedG] : HOD_BY[app.myDoc.hod]) : null, iAmMyHod = isHod() || !!fixedG;
   const chk = canApplyLeave() && LEAVE_TYPES[f.type] ? balanceCheck(app.uid, f.type, f.from, f.to) : [];
   const team = app.isAdmin ? Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && !LEAVE_OUT.includes(x.dept)) : myTeam();
   return `<div class="grid2">
@@ -1923,7 +1934,7 @@ function renderLeave() {
     ${shown.length ? `<div class="lv-list">${shown.map(l => leaveCard(l, app.isAdmin && !(groups.includes(l.group) && l.hodUid === app.uid) ? "admin" : "hod")).join("")}</div>` : `<div class="empty sm" data-icon="roster"><p>${state.lvFilter === "pending" ? "No leave requests waiting for you." : "Nothing here."}</p></div>`}
   </section>` : ""}
   ${canApplyLeave() ? `<form class="panel" id="lv-form" novalidate><h2>Apply for leave</h2>
-    <p class="muted small">Goes to ${iAmMyHod ? "<b>the MSA office</b> (HODs' leave is approved by the coordinator)" : `<b>${esc(hod.name)}</b> (${esc(hod.label)})`}${!iAmMyHod && !hodUidOf(hod.key) ? `. <span class="note">${esc(hod.name)} hasn't been linked to an account yet, so the MSA office will see it first.</span>` : ""}. Your reason is confidential: only you, your HOD and the MSA office can read it.</p>
+    <p class="muted small">Goes to ${iAmMyHod ? (fixedG ? `<b>the MSA office</b> (the coordinator is HOD of ${esc(HOD_BY[fixedG].label)})` : "<b>the MSA office</b> (HODs' leave is approved by the coordinator)") : `<b>${esc(hod.name)}</b> (${esc(hod.label)})`}${!iAmMyHod && !hodUidOf(hod.key) ? `. <span class="note">${esc(hod.name)} hasn't been linked to an account yet, so the MSA office will see it first.</span>` : ""}. Your reason is confidential: only you, your HOD and the MSA office can read it.</p>
     <div class="field"><span class="lab">Type of leave</span><div class="ir-radios">${Object.entries(LEAVE_TYPES).map(([k, t]) => `<label class="check"><input type="radio" name="lv-type" data-bind="lv.type" value="${k}" ${f.type === k ? "checked" : ""}> ${t}${TYPE_HINT[k] ? ` <span class="muted small">(${TYPE_HINT[k]})</span>` : ""}</label>`).join("")}</div></div>
     <div class="ir-grid"><div class="field"><label for="lv-from">From</label><input type="date" id="lv-from" data-bind="lv.from" value="${esc(f.from)}"></div><div class="field"><label for="lv-to">To (last day of leave)</label><input type="date" id="lv-to" data-bind="lv.to" value="${esc(f.to)}" min="${esc(f.from)}"></div></div>
     <div class="field"><label for="lv-reason">Reason</label><textarea class="plain" id="lv-reason" data-bind="lv.reason" rows="3" maxlength="1000" placeholder="Kept confidential">${esc(f.reason)}</textarea></div>
@@ -2381,7 +2392,8 @@ function renderProfileForm() {
       <div class="field"><span class="lab">Email</span><div class="locked-val"><b>${esc(email || "No email on this account")}</b><span class="muted small">From your sign-in</span></div></div>
       <div class="field"><label for="pf-dept">Department</label><select id="pf-dept" data-bind="profile.dept"><option value="">Choose your department</option>${DEPARTMENTS.map(x => `<option value="${esc(x)}" ${p.dept === x ? "selected" : ""}>${esc(x)}</option>`).join("")}${p.dept && !DEPARTMENTS.includes(p.dept) ? `<option value="${esc(p.dept)}" selected>${esc(p.dept)} (old name, please change)</option>` : ""}</select></div>
       ${d && isHod() && !app.sample ? `<div class="field"><span class="lab">Head of department (for leave)</span><div class="locked-val"><b>You're the HOD of ${myHodGroups().map(g => esc(HOD_BY[g].label)).join(", ")}</b><span class="muted small">Your own leave goes to the MSA office</span></div></div>` : ""}
-      ${d && !isHod() && !LEAVE_OUT.includes(p.dept) && (d.approved === true || app.sample) ? `<div class="field"><label for="pf-hod">Head of department (for leave)</label><select id="pf-hod" data-bind="profile.hod"><option value="">Choose your HOD</option>${HOD_GROUPS.map(g => `<option value="${g.key}" ${(p.hod || d.hod) === g.key ? "selected" : ""}>${esc(g.name)} · ${esc(g.label)}</option>`).join("")}</select></div>` : ""}
+      ${d && !isHod() && FIXED_BY_DEPT[p.dept] && !app.sample ? `<div class="field"><span class="lab">Head of department (for leave)</span><div class="locked-val"><b>The MSA office (coordinator)</b><span class="muted small">HOD of ${esc(p.dept)}</span></div></div>` : ""}
+      ${d && !isHod() && !FIXED_BY_DEPT[p.dept] && !LEAVE_OUT.includes(p.dept) && (d.approved === true || app.sample) ? `<div class="field"><label for="pf-hod">Head of department (for leave)</label><select id="pf-hod" data-bind="profile.hod"><option value="">Choose your HOD</option>${HOD_GROUPS.map(g => `<option value="${g.key}" ${(p.hod || d.hod) === g.key ? "selected" : ""}>${esc(g.name)} · ${esc(g.label)}</option>`).join("")}</select></div>` : ""}
       <div class="field"><label for="pf-desig">Designation${p.dept === "MSA" ? " (not needed for MSA)" : ""}</label><select id="pf-desig" data-bind="profile.designation"><option value="">Choose your designation</option>${DESIGNATIONS.map(x => `<option value="${esc(x)}" ${p.designation === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
     </div>
     ${locked ? (pc ? `<div class="note">Waiting for the coordinator to approve: ${pc.name ? `name → <b>${esc(pc.name)}</b>` : ""}${pc.name && pc.phone ? ", " : ""}${pc.phone ? `number → <b>${esc(pc.phone)}</b>` : ""}. <button class="btn ghost" type="button" data-act="pc-cancel" id="pc-cancel">Cancel request</button></div>`
@@ -2958,7 +2970,7 @@ const actions = {
     if (datesBetween(f.from, f.to).length > 90) { toast("Leave can be at most 90 days in one request."); return; }
     if (f.from < todayKey && f.type !== "sick" && f.type !== "emergency") { toast("Casual, Annual and Ex-Pakistan leave can't start in the past."); return; }
     if (!String(f.reason || "").trim()) { toast("Add a reason (it stays confidential)."); return; }
-    const g = isHod() ? myHodGroups()[0] : app.myDoc.hod, hodUid = isHod() || hodUidOf(g) === app.uid ? "" : hodUidOf(g); // HODs: to the MSA office
+    const fx = FIXED_BY_DEPT[app.myDoc.dept], g = isHod() ? myHodGroups()[0] : fx || app.myDoc.hod, hodUid = isHod() || fx || hodUidOf(g) === app.uid ? "" : hodUidOf(g); // HODs and Radiology/Anaesthesia/MSA: to the MSA office
     const clash = leaveList().find(l => l.uid === app.uid && (l.status === "pending" || l.status === "approved") && l.from <= f.to && f.from <= l.to);
     if (clash) { toast("You already have leave on some of these days (" + fmtRange(clash.from, clash.to) + ")."); return; }
     const bc = balanceCheck(app.uid, f.type, f.from, f.to), over = bc.filter(x => x.over);
