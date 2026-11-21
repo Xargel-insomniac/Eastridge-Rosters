@@ -227,6 +227,9 @@ details.cs-group[open] .cs-chev { transform: rotate(-135deg); margin-bottom: -3p
 .cp-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 8px; margin: 8px 0; }
 .cp-item { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 12px; }
 .cp-item > span { display: grid; min-width: 0; } .cp-item b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-close { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 8px; align-items: end; border-top: 1px dashed var(--line); padding-top: 10px; }
+.ab-close .btns { grid-column: 1 / -1; } .pill.ab-absent { background: var(--bad-bg); color: var(--bad); } .pill.ab-late, .pill.ab-early { background: var(--warn-bg); color: var(--warn); } .pill.ab-nohandover { background: var(--bad-bg); color: var(--bad); }
+.ab-form { display: grid; gap: 10px; margin: 8px 0 12px; }
 .lv-bal { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .lv-tile { border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 4px; background: var(--surface); min-width: 0; }
 .lv-tile .lab { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
@@ -1212,7 +1215,7 @@ const state = {
   tab: "board", dept: "all", mineOnly: false,
   doctors: {}, rosters: {}, requests: [],
   drafts: {}, editFor: null, upload: null, pasteText: "",
-  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, allot: null, leaves: {}, onleave: [], lv: null, lvRosters: {}, lvComment: {}, lvFilter: "pending", waNext: null, incidents: null, ir: null, irFiles: null, irRec: null, irFileCache: {}, irView: null, irFilter: "open", irNote: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
+  docDept: "", away: {}, cover: {}, cgDraft: null, csQ: "", csMode: "all", csSpec: "", opdUpload: null, pending: [], waPrompt: null, extended: {}, extPrompt: null, ann: null, annDraft: null, contact: null, allot: null, leaves: {}, onleave: [], absences: {}, ab: null, abFilter: "open", abClose: {}, lv: null, lvRosters: {}, lvComment: {}, lvFilter: "pending", waNext: null, incidents: null, ir: null, irFiles: null, irRec: null, irFileCache: {}, irView: null, irFilter: "open", irNote: null, staff: null, staffShow: "missing", staffPaste: "", staffAdd: false, msaDraft: null, fbDraft: null, icsPrompt: null, deptUpload: null, deptPaste: "", deptMode: "replace", deptSaving: "",
   auth: { mode: "signin", email: "", password: "", err: "", msg: "" }, confirmRevoke: null,
   profileOpen: false, profile: { name: "", dept: "", designation: "", phone: "" },
   form: { type: "swap", give: "", colleague: "", take: "", moveDate: "", moveShift: "M", note: "" },
@@ -1683,8 +1686,11 @@ function leaveBalance(uid, year, exceptId) {
   const used = { casual: 0, annual: 0, sick: 0 }, pending = { casual: 0, annual: 0, sick: 0 };
   for (const o of state.onleave) if (o.uid === uid && o.id !== exceptId) used[POOL_OF[o.type || (state.leaves[o.id] || {}).type] || "casual"] += daysInYear(o.from, o.to, year);
   for (const l of Object.values(state.leaves)) if (l.uid === uid && l.status === "pending" && l.id !== exceptId) pending[POOL_OF[l.type] || "casual"] += daysInYear(l.from, l.to, year);
+  let lwp = 0;
+  for (const a of Object.values(state.absences || {})) if (a.uid === uid && a.status === "closed" && a.outcome && String(a.date).slice(0, 4) === year) {
+    if (a.outcome.leave === "casual") used.casual += +a.outcome.days || 1; else if (a.outcome.leave === "lwp") lwp += +a.outcome.days || 1; }
   const left = k => LEAVE_POOLS[k].days - used[k];
-  return { used, pending, left };
+  return { used, pending, left, lwp };
 }
 /* What a request would use, per year: [{ year, pool, need, left, over }]. */
 function balanceCheck(uid, type, from, to, exceptId) {
@@ -1696,7 +1702,7 @@ function renderBalanceTiles(uid, year) {
   const b = leaveBalance(uid, year);
   return `<div class="lv-bal">${Object.entries(LEAVE_POOLS).map(([k, p]) => { const left = b.left(k), pct = Math.max(0, Math.min(100, (b.used[k] / p.days) * 100));
     return `<div class="lv-tile${left < 0 ? " over" : left <= 2 ? " low" : ""}" id="bal-${k}"><span class="lab">${p.label}</span><b>${left < 0 ? 0 : left}<small> of ${p.days} left</small></b>
-      <span class="bar" aria-hidden="true"><i style="width:${pct}%"></i></span><span class="muted small">${b.used[k]} used${b.pending[k] ? ` · ${b.pending[k]} waiting` : ""}${left < 0 ? ` · <b>${-left} over</b>` : ""}</span></div>`; }).join("")}</div>`;
+      <span class="bar" aria-hidden="true"><i style="width:${pct}%"></i></span><span class="muted small">${b.used[k]} used${b.pending[k] ? ` · ${b.pending[k]} waiting` : ""}${left < 0 ? ` · <b>${-left} over</b>` : ""}</span></div>`; }).join("")}</div>${b.lwp ? `<p class="small bad-t" id="bal-lwp">${b.lwp} day${b.lwp === 1 ? "" : "s"} without pay (absence) this year</p>` : ""}`;
 }
 function renderBalanceTable(list, year, title) {
   if (!list.length) return "";
@@ -1740,12 +1746,17 @@ function renderHodAssign() {
   </section>`;
 }
 /* ---- data ---- */
-let unsubLeaves = [], unsubOnleave = null, leavesKey = "";
+let unsubLeaves = [], unsubOnleave = null, leavesKey = "", unsubAbs = [];
 function subscribeLeaves() {
   if (!app.db || !app.uid || app.sample) return;
   const key = app.uid + "|" + (app.isAdmin ? "a" : "") + myHodGroups().join(); // resubscribe if someone becomes (or stops being) an HOD
   if (key === leavesKey) return;
   unsubLeaves.forEach(u => u()); unsubLeaves = []; if (unsubOnleave) unsubOnleave(); unsubOnleave = null; leavesKey = key;
+  unsubAbs.forEach(u => u()); unsubAbs = []; state.absences = {};
+  const putA = snap => { snap.docChanges().forEach(ch => { if (ch.type === "removed") delete state.absences[ch.doc.id]; else state.absences[ch.doc.id] = { id: ch.doc.id, ...ch.doc.data() }; }); render(); };
+  const ac = app.db.collection("absences");
+  if (app.isAdmin) unsubAbs.push(ac.orderBy("createdAt", "desc").limit(500).onSnapshot(putA, () => {}));
+  else { unsubAbs.push(ac.where("uid", "==", app.uid).limit(100).onSnapshot(putA, () => {})); if (myHodGroups().length) unsubAbs.push(ac.where("hodUid", "==", app.uid).limit(300).onSnapshot(putA, () => {})); }
   const put = snap => { snap.docChanges().forEach(ch => { if (ch.type === "removed") delete state.leaves[ch.doc.id]; else state.leaves[ch.doc.id] = { id: ch.doc.id, ...ch.doc.data() }; }); render(); };
   const col = app.db.collection("leaves");
   if (app.isAdmin) unsubLeaves.push(col.orderBy("createdAt", "desc").limit(300).onSnapshot(put, () => {}));
@@ -1756,7 +1767,7 @@ function subscribeLeaves() {
   const prev = addMonths(currentMonthKey(), -1) + "-01", jan = thisYear() + "-01-01", from = prev < jan ? prev : jan; // balances need the whole year
   unsubOnleave = app.db.collection("onleave").where("to", ">=", from).limit(2000).onSnapshot(snap => { state.onleave = snap.docs.map(x => ({ id: x.id, ...x.data() })); render(); }, () => {});
 }
-function stopLeaves() { leavesKey = ""; unsubLeaves.forEach(u => u()); unsubLeaves = []; if (unsubOnleave) unsubOnleave(); unsubOnleave = null; state.leaves = {}; state.onleave = []; state.lvRosters = {}; }
+function stopLeaves() { leavesKey = ""; unsubAbs.forEach(u => u()); unsubAbs = []; state.absences = {}; unsubLeaves.forEach(u => u()); unsubLeaves = []; if (unsubOnleave) unsubOnleave(); unsubOnleave = null; state.leaves = {}; state.onleave = []; state.lvRosters = {}; }
 const leaveList = () => Object.values(state.leaves).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 const datesBetween = (a, b) => { const out = []; for (let d = a; d <= b && out.length < 120; d = isoAdd(d, 1)) out.push(d); return out; };
 const onLeaveOn = (id, date) => state.onleave.some(x => x.uid === id && x.from <= date && date <= x.to);
@@ -1840,6 +1851,60 @@ const fmtRange = (a, b) => a === b ? fmtDate(a) : fmtDate(a) + " – " + fmtDate
 /* Others in the same HOD group already away on any of these dates. */
 const leaveOverlap = l => leaveList().filter(x => x.id !== l.id && x.group === l.group && (x.status === "approved" || x.status === "pending") && x.from <= l.to && l.from <= x.to);
 /* ---- screens ---- */
+/* ---------- absence reports: the coordinator (anyone) and HODs (their own department) report a doctor absent, late, leaving early
+   or leaving without handover. The doctor is told (in the app and on WhatsApp) but doesn't reply; the coordinator closes each report
+   and decides whether it uses leave: no deduction, Casual days, or without pay. ---------- */
+const ABS_TYPES = { absent: "Absent", late: "Late arrival", early: "Left early", nohandover: "Left without handover" };
+const ABS_LEAVE = { none: "No deduction", casual: "Casual leave", lwp: "Without pay" };
+const canReportAbsence = () => !app.sample && (app.isAdmin || isHod());
+const absReportable = () => (app.isAdmin ? Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster) : myTeam()).filter(x => x.uid !== app.uid).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+const absList = () => Object.values(state.absences || {}).sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || 0) - (a.createdAt || 0));
+function absText(a) {
+  const sh = SHIFT[a.shift] ? SHIFT[a.shift].name : a.shift, d = fmtDate(a.date);
+  return a.type === "absent" ? "absent from " + sh + " duty, " + d : a.type === "late" ? "late for " + sh + " duty, " + d + (a.time ? " (arrived " + a.time + ")" : "")
+    : a.type === "early" ? "left " + sh + " duty early, " + d + (a.time ? " (left at " + a.time + ")" : "") : "left " + sh + " duty without handover, " + d + (a.time ? " (at " + a.time + ")" : "");
+}
+function absCard(a, role) {
+  const st = a.status === "open" ? `<span class="pill warn">Open</span>` : a.status === "withdrawn" ? `<span class="pill declined">Withdrawn</span>` : `<span class="pill done">Closed</span>`;
+  const o = a.outcome, c = state.abClose[a.id] || { leave: "none", days: a.type === "absent" ? "1" : "0.5", note: "" }, dis = app.busy ? "disabled" : "";
+  return `<article class="lv-card ab-card${a.status === "open" ? " pending" : ""}" data-ab="${esc(a.id)}">
+    <div class="head"><b>${esc(role === "mine" ? ABS_TYPES[a.type] : a.name || docName(a.uid))}</b>${st}</div>
+    <p class="small">${role === "mine" ? "" : `<span class="pill ab-${esc(a.type)}">${esc(ABS_TYPES[a.type])}</span> `}<b>${esc(SHIFT[a.shift] ? SHIFT[a.shift].name : a.shift)} · ${esc(fmtDate(a.date))}</b>${a.time ? ` · ${a.type === "late" ? "arrived" : "at"} ${esc(a.time)}` : ""}${role !== "mine" && a.dept ? " · " + esc(a.dept) : ""}</p>
+    ${a.note ? `<p class="small">${esc(a.note)}</p>` : ""}
+    <p class="muted small">Reported by ${esc(a.reporterName || docName(a.reportedBy))} (${a.reportedRole === "msa" ? "MSA office" : "HOD"}) on ${esc(new Date(a.createdAt || 0).toLocaleDateString("en-GB", { timeZone: "Asia/Karachi" }))}</p>
+    ${o ? `<p class="small"><b>Outcome:</b> ${esc(ABS_LEAVE[o.leave] || o.leave)}${o.leave !== "none" ? " · " + esc(String(o.days)) + " day" + (+o.days === 1 ? "" : "s") : ""}${o.note ? " · " + esc(o.note) : ""}</p>` : ""}
+    ${role === "admin" && a.status === "open" ? `<div class="ab-close"><div class="field"><label for="abl-${esc(a.id)}">Leave</label><select id="abl-${esc(a.id)}" data-ab-field="${esc(a.id)}|leave">${Object.entries(ABS_LEAVE).map(([k, t]) => `<option value="${k}" ${c.leave === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+      ${c.leave !== "none" ? `<div class="field"><label for="abd-${esc(a.id)}">Days</label><select id="abd-${esc(a.id)}" data-ab-field="${esc(a.id)}|days">${["0.5", "1"].map(v => `<option value="${v}" ${String(c.days) === v ? "selected" : ""}>${v === "0.5" ? "Half a day" : "1 day"}</option>`).join("")}</select></div>` : ""}
+      <div class="field"><label for="abn-${esc(a.id)}">Note (optional)</label><input type="text" id="abn-${esc(a.id)}" data-ab-field="${esc(a.id)}|note" value="${esc(c.note)}" maxlength="300"></div>
+      <div class="btns"><button class="btn primary" data-act="ab-close" data-id="${esc(a.id)}" id="abc-${esc(a.id)}" ${dis}>Close report</button>${a.reportedBy === app.uid ? `<button class="btn ghost" data-act="ab-withdraw" data-id="${esc(a.id)}" ${dis}>Withdraw</button>` : ""}</div></div>`
+      : role === "hod" && a.status === "open" ? `<div class="btns"><span class="muted small">The MSA office closes it.</span>${a.reportedBy === app.uid ? `<button class="btn ghost" data-act="ab-withdraw" data-id="${esc(a.id)}" id="abw-${esc(a.id)}" ${dis}>Withdraw</button>` : ""}</div>` : ""}
+  </article>`;
+}
+function renderAbsences() {
+  const mine = absList().filter(a => a.uid === app.uid && a.status !== "withdrawn");
+  const mineHtml = mine.length ? `<section class="panel" id="ab-mine" style="grid-column:1/-1"><h2>Absence reports about you (${mine.length})</h2><p class="muted small">Reported by the MSA office or your HOD. Contact the MSA office if something is wrong.</p><div class="lv-list">${mine.map(a => absCard(a, "mine")).join("")}</div></section>` : "";
+  if (!canReportAbsence()) return mineHtml;
+  const f = state.ab || (state.ab = { uid: "", date: todayKey, shift: "", type: "absent", time: "", note: "" }), docs = absReportable();
+  const R = f.uid && f.date ? lvMonth(f.date.slice(0, 7)) : null, duty = R ? ((R.docs[f.uid] || {})[f.date] || []) : null;
+  const all = absList().filter(a => a.uid !== app.uid || app.isAdmin), shown = all.filter(a => state.abFilter === "all" || (state.abFilter === "open" ? a.status === "open" : a.status === state.abFilter));
+  const open = all.filter(a => a.status === "open").length;
+  return `<section class="panel" style="grid-column:1/-1" id="ab-panel"><h2>Absence reports${open ? ` <span class="pill warn">${open} open</span>` : ""}</h2>
+    <details class="cp-edit" ${state.abFormOpen ? "open" : ""} id="ab-form-wrap"><summary data-act="ab-form-toggle" id="ab-open">Report a doctor: absent, late, left early or without handover</summary>
+    <div class="ab-form" id="ab-form">
+      <p class="muted small">${app.isAdmin ? "You can report any doctor." : "You can report doctors in your department (" + esc(myHodGroups().map(g => HOD_BY[g].label).join(", ")) + "). The MSA office closes the report and decides any leave deduction."} The doctor is told in the app and on WhatsApp.</p>
+      <div class="ir-grid"><div class="field"><label for="ab-doc">Doctor</label><select id="ab-doc" data-bind="ab.uid"><option value="">Choose a doctor</option>${docs.map(x => `<option value="${esc(x.uid)}" ${f.uid === x.uid ? "selected" : ""}>${esc(x.name)}${x.dept ? " · " + esc(x.dept) : ""}</option>`).join("")}</select></div>
+      <div class="field"><label for="ab-date">Date</label><input type="date" id="ab-date" data-bind="ab.date" value="${esc(f.date)}" max="${todayKey}"></div></div>
+      ${f.uid ? `<p class="small ${duty && duty.length ? "" : "muted"}" id="ab-duty">${!R ? "Checking the roster…" : duty.length ? `Rostered that day: <b>${duty.map(c => esc(SHIFT[c].name)).join(", ")}</b>` : "No duty on the roster that day. You can still choose the shift."}</p>` : ""}
+      <div class="field"><span class="lab">Shift</span><div class="ir-radios">${SHIFTS.map(x => `<label class="check"><input type="radio" name="ab-shift" data-bind="ab.shift" value="${x.code}" ${(f.shift || (duty && duty.length === 1 ? duty[0] : "")) === x.code ? "checked" : ""}> ${esc(x.name)} <span class="muted small">${esc(x.time)}</span></label>`).join("")}</div></div>
+      <div class="field"><span class="lab">What happened</span><div class="ir-radios">${Object.entries(ABS_TYPES).map(([k, t]) => `<label class="check"><input type="radio" name="ab-type" data-bind="ab.type" value="${k}" ${f.type === k ? "checked" : ""}> ${t}</label>`).join("")}</div></div>
+      ${f.type !== "absent" ? `<div class="field" style="max-width:220px"><label for="ab-time">${f.type === "late" ? "Time they arrived" : f.type === "early" ? "Time they left" : "Time they left (optional)"}</label><input type="time" id="ab-time" data-bind="ab.time" value="${esc(f.time)}"></div>` : ""}
+      <div class="field"><label for="ab-note">Note (optional, the doctor sees it)</label><textarea class="plain" id="ab-note" data-bind="ab.note" rows="2" maxlength="500" placeholder="e.g. No call or message; ward covered by Dr. …">${esc(f.note)}</textarea></div>
+      <div class="btns"><button class="btn primary" data-act="ab-submit" id="ab-submit" ${app.busy ? "disabled" : ""}>Report</button></div>
+    </div></details>
+    <div class="btns"><label class="check">Show <select data-bind="abFilter" id="ab-filter">${[["open", "Open"], ["closed", "Closed"], ["withdrawn", "Withdrawn"], ["all", "All"]].map(([v, t]) => `<option value="${v}" ${state.abFilter === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+    ${shown.length ? `<div class="lv-list" id="ab-list">${shown.map(a => absCard(a, app.isAdmin ? "admin" : "hod")).join("")}</div>` : `<div class="empty sm" data-icon="roster"><p>${state.abFilter === "open" ? "No open reports." : "Nothing here."}</p></div>`}
+  </section>${mineHtml}`;
+}
 function renderLeave() {
   const f = state.lv || (state.lv = { type: "casual", from: todayKey, to: todayKey, reason: "" });
   const mine = leaveList().filter(l => l.uid === app.uid), groups = myHodGroups();
@@ -1850,6 +1915,7 @@ function renderLeave() {
   const chk = canApplyLeave() && LEAVE_TYPES[f.type] ? balanceCheck(app.uid, f.type, f.from, f.to) : [];
   const team = app.isAdmin ? Object.values(app.allDoctors || {}).filter(x => x.approved === true && !x.offRoster && !LEAVE_OUT.includes(x.dept)) : myTeam();
   return `<div class="grid2">
+  ${renderAbsences()}
   ${canApplyLeave() ? `<section class="panel" style="grid-column:1/-1" id="lv-mybal"><h2>My leave balance · ${thisYear()}</h2>${renderBalanceTiles(app.uid, thisYear())}
     <p class="muted small">Emergency leave uses Casual days and Ex-Pakistan uses Annual days. Every calendar day of leave counts. Allowances reset on 1 January.</p></section>` : ""}
   ${groups.length || app.isAdmin ? `<section class="panel" style="grid-column:1/-1" id="lv-review"><h2>${app.isAdmin ? "Leave requests (all departments)" : "Leave requests for " + groups.map(g => HOD_BY[g].label).join(", ")}</h2>
@@ -2849,6 +2915,41 @@ const actions = {
     const ok = await guarded(() => dbCall(() => app.db.collection("settings").doc("contact").set({ hods: clean, updatedAt: Date.now(), updatedBy: app.uid }, { merge: true })), "Heads of department saved.");
     if (ok) state.hodDraft = null;
   },
+  "ab-form-toggle"(b, e) { e.preventDefault(); state.abFormOpen = !state.abFormOpen; render(); },
+  async "ab-submit"() {
+    const f = state.ab || {}, d = (app.allDoctors || {})[f.uid];
+    const R = f.uid && f.date ? lvMonth(f.date.slice(0, 7)) : null, duty = R ? ((R.docs[f.uid] || {})[f.date] || []) : [], shift = f.shift || (duty.length === 1 ? duty[0] : "");
+    if (!d) { toast("Choose the doctor.", "bad"); return; }
+    if (!f.date || f.date > todayKey) { toast("Choose a date (today or earlier).", "bad"); return; }
+    if (!SHIFT[shift]) { toast("Choose the shift.", "bad"); return; }
+    if ((f.type === "late" || f.type === "early") && !f.time) { toast(f.type === "late" ? "Add the time they arrived." : "Add the time they left.", "bad"); return; }
+    if (absList().some(a => a.uid === f.uid && a.date === f.date && a.shift === shift && a.type === f.type && a.status !== "withdrawn")) { toast("That's already been reported.", "bad"); return; }
+    const group = groupOf(f.uid), hodUid = app.isAdmin ? (group ? hodUidOf(group) : "") : app.uid;
+    const doc = { uid: f.uid, name: d.name || "", dept: d.dept || "", group, hodUid, date: f.date, shift, type: f.type, time: f.type === "absent" ? "" : f.time || "", note: String(f.note || "").trim(),
+      reportedBy: app.uid, reporterName: docName(app.uid), reportedRole: app.isAdmin ? "msa" : "hod", status: "open", createdAt: Date.now() };
+    const win = waWindow();
+    const ok = await guarded(() => dbCall(() => app.db.collection("absences").add(doc)), d.name + " reported: " + ABS_TYPES[f.type].toLowerCase() + ".");
+    if (!ok) { waAbort(win); return; }
+    state.ab = { uid: "", date: todayKey, shift: "", type: "absent", time: "", note: "" }; render();
+    waSend(win, f.uid, "Assalam o Alaikum " + d.name + ", you have been reported " + absText(doc) + " by " + docName(app.uid) + " (" + (app.isAdmin ? "MSA office" : "HOD") + ") on the Eastridge duty roster." + (doc.note ? " Note: " + doc.note : "") + " Please contact the MSA office if you need to.");
+    const n = waNumber(state.contact && state.contact.msaWhatsApp);
+    if (!app.isAdmin && n) { const msa = { toId: null, href: "https://wa.me/" + n + "?text=" + encodeURIComponent("Assalam o Alaikum, I've reported " + d.name + " (" + (d.dept || "") + ") " + absText(doc) + " on the Eastridge duty roster." + (doc.note ? " Note: " + doc.note : "")) };
+      if (state.waPrompt) state.waNext = msa; else { state.waPrompt = msa; render(); } }
+  },
+  async "ab-close"(b) {
+    const a = state.absences[b.dataset.id]; if (!a || a.status !== "open") return;
+    const c = state.abClose[a.id] || { leave: "none", days: a.type === "absent" ? "1" : "0.5", note: "" }, days = c.leave === "none" ? 0 : +c.days || 1;
+    const outcome = { leave: c.leave, days, note: String(c.note || "").trim(), closedBy: app.uid, closedAt: Date.now() };
+    const win = waWindow();
+    const ok = await guarded(() => dbCall(() => app.db.collection("absences").doc(a.id).update({ status: "closed", outcome })), "Report closed: " + ABS_LEAVE[c.leave].toLowerCase() + ".");
+    if (!ok) { waAbort(win); return; }
+    delete state.abClose[a.id];
+    waSend(win, a.uid, "Assalam o Alaikum " + (a.name || docName(a.uid)) + ", the report that you were " + absText(a) + " has been closed by the MSA office: " + (c.leave === "none" ? "no leave deducted" : c.leave === "casual" ? days + " Casual leave day" + (days === 1 ? "" : "s") + " deducted" : days + " day" + (days === 1 ? "" : "s") + " without pay") + "." + (outcome.note ? " Note: " + outcome.note : ""));
+  },
+  async "ab-withdraw"(b) {
+    const a = state.absences[b.dataset.id]; if (!a || a.status !== "open" || !confirm("Withdraw this report? The doctor will still have the earlier WhatsApp message.")) return;
+    await guarded(() => dbCall(() => app.db.collection("absences").doc(a.id).update({ status: "withdrawn", closedAt: Date.now() })), "Report withdrawn.");
+  },
   async "lv-submit"() {
     const f = state.lv || {};
     if (!LEAVE_TYPES[f.type]) { toast("Choose the type of leave."); return; }
@@ -3295,8 +3396,9 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const fn = actions[b.dataset.act]; if (fn) { e.preventDefault(); fn(b, e); }
 });
-const LIVE_BINDS = new Set(["cpPaste", "lv.reason", ...IR_TEXT.map(x => "ir." + x[0]), "ir.involvesOther", "irNote.comments", "csQ", "extPrompt.reason", "staffPaste", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
+const LIVE_BINDS = new Set(["ab.note", "cpPaste", "lv.reason", ...IR_TEXT.map(x => "ir." + x[0]), "ir.involvesOther", "irNote.comments", "csQ", "extPrompt.reason", "staffPaste", "msaDraft", "fbDraft", "deptPaste", "annDraft.text", "auth.email", "auth.password", "pasteText", "profile.name", "profile.dept", "profile.phone", "profile.newName", "profile.newPhone", "form.note"]);
 document.addEventListener("input", e => {
+  if (e.target.dataset && e.target.dataset.abField) { const [id, k] = e.target.dataset.abField.split("|"), a = state.absences[id] || {}; (state.abClose[id] ||= { leave: "none", days: a.type === "absent" ? "1" : "0.5", note: "" })[k] = e.target.value; if (k !== "note") render(); return; }
   if (e.target.dataset && e.target.dataset.cp !== undefined) { (state.cpEdits ||= {})[e.target.dataset.cp] = e.target.value; return; }
   if (e.target.dataset && e.target.dataset.lvComment) { state.lvComment[e.target.dataset.lvComment] = e.target.value; return; }
   const el = e.target, path = el.dataset && el.dataset.bind; if (!path || !LIVE_BINDS.has(path)) return;

@@ -120,6 +120,28 @@ service cloud.firestore {
                 || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['relief'])));
       allow delete: if isAdmin();
     }
+    // Absence reports (absent / late / left early / left without handover). Only the coordinator (anyone) and HODs (their own
+    // department's doctors) can report. The doctor can read reports about them; only the coordinator closes them.
+    match /absences/{id} {
+      allow read: if isAdmin() || (isMember() && (resource.data.uid == uid() || resource.data.hodUid == uid()));
+      allow create: if isMember()
+        && request.resource.data.reportedBy == uid()
+        && request.resource.data.uid != uid()
+        && request.resource.data.status == 'open'
+        && request.resource.data.type in ['absent', 'late', 'early', 'nohandover']
+        && request.resource.data.shift in ['M', 'E', 'N']
+        && request.resource.data.date is string
+        && !('outcome' in request.resource.data)
+        && (isAdmin()
+            || (request.resource.data.group in ['gynae', 'medicine', 'surgery', 'peds']
+                && hodOf(request.resource.data.group) == uid() && request.resource.data.hodUid == uid()
+                && get(/databases/$(database)/documents/doctors/$(request.resource.data.uid)).data.get('hod', '') == request.resource.data.group));
+      allow update: if isAdmin()
+        // whoever reported it can withdraw it while it's open
+        || (isMember() && resource.data.reportedBy == uid() && resource.data.status == 'open'
+            && request.resource.data.status == 'withdrawn' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closedAt']));
+      allow delete: if isAdmin();
+    }
     // Approved leave without the reason, so everyone's roster can show who is away.
     match /onleave/{id} {
       allow read: if isMember();

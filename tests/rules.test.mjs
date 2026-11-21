@@ -143,6 +143,25 @@ await t("recipient can't edit other fields", as("ben").doc("requests/r2").update
 await t("recipient can't cancel", as("ben").doc("requests/r2").update({ status: "cancelled", decidedAt: 1, decidedBy: "ben" }), false);
 await t("sender cancels", as("amy").doc("requests/r2").update({ status: "cancelled", decidedAt: 1, decidedBy: "amy" }), true);
 await t("approved can't delete requests", as("amy").doc("requests/r1").delete(), false);
+// absence reports: only the coordinator (anyone) and the HOD (own department) report; the doctor can read but not change them
+await env.withSecurityRulesDisabled(async c => { const db = c.firestore(); await db.doc("doctors/amy").set({ hod: "medicine" }, { merge: true }); await db.doc("doctors/carl").set({ hod: "surgery" }, { merge: true }); });
+const AB = (by, extra = {}) => ({ uid: "amy", name: "Dr Amy", dept: "ER", group: "medicine", hodUid: "ben", date: "2026-11-20", shift: "N", type: "absent", time: "", note: "", reportedBy: by, reportedRole: by === "boss" ? "msa" : "hod", status: "open", createdAt: 1, ...extra });
+await t("HOD reports a doctor in their department absent", as("ben").doc("absences/a1").set(AB("ben")), true);
+await t("coordinator reports any doctor", as("boss").doc("absences/a2").set(AB("boss", { uid: "carl", name: "Dr Carl", group: "surgery", hodUid: "" })), true);
+await t("HOD can't report a doctor from another department", as("ben").doc("absences/a3").set(AB("ben", { uid: "carl", group: "surgery", hodUid: "ben" })), false);
+await t("HOD can't fake the department to report someone", as("ben").doc("absences/a3b").set(AB("ben", { uid: "carl", group: "medicine" })), false);
+await t("an ordinary doctor can't report anyone", as("carl").doc("absences/a4").set(AB("carl", { hodUid: "carl" })), false);
+await t("can't report yourself", as("ben").doc("absences/a5").set(AB("ben", { uid: "ben" })), false);
+await t("can't create a report already closed", as("boss").doc("absences/a6").set(AB("boss", { status: "closed", outcome: { leave: "casual", days: 1 } })), false);
+await t("unknown report type is refused", as("boss").doc("absences/a7").set(AB("boss", { type: "rude" })), false);
+await t("the doctor reads reports about them", as("amy").doc("absences/a1").get(), true);
+await t("the doctor lists their reports", as("amy").collection("absences").where("uid", "==", "amy").get(), true);
+await t("the HOD lists their department's reports", as("ben").collection("absences").where("hodUid", "==", "ben").get(), true);
+await t("another doctor can't read the report", as("carl").doc("absences/a1").get(), false);
+await t("the doctor can't change or close the report", as("amy").doc("absences/a1").update({ status: "closed" }), false);
+await t("the HOD can't close it with a leave deduction", as("ben").doc("absences/a1").update({ status: "closed", outcome: { leave: "none", days: 0 } }), false);
+await t("the HOD can withdraw their own open report", as("ben").doc("absences/a1").update({ status: "withdrawn", closedAt: 2 }), true);
+await t("coordinator closes a report and charges Casual leave", as("boss").doc("absences/a2").update({ status: "closed", outcome: { leave: "casual", days: 1, note: "", closedBy: "boss", closedAt: 3 } }), true);
 await t("admin removes access", as("boss").doc("doctors/ben").update({ approved: false }), true);
 await t("removed doctor loses roster access", as("ben").collection("rosters").get(), false);
 console.log(`\n${pass} passed, ${fail} failed`);
